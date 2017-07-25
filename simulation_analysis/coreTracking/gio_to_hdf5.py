@@ -1,0 +1,135 @@
+'''
+Joe Hollowed
+COSMO-HEP 2017
+'''
+
+import pdb
+import glob
+import h5py
+import numpy as np
+from dtk import gio
+import coreTools as ct
+import dispersionStats as stat
+
+def group_halos(catalog = 0, clusterMass = 1e14, process = 0):
+	'''
+	Core catalogs produced from simulations are saved in a single large data table, with one
+	column being a cores parent-halo id. This function groups cores into individual numpy files 
+	according to their parent halo, groups those halos by step, and saves everything to a single 
+	organized hdf5 file. In this way, the core data is considerably easier to manage at later 
+	stages of analysis.
+
+	Note - this function *only* groups the core data, it does not process it. After running this, 
+	it is still necessary to preform infall_mass and radius cuts on the cores, and also unwrap 
+	their comoving positions. 
+
+	:param catalog: which catalog to use; 0=BLEVelocity, 1=MedianVelocity, 2=CentralVelocity
+	:param clusterMass: only save info from cluster-sized halos above this mass cut
+	:param process: whether or not to process the cores
+	'''
+
+	# locate catalog data, build save file
+	catalogName = ['BLEVelocity', 'MedianVelocity', 'CentralVelocity'][catalog]
+	p_prefix = ['un', ''][process]
+	corePath = '/media/luna1/rangel/AlphaQ/CoreCat/{}'.format(catalogName)
+	sodPath = '/media/luna1/dkorytov/data/AlphaQ/sod'	
+	saveDest = '/home/jphollowed/data/hacc/alphaQ/coreCatalog/{}'.format(catalogName)
+	outputFile = h5py.File('{}/haloCores_{}processed.hdf5'.format(saveDest, p_prefix), 'w')
+
+	# declare processing parameters
+ 	disruption_param = 0.05
+	massThresh_param = 10**11.27
+
+	# gather all catalog files and sort by simulation step
+	allCores = np.array(glob.glob('{}/*.coreproperties'.format(corePath)))
+	steps = [int(f.split('.')[-2]) for f in allCores]
+	sortOrder = np.argsort(steps)
+	allCores = allCores[sortOrder]
+	
+	allHalos = np.array(glob.glob('{}/*.sodproperties'.format(sodPath)))
+	steps = [int(f.split('.')[-2].split('-')[-1]) for f in allHalos]
+	sortOrder = np.argsort(steps)
+	allHalos = allHalos[sortOrder]
+	
+	
+	# begin looping through each simulation step
+	for j in range(len(allCores)):
+
+		bigHalos = 0
+		cores = allCores[j]
+		halos = allHalos[j]
+		step = np.array(steps)[sortOrder][j]
+		print('\n---------- WORKING ON STEP {}({}) ----------'.format(step, j))
+		
+		# create sub-group for this snapshot in output hdf5
+		nextSnapshot = outputFile.create_group('step_{}'.format(step))
+
+		# find unique halos tags among core data. Proceed in saving core data for any
+		# cluster sized halos (as defined by the parameter 'clusterMass')
+		core_parentTags = gio.gio_read(cores, 'fof_halo_tag')
+		core_parentTags = ct.mask_tags(core_parentTags)
+		
+		haloTags = gio.gio_read(halos, 'fof_halo_tag')
+		haloMass = gio.gio_read(halos, 'sod_halo_mass')
+
+		if(len(core_parentTags) == 0): 
+			print('no halos with cores...')
+			continue
+
+
+		# begin looping through each halo in current step
+		for k in range(len(haloTags)):
+
+			# if this halo is below the mass cut, skip it, otherwise find all member cores
+			if(haloMass[k] < clusterMass): continue
+			bigHalos += 1
+			haloMask = np.where(core_parentTags == haloTags[k])[0]
+			
+			# create sub-group for this snapshot in output hdf5
+			nextHalo = nextSnapshot.create_group('halo_{}'.format(haloTags[k]))
+			
+			# process cores
+			if(process):
+				core_radii = gio.gio_read(cores, 'radius')[haloMask]
+				core_infallMass = gio.gio_read(cores, 'infall_mass')[haloMask]
+				radMask = core_radii < 	disruption_param
+				massMask = core_infallMass > massThresh_param
+				coreMask = np.logical_and(radMask, massMask)	
+
+				print('saving big halo with {}/{} cores ({})'
+			      	      .format(sum(coreMask), len(haloMask), bigHalos))
+			else:
+				print('saving big halo with {} cores ({})'
+				      .format(len(haloMask), bigHalos))
+
+
+			# save core data to halo file
+			core_cols = ['core_tag', 'x', 'y', 'z', 'vx', 'vy', 'vz', 'radius', 
+				     'infall_mass', 'infall_step', 'infall_fof_halo_tag']
+			for i in range(len(core_cols)):
+				nextData = gio.gio_read(cores, core_cols[i])[haloMask]
+				if(process): nextData = nextData[coreMask]
+				nextHalo.create_dataset(core_cols[i], data=nextData)
+
+			# save halo properties to hdf5 group attributes
+			halo_cols = ['fof_halo_center_x', 'fof_halo_center_y', 'fof_halo_center_z', 
+				     'sod_halo_min_pot_x', 'sod_halo_min_pot_y', 'sod_halo_min_pot_z', 
+				     'sod_halo_mean_vx', 'sod_halo_mean_vy', 'sod_halo_mean_vz', 
+				     'sod_halo_radius', 'sod_halo_mass', 'sod_halo_vel_disp', 
+				     'sod_halo_core_vel_disp']
+			for i in range(len(halo_cols)-1):
+				nextData = gio.gio_read(halos, halo_cols[i])[k]
+				nextHalo.attrs.create(halo_cols[i], data=nextData)
+			
+			# calculate core velocity dispersion and save as attribute
+			halo_v = np.array([nextHalo.attrs['sod_halo_mean_v{}'.format(v)] 
+					   for v in ['x','y','z']])
+			core_vs = np.rec.fromarrays([nextHalo['vx'].value - halo_v[0], 
+						     nextHalo['vy'].value - halo_v[1],
+						     nextHalo['vz'].value - halo_v[2]], 
+						     names = ['vx', 'vy', 'vz'])
+			nextHalo.attrs.create(halo_cols[-1], ct.core_velDisp(core_vs))
+					
+		if(bigHalos == 0):
+			print('no cluster-sized halos')	
+			continue
