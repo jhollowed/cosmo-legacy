@@ -1,9 +1,3 @@
-# uncompyle6 version 2.9.11
-# Python bytecode 2.7 (62211)
-# Decompiled from: Python 3.5.2 |Anaconda custom (64-bit)| (default, Jul  2 2016, 17:53:06) 
-# [GCC 4.4.7 20120313 (Red Hat 4.4.7-1)]
-# Embedded file name: /home/jphollowed/code/sim_scripts/read/coreTools.py
-# Compiled at: 2017-04-04 13:53:51
 """
 Joe Hollowed
 Last edited 1/17/2017
@@ -15,6 +9,7 @@ from mpl_toolkits.mplot3d import Axes3D
 from dispersionStats import bDispersion
 import numpy as np
 import pdb
+
 
 def core_velDisp(cores, dim=3):
     """
@@ -72,24 +67,21 @@ def unwrap_position(pos, center, boxL=256):
     return pos
 
 
-def process_cores(cores, merge=False, printarg=False, mass_cut=398107170553.49695, disrupt_rad=0.3, merger_dist=0.007):
+def process_cores(cores, printarg=False, mass_cut=10**11.26, disrupt_rad=0.05):
     """
     This function processes the core (first arg) according to the last three of the
     following parameters:
     
     :param cores: a numpy rec array of cores
-    :param merge: whether or not to preform merging of the cores
     :param printarg: whether or not to print function progress
     :param mass_cut: cores below this infall_mass value will be discarded
     :param disrupt_rad: cores with radii above this value will be discarded
-    :param merger_dist: any cores within this distance of eachother will be merged
     :return: the processed list of cores
     
     The default values for these parameters were found by fitting to SDSS galaxy profiles
     by Dan. They are
-    mass_cut = 10**11.6 M_sun/h
-    disrupt_rad = 0.3 Mpc/h
-    merger_dist = 0.007 Mpc/h
+    mass_cut = 10**11.26 M_sun/h
+    disrupt_rad = 0.05 Mpc/h
     """
     mass_mask = cores['infall_mass'] > mass_cut
     rad_mask = cores['radius'] < disrupt_rad
@@ -102,47 +94,4 @@ def process_cores(cores, merge=False, printarg=False, mass_cut=398107170553.4969
     if printarg:
         print 'Halo has {} cores after cuts'.format(N)
     
-    if not merge:
-        return cores
-    
-    else:
-        core_positions = np.swapaxes([ cores[r] for r in ['x', 'y', 'z'] ], 0, 1)
-        core_dist = np.linalg.norm(core_positions, axis=1)
-        indices = np.linspace(0, N - 1, N).astype(int)
-        dist_matrix = np.array([ abs(core_dist[n] - core_dist) for n in range(N) ])
-        dist_matrix = np.triu(dist_matrix)
-        merger_matrix = np.logical_and(dist_matrix != 0, dist_matrix < merger_dist) + np.eye(N).astype(bool)
-        merged_core_members = []
-        checked = []
-        for n in range(len(merger_matrix)):
-            if n in checked:
-                continue
-            core_pairs = merger_matrix[n]
-            for j in range(len(core_pairs)):
-                if j in checked:
-                    continue
-                if core_pairs[j]:
-                    checked.append(j)
-                    core_pairs = np.logical_or(core_pairs, merger_matrix[j])
-
-            merged_core_members.append(indices[core_pairs])
-
-        merged_cores = np.array([ cores[merged_core_members[n]] for n in range(len(merged_core_members))
-                                ])
-        final_cores = np.empty(len(merged_cores), dtype=cores.dtype)
-        fig = plt.figure()
-        ax = fig.add_subplot(111, projection='3d')
-        for i in range(len(merged_cores)):
-            final_core = merged_cores[i][0]
-            for column in merged_cores[i].dtype.names[2:]:
-                final_core[column] = np.mean(merged_cores[i][column])
-
-            final_core['infall_mass'] = sum(merged_cores[i]['infall_mass'])
-            final_cores[i] = final_core
-            ax.plot(merged_cores[i]['x'], merged_cores[i]['y'], merged_cores[i]['z'], 'x', ms=8, color=np.random.rand(3))
-            ax.plot([final_core['x']], [final_core['y']], final_core['z'], '.r', ms=10)
-
-        plt.show()
-        if printarg:
-            print 'Halo has {} cores after merging'.format(len(final_cores))
-        return final_cores
+    return cores

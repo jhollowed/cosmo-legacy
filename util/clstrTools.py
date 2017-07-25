@@ -7,7 +7,7 @@ Providing set of tools for quick calculations and conversions of cluster physics
 
 from astropy import constants as const
 from astropy.coordinates import SkyCoord
-from astropy.cosmology import WMAP9
+from astropy.cosmology import WMAP7
 from halotools.empirical_models import NFWProfile
 from astropy import units as u
 import numpy as np
@@ -22,7 +22,7 @@ Msun = const.M_sun.value
 
 def LOS_properVelocity(zi,z, dzi = [], dz = None):
     '''
-    Returns the line of sight proper velocity of a galaxy or galaxies (Ruel et al. 2014).
+    Returns the line of sight peculiar velocity of a galaxy or galaxies (Ruel et al. 2014).
 
     :param zi: an array-like of redshift values
     :param z: the redshift of the cluster that contains the member galaxy (biweight average of z)
@@ -47,13 +47,13 @@ def LOS_properVelocity(zi,z, dzi = [], dz = None):
         return [v, dv]
 
 
-def projectedDist(coords, center_coords, z, cosmo = WMAP9, type='comoving', units=0):
+def projectedDist(coords, center_coords, z, cosmo = WMAP7, type='comoving', units=0):
     '''
     Convert RA and Dec coordinate values to angular separation, and then separation distance in Mpc
     :param coords: Array of galaxy coordinates tuples or lists in the form (ra, dec)
     :param center_coords: The coordinate of the cluster center in the form (ra, dec)
     :param z: redshift of cluster
-    :param cosmo: AstroPy Cosmology object (default is cosmo = WMAP9)
+    :param cosmo: AstroPy Cosmology object (default is cosmo = WMAP7)
     :param type: whether to return proper or comoving distance measurements (default is type=comoving)
     :param units: boolean argument to return distances as AstroPy Quantity objects or not 
 		  (default is units=0)
@@ -81,7 +81,7 @@ def projectedDist(coords, center_coords, z, cosmo = WMAP9, type='comoving', unit
 
 
 
-def mass_to_radius(mass, z, h = 100, mdef ='200c', cosmo = WMAP9, Msun=1):
+def mass_to_radius(mass, z, h = 100, mdef ='200c', cosmo = WMAP7, Msun=1):
     '''
     spherical radius overdensity as a function of the input mass usign halotools
     :param mass: cluster mass(es) in units of M_sun/h or M_sun/h70 (factor of 10^14 is assumed)
@@ -89,7 +89,7 @@ def mass_to_radius(mass, z, h = 100, mdef ='200c', cosmo = WMAP9, Msun=1):
     :param h: the kind of dimensionless hubble parameter (either h (h=100) or h70 (h=70), 
 	      default is h = 100)
     :param mdef: mass definition (default is mdef = '200c')
-    :param cosmo: AstroPy Cosmology object instance (default is cosmo = WMAP9)
+    :param cosmo: AstroPy Cosmology object instance (default is cosmo = WMAP7)
     :param Msun: whether ot not masses are given in units of M_sun. If 0, then divide all masses
                  by M_sun. If 1, don't do anything (default is Msun=1)
     :return: scalar or array of halo radii in Mpc/h with the same overdesnity as the mass definition
@@ -131,7 +131,7 @@ def richness_to_m200(l):
 
 
 
-def richness_to_arcmin(l,z, cosmo = WMAP9, mdef='200c', h=70):
+def richness_to_arcmin(l,z, cosmo = WMAP7, mdef='200c', h=70):
     mass = richness_to_m200(l)
     radius = mass_to_radius(mass, z, h, mdef =mdef)
     # multiply radius by h and divide denominator by 1000
@@ -162,7 +162,7 @@ def classifyType(spectra):
     return types
 
 
-def convertMass(mass, mdef, z, mdef_out = 200, h = 100, cosmo = WMAP9):
+def convertMass(mass, mdef, z, mdef_out = 200, h = 100, cosmo = WMAP7):
     '''
     Convert between mass definitions according to NFW profile
     :param mass: mass in some definition (array of scalar)
@@ -197,12 +197,12 @@ def convertMass(mass, mdef, z, mdef_out = 200, h = 100, cosmo = WMAP9):
     return newMass
 
 
-def meanVirialDensity(z, cosmo = WMAP9):
+def meanVirialDensity(z, cosmo = WMAP7):
     '''
     Compute the virial overdensity of a halo with respect to the
     mean matter density (Hu&Kravtsov 2008)
     :param z: redshift of cluster
-    :param cosmo: AstroPy cosmology instance (default is cosmo=WMAP9)
+    :param cosmo: AstroPy cosmology instance (default is cosmo=WMAP7)
     :return: delta_v, the virial overdensity
     '''
     x = cosmo.Om(z) - 1
@@ -212,20 +212,18 @@ def meanVirialDensity(z, cosmo = WMAP9):
     return dv
 
 
-
-
-def h70(z = 0, cosmo = WMAP9):
+def h70(z = 0, cosmo = WMAP7):
     '''
     Return the value of h_70 at a redshift z
     :param z: redshift at which to measure the Hubble parameter (default is z=0)
-    :param cosmo: instance of an astropy Cosmology object (default is WMAP9)
+    :param cosmo: instance of an astropy Cosmology object (default is WMAP7)
     :return: h_70
     '''
     h70 = (cosmo.H(z) / (70 * u.km/(u.Mpc *u.s))).value
     return h70
 
 
-def h(z = 0, cosmo = WMAP9):
+def h(z = 0, cosmo = WMAP7):
     '''
     Return the value of h_70 at a redshift z
     :param z: redshift at which to measure the Hubble parameter (default is z=0)
@@ -250,7 +248,6 @@ def saroRelation(sigBI, z, A=939, B=2.91, C=0.33):
     hz = np.array([h70(zi) for zi in z])
     mass = ((sigBI / (A*(hz**C)))**B) * 1e15
     return mass
-
 
 
 def evrardRelation(mass, z, sigDM15 = 1082.9, a = 0.3361):
