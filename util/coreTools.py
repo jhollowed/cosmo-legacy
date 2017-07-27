@@ -50,10 +50,10 @@ def unwrap_position(pos, center, boxL=256):
     positions that have wrapped around simulation box due to periodic boundaries.
     
     :param pos: position(s) of n particle(s) in form 
-                [[x0,y0,z0],...,[xn,yn,zn]] (in Mpc)
-    :param center: relative center position in form [x, y, z] (in Mpc)
+                [[x0,y0,z0],...,[xn,yn,zn]] (in Mpc/h)
+    :param center: relative center position in form [x, y, z] (in Mpc/h)
     :param boxL: length of simulation box in Mpc (default is 256)
-    :return: unwrapped position (either <0 or >box length) in Mpc
+    :return: unwrapped position (either <0 or >box length) in Mpc/h
     """
     for n in range(len(pos)):
         p = pos[n]
