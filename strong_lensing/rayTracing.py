@@ -1,38 +1,54 @@
-import numpy as np
-import pylab as pl
-from datetime import datetime
+'''
+Nan Li
+Joe Hollowed
+COSMO-HEP 2017
+
+This module contains a collection of functions for preforming ray-tracing of a gravitationally-lensed 
+system, supporting arbitrary lens and source morphology. The main function is doRayTrace()
+'''
+
 import time
 import pdb
-
-#--------------------------------------------------------------------
+import pylab as pl
+import numpy as np
+from datetime import datetime
+import astropy.constants as const
 from astropy.cosmology import WMAP7 as cosmo
 
-vc = 2.998e5 #km/s
+#--------------------------------------------------------------------
+
+
+#vc = 2.998e5 #km/s
+vc = const.c.value / 1000 # km/s
 G = 4.3011790220362e-09 # Mpc/h (Msun/h)^-1 (km/s)^2
 apr = 206269.43
+
+
 #--------------------------------------------------------------------
+
 # Angular Diameter Distance (Mpc/h)
-#
 def Da(z):
     res = cosmo.comoving_distance(z).value*cosmo.h/(1.0+z)
     return res
 
 def Da2(z1,z2):
-
     Dcz1 = (cosmo.comoving_distance(z1).value*cosmo.h)
     Dcz2 = (cosmo.comoving_distance(z2).value*cosmo.h)
     res = (Dcz2-Dcz1+1e-8)/(1.0+z2)
     return res
+
+
 #--------------------------------------------------------------------
+
 # Einstein Radius (arcsec)
-#
 def re_sv(sv, z1, z2):
     res = 4.0*np.pi*(sv**2.0/vc**2.0)*Da2(z1,z2)/Da(z2)*apr
     return res
+
+
 #--------------------------------------------------------------------
 # The function to calculate deflection angles,
 # convergence, shears, and magnification
-#
 def lensing_signals_sie(x1, x2, lpar):
     xc1 = lpar[0]           # center of the lens, arcsec
     xc2 = lpar[1]           # center of the lens, arcsec
@@ -99,28 +115,34 @@ def lensing_signals_sie(x1, x2, lpar):
     alpha2 = (a2 * cosa + a1 * sina) * re
 
     return alpha1, alpha2, kappa, shear1, shear2, mu
+
+
 #--------------------------------------------------------------------
+
 # Rotate the sources
-#
 def xy_rotate(x, y, xcen, ycen, phi):
 	phirad = np.deg2rad(phi)
 	xnew = (x - xcen) * np.cos(phirad) + (y - ycen) * np.sin(phirad)
 	ynew = (y - ycen) * np.cos(phirad) - (x - xcen) * np.sin(phirad)
 	return (xnew,ynew)
+
+
 #--------------------------------------------------------------------
+
 # 2D Gaussian Profile
-#
 def gauss_2d(x, y, par):
 	(xnew,ynew) = xy_rotate(x, y, par[2], par[3], par[5])
 	res0 = ((xnew**2)*par[4]+(ynew**2)/par[4])/np.abs(par[1])**2
 	res = par[0]*np.exp(-0.5*res0)
 	return res
-#--------------------------------------------------------------------
-# Main Function
-#
-def main(zl=0.1, zs=1.0, boxsize=6.0, nnn=512, sigmav=220, l_xcen=0.0, l_ycen=0.0, l_axrat=0.7, 
+
+
+#---------------------------------------------------------------------
+
+
+def doRayTrace(zl=0.1, zs=1.0, boxsize=6.0, nnn=512, sigmav=220, l_xcen=0.0, l_ycen=0.0, l_axrat=0.7, 
          l_core=0.0, l_orient=0.0, g_amp=1.0, g_sig=0.15, g_xcen=0.3, g_ycen=0.2, g_axrat=0.5, 
-         g_orient=-20.00, showPlot = True):
+         g_orient=-20.00, plot = True, showPlot = True):
     '''
     Preform gravitation lensing ray-tracing with lens and source objects as specified by the input 
     parameters
@@ -144,9 +166,10 @@ def main(zl=0.1, zs=1.0, boxsize=6.0, nnn=512, sigmav=220, l_xcen=0.0, l_ycen=0.
     :param g_axrat: minor-to-major axis ratio of source
     :param g_orient: source major-axis position angle ccw from x-axis (degrees)
     
-    :param showPlot: boolean determining whether or not to display plotted result (false - save to file)
+    :param plot: boolean whether or not to plot the rayTracing result
+    :param showPlot: boolean determining whether or not to display plotted result (False = save to file)
 
-    :return: 0 if successful
+    :return: 0 if lens is plotted, else return lens/source information
     '''
 
     dsx = boxsize/nnn       # the size of one pixel
@@ -169,7 +192,9 @@ def main(zl=0.1, zs=1.0, boxsize=6.0, nnn=512, sigmav=220, l_xcen=0.0, l_ycen=0.
     gpar = np.asarray([g_amp,g_sig,g_xcen,g_ycen,g_axrat,g_orient])
     g_lensimage = gauss_2d(yi1,yi2,g_param)    # lensed images
    
-    return 
+    if(plot==False):
+        return [al1, al2, kap, sh1, sh2, mua, gal_image, gal_lensimage]
+
     #--------------------------lens images contour------------------------
     levels = [0.15,0.30,0.45,0.60,0.75,0.9,1.05]
     fig = pl.figure(num=None,figsize=(10,5),dpi=80, facecolor='w', edgecolor='k')
@@ -198,21 +223,42 @@ def main(zl=0.1, zs=1.0, boxsize=6.0, nnn=512, sigmav=220, l_xcen=0.0, l_ycen=0.
         pl.show()
     else:
         pl.savefig('lens_{}.png'.format(str(datetime.now())))
+    return 0
 
 
-if __name__ == '__main__':
-    # run with default parameters
+#---------------------------------------------------------------------
+
+
+def timeTracing(runs = 1000):
+    '''
+    Function to get the time+-err of the ray-tracing functions by averaging over multiple runs
     
-    times = np.zeros(1000)
+    :param runs: number of ray-tracing computaitons to average over
+    :return: the mean execution time, and assocaited SDOM, of all runs
+    '''
+    
+    np.random.seed(101)
+    orient = np.random.random(size = runs) * 360
+    times = np.zeros(runs)
 
     for i in range(len(times)):
-        if(i %100 == 0): print(i)
+        if(i %100 == 0): 
+            print('lens {}/{}'.format(i, runs))
         start = time.time()
-        main(showPlot=False)
+        doRayTrace(g_orient = orient[i], showPlot=False)
         end = time.time()
         times[i] = end - start
 
     time_avg = np.mean(times)
     time_err = np.std(times) / np.sqrt(len(times))
-    print('Time = {} +- {}'.format(time_avg, time_err))
-    pdb.set_trace()
+    return [time_avg, time_err] 
+
+
+#---------------------------------------------------------------------
+
+
+if __name__ == '__main__':
+    '''
+    provided to quickly run with default parameters
+    '''
+    doRayTrace() 
