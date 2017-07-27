@@ -142,7 +142,7 @@ def doRayTrace(zl=0.1, zs=1.0, boxsize=6.0, nnn=512, sigmav=220, l_xcen=0.0, l_y
     
     :param zl: redshift of the lens
     :param zs: redshift of the source
-    :param boxsize: the size of the field of view (arcsec)
+    :param boxsize: the side length of the field of view (arcsec)
     :param nnn: number of pixels per side
     
     :param sigmav: velocity dispersion of lens (km/s)
@@ -159,7 +159,7 @@ def doRayTrace(zl=0.1, zs=1.0, boxsize=6.0, nnn=512, sigmav=220, l_xcen=0.0, l_y
     :param g_axrat: minor-to-major axis ratio of source
     :param g_orient: source major-axis position angle ccw from x-axis (degrees)
     
-    :param plot: boolean whether or not to plot the rayTracing result
+    :param plot: boolean whether or not to plot the rayTracing result (if True, call plotLens())
     :param showPlot: boolean determining whether or not to display plotted result (False = save to file)
 
     :return: 0 if lens is plotted, else return lens/source information
@@ -167,50 +167,73 @@ def doRayTrace(zl=0.1, zs=1.0, boxsize=6.0, nnn=512, sigmav=220, l_xcen=0.0, l_y
 
     #---------------------------------------------------------------------
     
-    dsx = boxsize/nnn   # the size of one pixel
-    xi1 = np.linspace(-boxsize/2.0,boxsize/2.0-dsx,nnn)+dsx/2.0
-    xi2 = np.linspace(-boxsize/2.0,boxsize/2.0-dsx,nnn)+dsx/2.0
-    xi1,xi2 = np.meshgrid(xi1,xi2)      # Grid on the lens plane
+    # Build lens-plane grid
+    pixelSize = boxsize/nnn
+    lensGrid_1d = np.linspace(-boxsize/2.0, boxsize/2.0-pixelSize, nnn) + pixelSize/2.0
+    lensGrid_x, lensGrid_y = np.meshgrid(lensGrid_1d, lensGrid_1d)
 
-    l_eRadius = re_sv(sigmav,zl,zs)    # Einstein Radius (arcsec)
-    l_param = np.asarray([l_xcen,l_ycen,l_axrat,l_core,l_eRadius,l_orient])
-    al1, al2, kap, sh1, sh2, mua =  lensing_signals_sie(xi1, xi2, l_param)
+    l_eRadius = re_sv(sigmav, zl, zs)    # Einstein Radius (arcsec)
+    l_param = np.asarray([l_xcen, l_ycen, l_axrat, l_core, l_eRadius, l_orient])
+    al1, al2, kap, sh1, sh2, mua =  lensing_signals_sie(lensGrid_x, lensGrid_y, l_param)
     
-    g_param = np.asarray([g_amp,g_sig,g_xcen,g_ycen,g_axrat,g_orient])
-    g_image = gauss_2d(xi1,xi2,g_param)    # image of the source
+    # Build source-plane grid 
+    # (intersection of deflected light radius and the source plane)
+    sourceGrid_x = lensGrid_x - al1
+    sourceGrid_y = lensGrid_y - al2
     
-    yi1 = xi1-al1       # intersection of deflected light radius and the source plane
-    yi2 = xi2-al2       # intersection of deflected light radius and the source plane
-    gpar = np.asarray([g_amp,g_sig,g_xcen,g_ycen,g_axrat,g_orient])
-    g_lensimage = gauss_2d(yi1,yi2,g_param)    # lensed image
+    # Make images
+    g_param = np.asarray([g_amp, g_sig, g_xcen, g_ycen, g_axrat, g_orient])
+    g_sourceImage = gauss_2d(lensGrid_x, lensGrid_y, g_param)
+    g_lensImage = gauss_2d(sourceGrid_x, sourceGrid_y, g_param)
+    
+    if(plot):
+        plotLens(boxsize, lensGrid_x, lensGrid_y, sourceGrid_x, sourceGrid_y, 
+                 g_sourceImage, g_lensImage, mua, showPlot)
+
+    return [al1, al2, kap, sh1, sh2, mua, g_sourceImage, g_lensImage]
+
+#---------------------------------------------------------------------
    
-    if(plot==False):
-        return [al1, al2, kap, sh1, sh2, mua, gal_image, gal_lensimage]
+def plotLens(boxsize, lensGrid_x, lensGrid_y, sourceGrid_x, sourceGrid_y, g_sourceImage, 
+             g_lensImage, mua, showPlot = True):
+    '''
+    plot the lens and source planes as images - the source is a filled contour plot
+    and the lens radius is shown as a solid curve
 
-    #--------------------------plot lens image contours------------------------
-    
+    :param boxsize: the side-length of the field of view (arcsec)
+    :param lensGrid_x:
+    :param lensGrid_y:
+    :param sourceGrid_x:
+    :param sourceGrid_y:
+    :param g_sourceImage:
+    :param g_lensImage:
+    :param mua:
+    :param showPlot:
+    :return: None, display or save figure
+    ''' 
+     
     levels = [0.15,0.30,0.45,0.60,0.75,0.9,1.05]
     fig = pl.figure(num=None,figsize=(10,5),dpi=80, facecolor='w', edgecolor='k')
 
     a = pl.axes([0.1,0.2,0.3,0.6])
-    a.set_xlim(-boxsize/2.0,boxsize/2.0)
-    a.set_ylim(-boxsize/2.0,boxsize/2.0)
+    a.set_xlim(-boxsize/2.0, boxsize/2.0)
+    a.set_ylim(-boxsize/2.0, boxsize/2.0)
     pl.xlabel("arcsec")
     pl.ylabel("arcsec")
     pl.xticks([-3,-2,-1,0,1,2,3])
     pl.yticks([-3,-2,-1,0,1,2,3])
-    a.contourf(xi1,xi2,g_image,levels)
-    a.contour(yi1,yi2,mua,0,colors=('g'),linewidths = 2.0)
+    a.contourf(lensGrid_x, lensGrid_y, g_sourceImage, levels)
+    a.contour(sourceGrid_x, sourceGrid_y, mua, 0, colors=('g'), lw = 2.0)
 
     b = pl.axes([0.6,0.2,0.3,0.6])
-    b.set_xlim(-boxsize/2.0,boxsize/2.0)
-    b.set_ylim(-boxsize/2.0,boxsize/2.0)
+    b.set_xlim(-boxsize/2.0, boxsize/2.0)
+    b.set_ylim(-boxsize/2.0, boxsize/2.0)
     pl.xlabel("arcsec")
     pl.ylabel("arcsec")
     pl.xticks([-3,-2,-1,0,1,2,3])
     pl.yticks([-3,-2,-1,0,1,2,3])
-    b.contourf(xi1,xi2,g_lensimage,levels)
-    b.contour(xi1,xi2,mua,colors=('k'),linewidths = 2.0)
+    b.contourf(lensGrid_x, lensGrid_y, g_lensImage, levels)
+    b.contour(lensGrid_x, lensGrid_y, mua, colors=('k'), lw = 2.0)
 
     if(showPlot):
         pl.show()
