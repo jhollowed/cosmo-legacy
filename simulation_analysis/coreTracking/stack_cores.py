@@ -48,6 +48,8 @@ saved per core in the stacked (or ensemble) halo:
 This script makes such a stacked halo at each redshift where there is at least one halo
 
 '''
+import sys, os
+sys.path.append(os.path.join(os.path.dirname(__file__), '..', 'util'))
 
 import numpy as np
 import dtk

@@ -1,5 +1,6 @@
 import numpy as np
 import pylab as pl
+from datetime import datetime
 
 #--------------------------------------------------------------------
 from astropy.cosmology import WMAP7 as cosmo
@@ -193,7 +194,7 @@ def main(zl=0.1, zs=1.0, boxsize=6.0, nnn=512, sigmav=220, l_xcen=0.0, l_ycen=0.
     if(showPlot):
         pl.show()
     else:
-        pl.savefig('output.eps')
+        pl.savefig('lens_{}.png'.format(str(datetime.now())))
 
     return 0
 

@@ -2,6 +2,9 @@
 Joe Hollowed
 HEP 6/2017
 '''
+import sys, os
+sys.path.append(os.path.join(os.path.dirname(__file__), '..', 'util'))
+
 import pdb
 import numpy as np
 import clstrTools as ct

@@ -3,7 +3,6 @@ Joe Hollowed
 COSMO-HEP 2017
 Last edited 7/19/17
 '''
-
 import numpy as np
 import matplotlib.pyplot as plt
 import pdb

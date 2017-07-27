@@ -5,6 +5,8 @@ HEP 5/2017
 This script plots cores in velocity-position phase space, along with a third (color) axis of 
 infall time. 
 '''
+import sys, os
+sys.path.append(os.path.join(os.path.dirname(__file__), '..', 'util'))
 
 import matplotlib.pyplot as plt
 import matplotlib as mpl

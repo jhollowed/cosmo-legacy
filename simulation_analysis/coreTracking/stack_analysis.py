@@ -5,6 +5,8 @@ Last edited 2/7/2017
 A collection of functions to do some analysis on the stacked halos output from 
 stackedCores.py
 '''
+import sys, os
+sys.path.append(os.path.join(os.path.dirname(__file__), '..', 'util'))
 
 import dispersionStats as stat
 import coreTools

@@ -1,4 +1,7 @@
 
+import sys, os
+sys.path.append(os.path.join(os.path.dirname(__file__), '..', 'util'))
+
 import numpy as np
 import sqlcl
 import pyfits

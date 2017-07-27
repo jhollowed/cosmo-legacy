@@ -3,6 +3,9 @@ Joe Hollowed
 COSMO-HEP 2017
 '''
 
+import sys, os
+sys.path.append(os.path.join(os.path.dirname(__file__), '..', 'util'))
+
 import pdb
 import glob
 import h5py

@@ -1,6 +1,9 @@
 # Joe Hollowed
 # HEP 6/21/17
 
+import sys, os
+sys.path.append(os.path.join(os.path.dirname(__file__), '..', 'util'))
+
 import pdb
 import glob
 import numpy as np
