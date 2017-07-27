@@ -1,6 +1,8 @@
 import numpy as np
 import pylab as pl
 from datetime import datetime
+import time
+import pdb
 
 #--------------------------------------------------------------------
 from astropy.cosmology import WMAP7 as cosmo
@@ -166,10 +168,11 @@ def main(zl=0.1, zs=1.0, boxsize=6.0, nnn=512, sigmav=220, l_xcen=0.0, l_ycen=0.
     yi2 = xi2-al2       # intersection of deflected light radius and the source plane
     gpar = np.asarray([g_amp,g_sig,g_xcen,g_ycen,g_axrat,g_orient])
     g_lensimage = gauss_2d(yi1,yi2,g_param)    # lensed images
-    
+   
+    return 
     #--------------------------lens images contour------------------------
     levels = [0.15,0.30,0.45,0.60,0.75,0.9,1.05]
-    pl.figure(num=None,figsize=(10,5),dpi=80, facecolor='w', edgecolor='k')
+    fig = pl.figure(num=None,figsize=(10,5),dpi=80, facecolor='w', edgecolor='k')
 
     a = pl.axes([0.1,0.2,0.3,0.6])
     a.set_xlim(-boxsize/2.0,boxsize/2.0)
@@ -196,9 +199,20 @@ def main(zl=0.1, zs=1.0, boxsize=6.0, nnn=512, sigmav=220, l_xcen=0.0, l_ycen=0.
     else:
         pl.savefig('lens_{}.png'.format(str(datetime.now())))
 
-    return 0
-
 
 if __name__ == '__main__':
     # run with default parameters
-    main()
+    
+    times = np.zeros(1000)
+
+    for i in range(len(times)):
+        if(i %100 == 0): print(i)
+        start = time.time()
+        main(showPlot=False)
+        end = time.time()
+        times[i] = end - start
+
+    time_avg = np.mean(times)
+    time_err = np.std(times) / np.sqrt(len(times))
+    print('Time = {} +- {}'.format(time_avg, time_err))
+    pdb.set_trace()
