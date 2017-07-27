@@ -17,12 +17,10 @@ from astropy.cosmology import WMAP7 as cosmo
 
 #--------------------------------------------------------------------
 
-
 #vc = 2.998e5 #km/s
 vc = const.c.value / 1000 # km/s
 G = 4.3011790220362e-09 # Mpc/h (Msun/h)^-1 (km/s)^2
 apr = 206269.43
-
 
 #--------------------------------------------------------------------
 
@@ -37,7 +35,6 @@ def Da2(z1,z2):
     res = (Dcz2-Dcz1+1e-8)/(1.0+z2)
     return res
 
-
 #--------------------------------------------------------------------
 
 # Einstein Radius (arcsec)
@@ -45,8 +42,8 @@ def re_sv(sv, z1, z2):
     res = 4.0*np.pi*(sv**2.0/vc**2.0)*Da2(z1,z2)/Da(z2)*apr
     return res
 
-
 #--------------------------------------------------------------------
+
 # The function to calculate deflection angles,
 # convergence, shears, and magnification
 def lensing_signals_sie(x1, x2, lpar):
@@ -116,7 +113,6 @@ def lensing_signals_sie(x1, x2, lpar):
 
     return alpha1, alpha2, kappa, shear1, shear2, mu
 
-
 #--------------------------------------------------------------------
 
 # Rotate the sources
@@ -125,7 +121,6 @@ def xy_rotate(x, y, xcen, ycen, phi):
 	xnew = (x - xcen) * np.cos(phirad) + (y - ycen) * np.sin(phirad)
 	ynew = (y - ycen) * np.cos(phirad) - (x - xcen) * np.sin(phirad)
 	return (xnew,ynew)
-
 
 #--------------------------------------------------------------------
 
@@ -136,13 +131,11 @@ def gauss_2d(x, y, par):
 	res = par[0]*np.exp(-0.5*res0)
 	return res
 
-
 #---------------------------------------------------------------------
 
-
 def doRayTrace(zl=0.1, zs=1.0, boxsize=6.0, nnn=512, sigmav=220, l_xcen=0.0, l_ycen=0.0, l_axrat=0.7, 
-         l_core=0.0, l_orient=0.0, g_amp=1.0, g_sig=0.15, g_xcen=0.3, g_ycen=0.2, g_axrat=0.5, 
-         g_orient=-20.00, plot = True, showPlot = True):
+               l_core=0.0, l_orient=0.0, g_amp=1.0, g_sig=0.15, g_xcen=0.3, g_ycen=0.2, g_axrat=0.5, 
+               g_orient=-20.00, plot = True, showPlot = True):
     '''
     Preform gravitation lensing ray-tracing with lens and source objects as specified by the input 
     parameters
@@ -172,30 +165,30 @@ def doRayTrace(zl=0.1, zs=1.0, boxsize=6.0, nnn=512, sigmav=220, l_xcen=0.0, l_y
     :return: 0 if lens is plotted, else return lens/source information
     '''
 
-    dsx = boxsize/nnn       # the size of one pixel
+    #---------------------------------------------------------------------
+    
+    dsx = boxsize/nnn   # the size of one pixel
     xi1 = np.linspace(-boxsize/2.0,boxsize/2.0-dsx,nnn)+dsx/2.0
     xi2 = np.linspace(-boxsize/2.0,boxsize/2.0-dsx,nnn)+dsx/2.0
-    xi1,xi2 = np.meshgrid(xi1,xi2)      # Grids on the lens plane
+    xi1,xi2 = np.meshgrid(xi1,xi2)      # Grid on the lens plane
 
-    #--------------------------------------------------------------------
     l_eRadius = re_sv(sigmav,zl,zs)    # Einstein Radius (arcsec)
     l_param = np.asarray([l_xcen,l_ycen,l_axrat,l_core,l_eRadius,l_orient])
     al1, al2, kap, sh1, sh2, mua =  lensing_signals_sie(xi1, xi2, l_param)
     
-    #----------------------------------------------------------------------
     g_param = np.asarray([g_amp,g_sig,g_xcen,g_ycen,g_axrat,g_orient])
     g_image = gauss_2d(xi1,xi2,g_param)    # image of the source
     
-    #----------------------------------------------------------------------
     yi1 = xi1-al1       # intersection of deflected light radius and the source plane
     yi2 = xi2-al2       # intersection of deflected light radius and the source plane
     gpar = np.asarray([g_amp,g_sig,g_xcen,g_ycen,g_axrat,g_orient])
-    g_lensimage = gauss_2d(yi1,yi2,g_param)    # lensed images
+    g_lensimage = gauss_2d(yi1,yi2,g_param)    # lensed image
    
     if(plot==False):
         return [al1, al2, kap, sh1, sh2, mua, gal_image, gal_lensimage]
 
-    #--------------------------lens images contour------------------------
+    #--------------------------plot lens image contours------------------------
+    
     levels = [0.15,0.30,0.45,0.60,0.75,0.9,1.05]
     fig = pl.figure(num=None,figsize=(10,5),dpi=80, facecolor='w', edgecolor='k')
 
@@ -225,9 +218,7 @@ def doRayTrace(zl=0.1, zs=1.0, boxsize=6.0, nnn=512, sigmav=220, l_xcen=0.0, l_y
         pl.savefig('lens_{}.png'.format(str(datetime.now())))
     return 0
 
-
 #---------------------------------------------------------------------
-
 
 def timeTracing(runs = 1000):
     '''
@@ -253,9 +244,7 @@ def timeTracing(runs = 1000):
     time_err = np.std(times) / np.sqrt(len(times))
     return [time_avg, time_err] 
 
-
 #---------------------------------------------------------------------
-
 
 if __name__ == '__main__':
     '''
