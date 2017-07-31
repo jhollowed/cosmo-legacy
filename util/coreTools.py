@@ -6,20 +6,22 @@ Module containing tools for preforming analysis on core catalogs
 """
 import matplotlib.pyplot as plt
 from mpl_toolkits.mplot3d import Axes3D
-from dispersionStats import bDispersion
+import dispersionStats as stat
 import numpy as np
 import pdb
 
 
-def core_velDisp(cores, dim=3):
+def core_velDisp(cores, err = False, dim=3):
     """
     Calculate the velocity dispersion of a group of cores
     
     :param cores: numpy rec array with labeled fields, containing all cores 
                   in a particular halo (halo tag in file name) 
+    :param err: whether or not to return the bootstrapped error of the biweight dispersion
+                estimator
     :param dim: dimensions in which to calculate dispersion (defult = 3)
                 (valid inputs are 3 or 1)
-    :return: velocity dispersion in km s^-1
+    :return: velocity dispersion in km s^-1 (and error if err==True)
     """
     if dim == 3:
         v = np.array([np.linalg.norm([c['vx'], c['vy'], c['vz']], axis=0) for c in cores])
@@ -28,8 +30,12 @@ def core_velDisp(cores, dim=3):
     else:
         raise ValueError('Argument dim can be 1 or 3')
     
-    velDisp = bDispersion(v)
-    return velDisp
+    velDisp = stat.bDispersion(v)
+    if(err):
+        velDisp_err = stat.bootstrap_bDispersion_err(v)
+        return [velDisp, velDisp_err]
+    else:
+        return velDisp
 
 
 def mask_tags(tags):
@@ -67,12 +73,13 @@ def unwrap_position(pos, center, boxL=256):
     return pos
 
 
-def process_cores(cores, printarg=False, mass_cut=10**11.26, disrupt_rad=0.05):
+def process_cores(masses, radii, printarg=False, mass_cut=10**11.27, disrupt_rad=0.05):
     """
     This function processes the core (first arg) according to the last three of the
     following parameters:
     
-    :param cores: a numpy rec array of cores
+    :param masses: numpy array of core infall masses
+    :param radii: numpy array of core radii
     :param printarg: whether or not to print function progress
     :param mass_cut: cores below this infall_mass value will be discarded
     :param disrupt_rad: cores with radii above this value will be discarded
@@ -87,11 +94,11 @@ def process_cores(cores, printarg=False, mass_cut=10**11.26, disrupt_rad=0.05):
     rad_mask = cores['radius'] < disrupt_rad
     mask = np.logical_and(mass_mask, rad_mask)
     if printarg:
-        print 'Halo has {} cores'.format(len(cores))
+        print('Halo has {} cores'.format(len(cores)))
     
     cores = cores[mask]
     N = len(cores)
     if printarg:
-        print 'Halo has {} cores after cuts'.format(N)
+        print('Halo has {} cores after cuts'.format(N))
     
     return cores
