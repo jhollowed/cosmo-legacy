@@ -176,7 +176,7 @@ def bootstrap_bDispersion_err(vals, size = None, draws = 1000, replace = True):
     if(size == None):
         size = len(vals)
     results = [bDispersion(np.random.choice(vals, size=size, replace=replace)) for i in range(draws)]
-    err = np.std(results)
+    err = np.sqrt(np.std(results))
     return err
 
 

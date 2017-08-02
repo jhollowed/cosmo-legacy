@@ -14,12 +14,14 @@ import matplotlib.colors as colors
 import h5py
 import dtk
 
-def plot_sigVm(catalog=0):
+def plot_sigVm(catalog=0, processed=True):
 
 	catalogName = ['BLEVelocity', 'MedianVelocity', 'CentralVelocity'][catalog]
+        processSuffix = ['un', ''][processed]
+
 	fig_path = '/home/jphollowed/figs/dispVmass_figs'
-	halo_path = ('/home/jphollowed/data/hacc/alphaQ/coreCatalog/{}/halo_cores.hdf5'
-		     .format(catalogName))
+	halo_path = ('/home/jphollowed/data/hacc/alphaQ/coreCatalog/{}/haloCores_{}processed.hdf5'
+		     .format(catalogName, processSuffix))
 	stepZ = dtk.StepZ(200, 0, 500)
 
 	alphaQ = h5py.File(halo_path, 'r')
@@ -31,6 +33,7 @@ def plot_sigVm(catalog=0):
 	halo_masses = []
 	halo_vDisp = []
 	core_vDisp = []
+        core_vDisp_err = []
 	core_counts = []
 
 	for j in range(len(zs)):
@@ -43,9 +46,11 @@ def plot_sigVm(catalog=0):
 		
 		halo_masses += [halo['sod_halo_mass']*h for halo in halos]
 		halo_vDisp += [halo['sod_halo_vel_disp']*a for halo in halos]
-		core_vDisp += [halo['sod_halo_core_vel_disp']*a for halo in halos]
-		core_counts += [thisStep[tag]['core_tag'].size for tag in halo_tags]
-
+		core_vDisp += [halo['core_vel_disp']*a for halo in halos]
+                core_vDisp_err += [halo['core_vel_disp_err']*a for halo in halos]
+                core_counts += [thisStep[tag]['core_tag'].size for tag in halo_tags]
+        
+        core_vDisp = np.array(core_vDisp) / np.array(core_vDisp_err)
 	# Overplotting Evrard relation
 	t_x = np.linspace(4.5e13, 2e15, 300)
 	sig_dm15 = 1082.9
@@ -86,9 +91,9 @@ def plot_sigVm(catalog=0):
 	ax = fig.add_subplot(1,1,1)
 	p = ax.loglog(halo_masses, halo_vDisp, '^', markersize=8, color='black', zorder=1, 
 		      label='DM dispersion')
-	ax.hold(True)
-	p_cores = ax.scatter(halo_masses, core_vDisp, lw=0, c=core_counts, cmap='PuBu', 
-			     zorder=2, norm=colors.LogNorm(vmin=30, vmax=200), 
+	plt.hold(True)
+	p_cores = ax.scatter(halo_masses, core_vDisp, lw=0, c=core_counts, 
+			     zorder=2, norm=colors.LogNorm(vmin=10, vmax=200), 
 			     label='Core dispersion')
 	cbar=plt.colorbar(p_cores, ticks=np.linspace(0, 200, 21), extend='max')
 	cbar.ax.set_yticklabels([str(int(i)) for i in np.linspace(0, 200, 21)])

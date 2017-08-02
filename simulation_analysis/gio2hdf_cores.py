@@ -16,13 +16,19 @@ import dispersionStats as stat
 import time
 
 def group_halos(catalog = 0, clusterMass = 1e14, disruption = 0.06, 
-                massThresh = 10**11.6, process = True, timed = False):
+                massThresh = 10**11.6, process = True, timed = True):
     '''
     Core catalogs produced from simulations are saved in a single large data table, with one
     column being a cores parent-halo id. This function groups cores into individual numpy files 
     according to their parent halo, groups those halos by step, and saves everything to a single 
     organized hdf5 file. In this way, the core data is considerably easier to manage at later 
-    stages of analysis. The cores are also processed through this function as well, if enabled.
+    stages of analysis. 
+    The cores are also processed through this function as well, if enabled, which means that any 
+    falling outside of the radius and mass cuts are removed from the data. 
+    Velocities and positions are *not* with respect to the host cluster after this data managing - 
+    they are relative to the simulation box. Positions are also *not* unwrapped - meaning that 
+    any halos near the simulation boundary may have halos that wrapped around to the other side of 
+    the box, and therefore have vastly different positions. 
 
     :param catalog: which catalog to use; 0=BLEVelocity, 1=MedianVelocity, 2=CentralVelocity
     :param clusterMass: only save info from cluster-sized halos above this mass cut
@@ -100,11 +106,6 @@ def group_halos(catalog = 0, clusterMass = 1e14, disruption = 0.06,
                 radMask = core_radii < disruption
                 massMask = core_infallMass > massThresh
                 coreMask = np.logical_and(radMask, massMask)
-                #unwrap positions
-                core_pos = np.array([gio.gio_read(cores, p)[haloMask] for p in ['x','y','z']]).T
-                halo_pos = np.array([gio.gio_read(halos, 'sod_halo_min_pot_{}'.format(p))[k] 
-                                     for p in ['x', 'y', 'z']]).T
-                core_pos = ct.unwrap_position(core_pos, halo_pos).T
                 print('saving big halo with {}/{} cores ({})'
                        .format(sum(coreMask),len(haloMask),bigHalos))
             else:
@@ -116,9 +117,7 @@ def group_halos(catalog = 0, clusterMass = 1e14, disruption = 0.06,
                          'infall_mass', 'infall_step', 'infall_fof_halo_tag']
             for i in range(len(core_cols)):
                 nextData = gio.gio_read(cores, core_cols[i])[haloMask]
-                if(process): 
-                    nextData = nextData[coreMask]
-                    if(i in [1, 2, 3]): nextData = core_pos[i-1]
+                if(process): nextData = nextData[coreMask]
                 nextHalo.create_dataset(core_cols[i], data=nextData)
 
             # save halo properties to hdf5 group attributes
