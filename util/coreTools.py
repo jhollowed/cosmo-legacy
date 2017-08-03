@@ -9,7 +9,7 @@ from mpl_toolkits.mplot3d import Axes3D
 import dispersionStats as stat
 import numpy as np
 import pdb
-
+import math
 
 def core_velDisp(cores, err = False, dim=3):
     """
@@ -30,9 +30,8 @@ def core_velDisp(cores, err = False, dim=3):
     else:
         raise ValueError('Argument dim can be 1 or 3')
     
-    velDisp = stat.bDispersion(v)
+    [velDisp, velDisp_err] = stat.bootstrap_bDispersion(v, size = math.ceil(len(v)*0.75), repl=False)
     if(err):
-        velDisp_err = stat.bootstrap_bDispersion_err(v)
         return [velDisp, velDisp_err]
     else:
         return velDisp

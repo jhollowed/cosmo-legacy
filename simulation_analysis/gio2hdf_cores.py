@@ -47,7 +47,7 @@ def group_halos(catalog = 0, clusterMass = 1e14, disruption = 0.06,
     p_prefix = ['un', ''][process]
     corePath = '/media/luna1/rangel/AlphaQ/CoreCat/{}'.format(catalogName)
     sodPath = '/media/luna1/dkorytov/data/AlphaQ/sod'    
-    saveDest = '/home/jphollowed/data/hacc/alphaQ/coreCatalog/{}'.format(catalogName)
+    saveDest = 'data/coreCatalog/{}'.format(catalogName)
     outputFile = h5py.File('{}/haloCores_{}processed.hdf5'.format(saveDest, p_prefix), 'w')
     outputFile.attrs.create('disruption radius', disruption)
     outputFile.attrs.create('infall mass cut', massThresh)

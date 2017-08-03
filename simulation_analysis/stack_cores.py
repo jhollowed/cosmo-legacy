@@ -53,7 +53,7 @@ def stackCores(catalog = 0, processed = True):
 
     catalogName = ['BLEVelocity', 'MedianVelocity', 'CentralVelocity'][catalog]
     processPrefix = ['un', ''][processed]
-    corePath = '/home/jphollowed/data/hacc/alphaQ/coreCatalog/{}'.format(catalogName)
+    corePath = 'data/coreCatalog/{}'.format(catalogName)
     stackFile = h5py.File('{}/stackedCores_{}processed.hdf5'.format(corePath, processPrefix), 'w')
     print('Read data from {} catalog and created file for stacking'.format(catalogName))
 

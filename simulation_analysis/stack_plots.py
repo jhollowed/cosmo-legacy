@@ -11,6 +11,14 @@ import glob
 import numpy as np
 import pdb
 import os
+import h5py
+import dtk
+from astropy.constants import M_sun
+from astropy.cosmology import WMAP7 as cosmo
+from matplotlib.ticker import ScalarFormatter
+import matplotlib.ticker as plticker
+import matplotlib.colors as colors
+#==============================================================================================
 
 def initPlot():
 	'''
@@ -20,6 +28,9 @@ def initPlot():
 	plt.rc('text', usetex=True)
 	params = {'text.latex.preamble' : [r'\usepackage{amsmath}']}
 	plt.rcParams.update(params)
+
+
+#==============================================================================================
 
 def stack_binning(bin_prop, catalog='cut'):
 	'''
@@ -74,6 +85,8 @@ def stack_binning(bin_prop, catalog='cut'):
 		plt.savefig('{}/{}.png'.format(fig_path, z))
 		print('saved figure at z = {}'.format(z))
 
+
+#==============================================================================================
 	
 def stack_segregation(segr_prop='infall_mass', max_r = 1, catalog='cut', vel_type = '', 
 		      norm='_coreNorm', all_zs=False, particles=False):
@@ -159,6 +172,8 @@ def stack_segregation(segr_prop='infall_mass', max_r = 1, catalog='cut', vel_typ
 		print('saved figure at z = {}'.format(z))
 	
 
+#==============================================================================================
+
 def VvsR_particlesVcores():
 	'''
 	Plots the binned average radial velocity vs radial distance 
@@ -212,3 +227,189 @@ def VvsR_particlesVcores():
 
 		plt.savefig('{}/{}.png'.format(fig_path, z))
 		print('saved figure for z = {}'.format(z))
+
+
+#==============================================================================================
+
+def vHistograms(allCats = True, catalog = 0, cutR = False, processed = True, norm=False):
+
+    initPlot()
+    if not allCats:
+        catalogName = [['BLEVelocity', 'MedianVelocity', 'CentralVelocity'][catalog]]
+    else:
+        catalogName = ['BLEVelocity', 'MedianVelocity', 'CentralVelocity']
+    processPrefix = ['un', ''][processed]
+    corePath = ['data/coreCatalog/{}'.format(cat) for cat in catalogName]
+    stackFile = [h5py.File('{}/stackedCores_{}processed.hdf5'.format(path, processPrefix), 'r+')
+                 for path in corePath]
+
+    vel = [stack['step_499']['v_coreNorm'][:] for stack in stackFile]
+    lw = [1, 1.2, 1.2]
+    c = [[0.3, 0.3, 1], [0, 1, 0], [1, .3, 0.3]]
+    bins = np.linspace(0, 8, 75)
+    if(allCats == False): ht = 'stepfilled'
+    else: ht = 'step'
+
+    if(cutR):
+        rad = [stack['step_499']['r_norm'][:] for stack in stackFile]
+        mask = [(r > 1e-1) for r in rad]
+        imask = [(r < 1e-1) for r in rad]
+        vel_cut = [v[mask] for v in vel]
+        vel_nocut = [v[imask] for v in vel]
+
+    f = plt.figure()
+    ax = f.add_subplot(111)
+    plt.hold(True)
+
+    for i in range(len(vel)):
+        if(cutR):
+            color = c[catalog]
+            ax.hist(vel_nocut[i], bins, histtype=ht, lw=lw[i], color=color, 
+                    label=catalogName[i] + '(r $<$ 0.1 r200)', normed=norm, alpha = 0.5)
+            ax.hist(vel_cut[i], bins, histtype=ht, lw=lw[i], color=color, 
+                    label=catalogName[i] + '(r $>$ 0.1 r200)',normed=norm, alpha = 0.8)
+        else:
+            ax.hist(vel[i], bins, histtype=ht, lw=lw[i], color=c[i], label=catalogName[i], normed=norm)
+    
+    ax.legend(fontsize=14)
+    ax.set_xlabel(r'$v/\sigma_{v,\mathrm{cores}}$', fontsize=18)
+    #ax.set_ylabel(r'$\mathrm{pdf}$', fontsize=18)
+
+    plt.show()
+
+
+#==============================================================================================
+
+def plot_sigVm(catalog=0, processed=True, scatter = False):
+
+    initPlot()
+    catalogName = ['BLEVelocity', 'MedianVelocity', 'CentralVelocity'][catalog]
+    processSuffix = ['un', ''][processed]
+
+    fig_path = '/home/jphollowed/figs/dispVmass_figs'
+    halo_path = ('data/coreCatalog/{}/haloCores_{}processed.hdf5'
+             .format(catalogName, processSuffix))
+    stepZ = dtk.StepZ(200, 0, 500)
+
+    alphaQ = h5py.File(halo_path, 'r')
+    steps = np.array(list(alphaQ.keys()))
+    zs = np.array([stepZ.get_z(int(step.split('_')[-1])) for step in steps])
+    sortOrder = np.argsort(zs)
+    zs = zs[sortOrder]
+    steps = steps[sortOrder]
+    halo_masses = []
+    halo_vDisp = []
+    core_vDisp = []
+    core_vDisp_err = []
+    core_counts = []
+
+    for j in range(len(zs)):
+        z = zs[j]
+        a = cosmo.scale_factor(z)
+        h = cosmo.H(z).value/100
+        thisStep = alphaQ[steps[j]]
+        halo_tags = thisStep.keys()
+        halos = [thisStep[tag].attrs for tag in halo_tags]
+
+        halo_masses = np.concatenate([halo_masses, [halo['sod_halo_mass']*h for halo in halos]])
+        halo_vDisp = np.concatenate([halo_vDisp, [halo['sod_halo_vel_disp']*a for halo in halos]])
+        core_vDisp = np.concatenate([core_vDisp, [halo['core_vel_disp']*a for halo in halos]])
+        core_vDisp_err = np.concatenate([core_vDisp_err, 
+                                        [halo['core_vel_disp_err']*a for halo in halos]])
+        core_counts = np.concatenate([core_counts, 
+                                     [thisStep[tag]['core_tag'].size for tag in halo_tags]])
+         
+    # Overplotting Evrard relation
+    t_x = np.linspace(4.5e13, 2e15, 300)
+    sig_dm15 = 1082.9
+    sig_dm15_err = 4
+    alpha = 0.3361
+    alpha_err = 0.0026
+    t_y = sig_dm15 * (t_x / 1e15)**alpha
+    t_y_high = (sig_dm15 + sig_dm15_err) * (t_x / 1e15)**(alpha + alpha_err)
+    t_y_low = (sig_dm15 - sig_dm15_err) * (t_x/ 1e15)**(alpha - alpha_err)
+    
+    # preforming Least Squares on AlphaQuadrant Data
+    # (fitting to log linear form, as in Evrard et al.)
+    # X = feature matrix (masses)
+    # P = parameter matrix (sig_dm15(log intercept) and alpha(log slope))
+    X = np.array([np.log(mi / 1e15) for mi in halo_masses])
+    X = np.vstack([X, np.ones(len(X))]).T
+    P = np.linalg.lstsq(X, np.log(halo_vDisp))[0]
+    alpha_fit = P[0]
+    sig_dm15_fit = np.e**P[1]
+
+    # preforming Least Squares on core data
+    X = np.array([np.log(mi / 1e15) for mi in halo_masses])
+    X = np.vstack([X, np.ones(len(X))]).T
+    P = np.linalg.lstsq(X, np.log(core_vDisp))[0]
+    alpha_fit_cores = P[0]
+    sig_dm15_fit_cores = np.e**P[1]
+
+    fit_x = np.linspace(4.5e13, 2e15, 300)
+    fit_y = sig_dm15_fit * (( (fit_x) / (1e15) )**alpha_fit)
+    fit_y_cores = sig_dm15_fit_cores * (( (fit_x) / (1e15) )**alpha_fit_cores)
+    
+    print('Dm fit: sig_dm15 = {}, alpha = {}'.format(sig_dm15_fit, alpha_fit))
+    print('Core fit: sig_dm15 = {}, alpha = {}'.format(sig_dm15_fit_cores, alpha_fit_cores))
+    print('Bias = sig_cors / sig_DM = {}'.format(sig_dm15_fit_cores/sig_dm15_fit))
+
+    # ---------- plotting ----------
+    fig = plt.figure()
+    ax = fig.add_subplot(1,1,1)
+    vRange = [200, 1550]
+    mRange = [4.5e13, 2e15]
+    plt.hold(True)
+    
+    if(scatter):
+        p = ax.loglog(halo_masses, halo_vDisp, '^', markersize=8, color='black', zorder=1, 
+                  label='DM dispersion')
+        p_cores = ax.scatter(halo_masses, core_vDisp, lw=0, c=core_counts, 
+                     zorder=2, norm=colors.LogNorm(vmin=10, vmax=200), 
+                     label='Core dispersion', s=10, cmap='PuBuGn')
+        cbar=plt.colorbar(p_cores, ticks=np.linspace(0, 200, 21), extend='max')
+        cbar.ax.set_yticklabels([str(int(i)) for i in np.linspace(0, 200, 21)])
+    else:
+        nBins = 30
+        xRange = np.log10(mRange)
+        yRange = np.log10(vRange)
+        xbins = np.logspace(xRange[0], xRange[1], nBins)
+        ybins = np.logspace(yRange[0], yRange[1], nBins)
+        bins = [xbins, ybins]
+
+        xCenters = xbins[:-1] + np.diff(xbins) / 2
+        yCenters = ybins[:-1] + np.diff(ybins) / 2
+        X, Y = np.meshgrid(xCenters, yCenters)
+        
+        haloDensity = np.histogram2d(halo_masses, halo_vDisp, bins)
+        coreDensity = np.histogram2d(halo_masses, core_vDisp, bins) 
+        ax.contourf(X, Y, haloDensity[0].T, cmap='Greys', vmin=0, label='core dispersion')
+        ax.contourf(X, Y, coreDensity[0].T, cmap='PuBu', vmin=0, label='particle dispersion')
+
+    t = ax.loglog(t_x, t_y, '--b', linewidth = 1.2)
+    t_err = plt.fill_between(t_x, t_y_low, t_y_high, color=[0.7, 0.7, 1])
+    fit = ax.loglog(fit_x, fit_y, 'b', linewidth = 1.2)
+    fit_cores = ax.loglog(fit_x, fit_y_cores, 'g', linewidth = 1.2)
+
+    ax.set_ylim(vRange)
+    ax.set_xlim(mRange)
+    
+    ax.set_ylabel(r'$\sigma_v$', fontsize=16)
+    ax.set_xlabel(r'$h(z)\mathrm{M}_{200}$', fontsize=16)
+    ax.legend(loc=4)
+    ax.yaxis.set_major_formatter(ScalarFormatter())
+    loc = plticker.MultipleLocator(base=100)
+    ax.yaxis.set_major_locator(loc)
+    #plt.text(0.05, 0.8, 'Dm fit: sig_dm15 = {:.2f}, alpha = {:.2f}'
+    #              .format(sig_dm15_fit, alpha_fit),
+    #     transform=ax.transAxes, fontsize = 14)
+    #plt.text(0.05, 0.75,'Core fit: sig_dm15 = {:.2f}, alpha = {:.2f}'
+    #              .format(sig_dm15_fit_cores, 
+    #     alpha_fit_cores),transform=ax.transAxes, fontsize = 14)
+    #plt.text(0.05, 0.7, 'Bias = sig_cors / sig_DM = {:.2f}'
+    #     .format(sig_dm15_fit_cores/sig_dm15_fit),
+    #     transform=ax.transAxes, fontsize = 14)
+    plt.text(0.05, 0.8, '{}'.format(catalogName),transform=ax.transAxes, fontsize = 14)
+        
+    #plt.savefig('{}/{}_members.png'.format(fig_path, minN))
+    plt.show()

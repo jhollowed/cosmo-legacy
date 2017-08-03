@@ -171,14 +171,26 @@ def bDispersion_err(sigBI, N):
     return d_sigBI
 
 
-def bootstrap_bDispersion(vals, size = None, draws = 1000, repl = True):
+def bootstrap_bDispersion(vals, size = None, draws = 1000, repl = True, conf=68.3, avgErr = True):
 
     if(size == None):
         size = len(vals)
+    else:
+        size = int(size)
+
+    disp = bDispersion(vals)
     results = [bDispersion(np.random.choice(vals, size=size, replace=repl)) for i in range(draws)]
-    avg = np.mean(results)
-    err = np.sqrt(np.std(results))
-    return [avg, err]
+    scatter = results - disp
+
+    critPoints = [0+(100-conf)/2, 100-(100-conf)/2]
+    critVals = [np.percentile(scatter, critPoints[i], interpolation='nearest') for i in range(2)]
+    confidence = [disp - crit for crit in critVals]
+    
+    if(avgErr):
+        err = np.mean(abs(confidence - disp))
+        return [disp, err]
+    else:
+        return [confidence[1], disp, confidence[0]]
 
 
 def bDispersion_beers(v, iter = True, maxIters=6, tol = 0, C=9.0):

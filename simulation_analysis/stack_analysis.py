@@ -24,8 +24,8 @@ import numpy.lib.recfunctions as rcfn
 
 #==============================================================================================
 
-def stack_segregation(n_draws=21, max_r=10, max_z=1.5, catalog=0, velComp =2, norm=0, 
-                      processed = True, have_stacks=False):
+def stack_segregation(n_draws=21, max_r=9, max_z=1.5, catalog=0, velComp =2, norm=0, 
+                      processed = True):
     '''
     Caclulate the segregation in velocity dispersion of cores on each core property (i.e 
     infall_mass) by drawing from the full stacked halo ("full" as in, across all redshifts, 
@@ -45,8 +45,6 @@ def stack_segregation(n_draws=21, max_r=10, max_z=1.5, catalog=0, velComp =2, no
     This entire procedure is done using both 1D and 3D velocities/dispersions, and for all 
     important core properties (infall mass, radius, infall time)
 
-    :param segrProp: the core property on which to calculate velocity segregation
-          (must match an exact column name of the core catalog data) 
     :param n_draws: the number of mixed bins to include in the analysis (default=21)
     :param max_r: maximum normalized radial distance of which to draw cores from (default=1)
     :param max_z: the maximum redshift from which to draw cores
@@ -54,16 +52,14 @@ def stack_segregation(n_draws=21, max_r=10, max_z=1.5, catalog=0, velComp =2, no
     :param velComp: which velocity component to use (0=radial, 1=tangent, or 2=total velocity vector)
     :param norm: which velocity normalization to use (0=coreNorm, 1=haloNorm)
     :param processed: whether or not to use the processed core catalog
-    :param have_stacks: whether or not to use saved segregation stacks or make new ones
-                        (essentially, whether or not you have run this function for a 
-                        given core property yet. If True, then do no create new segregation stacks)
+    
     :return: None
     '''
 
     # find stacked-halo core data and prepare parameters
     catalogName = ['BLEVelocity', 'MedianVelocity', 'CentralVelocity'][catalog]
     processPrefix = ['un', ''][processed]
-    corePath = '/home/jphollowed/data/hacc/alphaQ/coreCatalog/{}'.format(catalogName)
+    corePath = 'data/coreCatalog/{}'.format(catalogName)
     stackFile = h5py.File('{}/stackedCores_{}processed.hdf5'.format(corePath, processPrefix), 'r+')
     velComp = ['_rad', '_tan', ''][velComp]
     norm = ['_coreNorm', '_haloNorm'][norm]
@@ -119,8 +115,12 @@ def stack_segregation(n_draws=21, max_r=10, max_z=1.5, catalog=0, velComp =2, no
         print('\n\n----- Working on stack at z = {} ({}/{})-----'.format(z, n, len(zStacks))) 
 
         # get dispersion and center of the full stack, before segregation
+        # Note: it is important to draw without replacement when bootstrapping if you are investigating 
+        # a second order statistic, like dispersion, since allowing replacement will artificially 
+        # bias results low (Bayliss + 2016), hence we pass repl=False to the bootstrap function
         velocities = stack['v{}{}'.format(velComp, norm)][:][rMask]
-        [vDisp_all, vDisp_allErr] = stat.bootstrap_bDispersion(velocities)
+        [vDisp_all, vDisp_allErr] = stat.bootstrap_bDispersion(velocities, 
+                                                               size=len(velocities)/2, repl = False)
         vAvg_all = stat.bAverage(velocities)
         
         # create vector of fractions according to n_draws
@@ -149,6 +149,8 @@ def stack_segregation(n_draws=21, max_r=10, max_z=1.5, catalog=0, velComp =2, no
                     popLabels[haloMask] = halo_upperPopulation
                 
                 stack.create_dataset('{}_segr'.format(prop), data = popLabels.astype(int))
+            else:
+                print('skipping segregation on {}; already complete'.format(prop))
 
             for j in range(n_draws):
                 print('Working on bin {} ({:.2f}% upper points)'.format(j, fracs[j]*100))
@@ -167,7 +169,8 @@ def stack_segregation(n_draws=21, max_r=10, max_z=1.5, catalog=0, velComp =2, no
 
                 # find the dispersion of the cores in this bin, and associated errors, via 
                 # bootstrap resampling 
-                [vDisp_avg, vDisp_err] = stat.bootstrap_bDispersion(sample_v)
+                [vDisp_avg, vDisp_err] = stat.bootstrap_bDispersion(sample_v, 
+                                                                    size=len(sample_v)/2, repl = False)
 
                 # normalize the resultant dispersions and errors by the dispersion of the 
                 # entire stacked halo (using proper error propegation for the uncertainty)
@@ -187,7 +190,8 @@ def stack_segregation(n_draws=21, max_r=10, max_z=1.5, catalog=0, velComp =2, no
 
 #==============================================================================================
 
-def stack_binning(bin_prop, n_bins = 10, catalog='cut'):
+def segregation_binning(n_bins=21, max_r=9, max_z=1.5, catalog=0, velComp =2, norm=0, 
+                        processed = True):
     '''
     Similar the the stack_segregation() function, where I simply bin the stacked halos by
     some core property rather than segregating by it (i.e. instead of collecting two distinct
@@ -197,69 +201,125 @@ def stack_binning(bin_prop, n_bins = 10, catalog='cut'):
     I still use the same bootstrap method for finding the dispersion and dispersion error
     for each distribution (bin of cores). This can also all be done using 1D or 3D velocities.
 
-    :param bin_prop: the core property to use to bin the stacked halo (str)
-    :param n_bins: number of bins to use (number of distinct distributions to measure
-               dispersion on) (int)
-    :param catalog: version of the core catalog to use ('unprocessed', 'cut', or 'merged') (str)
+    :param n_bins: the number of mixed bins to include in the analysis (default=21)
+    :param max_r: maximum normalized radial distance of which to draw cores from (default=1)
+    :param max_z: the maximum redshift from which to draw cores
+    :param catalog: version of core velocities to use (0=biweight, 1=median, 2=central particle)
+    :param velComp: which velocity component to use (0=radial, 1=tangent, or 2=total velocity vector)
+    :param norm: which velocity normalization to use (0=coreNorm, 1=haloNorm)
+    :param processed: whether or not to use the processed core catalog
+
+    :return: None, save results to hdf file
     '''
 
-    save_dest = ('/home/jphollowed/data/hacc/alphaQ/coreCatalog_{}/stackAnalysis/'\
-             '{}_binned_cores'.format(catalog, bin_prop))
-    if not os.path.exists(save_dest): os.makedirs(save_dest)
-    stack_path = ('/home/jphollowed/data/hacc/alphaQ/coreCatalog_{}/stackedHalos/by_redshift'
-              .format(catalog))
-    stacks = sorted(glob.glob('{}/stack_[0-9]*_[0-9]*'.format(stack_path)))
-    stack_zs = [s.split('_')[-2].split('_')[-1] for s in stacks]
+    # find stacked-halo core data and prepare parameters
+    catalogName = ['BLEVelocity', 'MedianVelocity', 'CentralVelocity'][catalog]
+    processPrefix = ['un', ''][processed]
+    corePath = 'data/coreCatalog/{}'.format(catalogName)
+    stackFile = h5py.File('{}/stackedCores_{}processed.hdf5'.format(corePath, processPrefix), 'r')
+    velComp = ['_rad', '_tan', ''][velComp]
+    norm = ['_coreNorm', '_haloNorm'][norm]
+
+    # build suffix for the tail of the filename based on the current parameters
+    if(velComp == ''): suff = 'z{}r{}n{}'.format(max_z, max_r, norm[1])
+    else: suff = 'z{}r{}n{}v{}'.format(max_z, max_r, norm[1], velComp[1])
     
-    # save plot data for each redshift
-    for n  in range(len(stacks)):
+    # create new hdf5 file to hold segregation data
+    segrStackFile = h5py.File('{}/segregatedCores_binned_{}processed_{}.hdf5'
+                              .format(corePath, processPrefix, suff), 'w')
+    print('\nRead data from core catalog and created file for segregation')
+    print('Using {} velocity with {} normalization'.format(catalogName, norm))
 
-        stack = np.load(stacks[n])
-        z = stack_zs[n]
-
-        print('\n\n----- Working on stack at z = {} ({}/{})-----'.format(z, n, len(stacks)-1)) 
-        # get dispersion and center of the full stack, before binning        
-        vDisp_all = stat.bDispersion(stack['v_coreNorm'])
-        vAvg_all = stat.bAverage(stack['v_coreNorm'])
-        vDisp_all_1d = stat.bDispersion(stack['v_1d_coreNorm'])
-        vAvg_1d = stat.bDispersion(stack['v_1d_coreNorm'])
-        
-        # bin stack into bins of equal sample size on the specified core property
-        prop = stack[bin_prop]
-        bin_edges = np.percentile(prop, np.linspace(0, 100, n_bins).tolist())
-        avg_prop = [(bin_edges[n+1] + bin_edges[n]) / 2 for n in range(len(bin_edges)-1)]    
-        bin_widths = [bin_edges[n+1]-bin_edges[n] for n in range(len(bin_edges)-1)]
-
-        # gather velocity data. In arrays below, 1st row is 1d data, 2nd row is 3d data
-        vs_3d = stack['v_coreNorm']
-        vs_1d = stack['v_1d_coreNorm']
-        vs = np.vstack((vs_1d, vs_3d))
-        vel_disp = np.empty((2,len(avg_prop)))
-        vel_disp_err = np.empty((2,len(avg_prop)))
-        
-        # find dispersion for each bin
-        for i in range(len(bin_widths)):
-            if(i%5==0):print('working on bin {}'.format(i))
-            mask = (prop <= bin_edges[i+1]) & (prop > bin_edges[i])
-            bin_vs = np.array([vi[mask] for vi in vs])
-            
-            # do bootstrap resampling 
-            # (first row is 1d dispersions, 2nd row is 3d dispersions)
-            bootstrap_disp = np.zeros((2,1000))
-            
-            for j in range(1000): 
-                if(j%500 == 0): print('bootstrap resample {}/{}'.format(j, 1000))
-                next_sample_1d = np.random.choice(vs[0], size=len(vs[0]), replace=True)
-                next_sample_3d = np.random.choice(vs[1], size=len(vs[1]), replace=True)
-                bootstrap_disp[:,j] = [stat.bDispersion(next_sample_1d),
-                               stat.bDispersion(next_sample_3d)] / vDisp_all
-            vel_disp[:,i] = np.mean(bootstrap_disp, axis=1)
-            vel_disp_err[:,i] = np.std(bootstrap_disp, axis=1) 
+    # find all cores within redshift bound set by max_z, from stacked halo
+    steps = np.array(list(stackFile.keys()))
+    zs = np.array([stackFile[step].attrs['z'] for step in steps])
+    zMask = (zs <= max_z)
     
-        cols = ['bin_avg', 'bin_width', 'vDisp', 'vDisp_err', 'vDisp_1d', 'vDisp_err_1d']
-        output = np.rec.fromarrays([avg_prop, bin_widths, vel_disp[1], vel_disp_err[1], 
-                        vel_disp[0], vel_disp_err[0]], names=cols) 
-        np.save('{}/core_{}_binned_{}'.format(save_dest, bin_prop, z), output)
+    stepNums = np.array([int(step.split('_')[-1]) for step in steps[zMask]])
+    sortMask = np.argsort(stepNums)
+    
+    stepNums = stepNums[sortMask]
+    zs = zs[zMask][sortMask]
+    zStacks = [stackFile[step] for step in steps[zMask][sortMask]]
+
+    # list each core property to be segregated
+    segrProp = ['infall_mass', 'radius', 'time_since_infall']
+    
+    # record current parameters as hdf root group attributes, and
+    # create a new hdf group for each mixed bin
+    segrStackFile.attrs.create('max_(r/r200)', max_r)
+    segrStackFile.attrs.create('max_z', max_z)
+    segrStackFile.attrs.create('norm', norm.encode('utf8'))
+    for j in range(len(stepNums)):
+        nextStep = segrStackFile.create_group('step_{}'.format(stepNums[j]))
+        nextStep.attrs.create('z', zs[j])
+        for prop in segrProp:
+            nextStep.create_group('{}_segr'.format(prop)) 
+
+    #---------------------------------------------------------------------------------
+    #-------------------- begin segregating stacks at each redshift -------------------
+    
+    for n  in range(len(zStacks)):
+
+        # focus on hdf group from the original stacked halo that corresponds to the current redshift
+        # Note: h5py datasets must be read in the form file['datasetName'][:] to yield 
+        # an actual numpy array, file['datasetName'] will return an h5py object
+        step = stepNums[n]
+        stack = zStacks[n]
+        rMask = stack['r_norm'][:] <= max_r
+        z = zs[n]
+        print('\n\n----- Working on stack at z = {} ({}/{})-----'.format(z, n, len(zStacks))) 
+
+        # get dispersion and center of the full stack, before segregation
+        # Note: it is important to draw without replacement when bootstrapping if you are investigating 
+        # a second order statistic, like dispersion, since allowing replacement will artificially 
+        # bias results low (Bayliss + 2016), hence we pass repl=False to the bootstrap function
+        velocities = stack['v{}{}'.format(velComp, norm)][:][rMask]
+        [vDisp_all, vDisp_allErr] = stat.bootstrap_bDispersion(velocities, 
+                                                               size=len(velocities)/2, repl = False)
+        vAvg_all = stat.bAverage(velocities)
+        
+        # add a a new column of binary data for each segregation property to the original
+        # stacked cluster hdf file, representing if that core belong to the lower or upper pop
+        for prop in segrProp:
+
+            print('---------- preforming segregation on {} ----------'.format(prop))
+            
+            # bin stack into bins of equal sample size on the current segregation property
+            propData = stack[prop][:]
+            bin_edges = np.percentile(propData, np.linspace(0, 100, n_bins))
+            bin_centers = bin_edges[:-1] + np.diff(bin_edges)/2
+            bin_widths = np.diff(bin_edges)
+            
+            bin_dispersions = np.zeros(n_draws)
+            bin_disp_errors = np.zeros(n_draws)
+
+            for j in range(n_bins):
+                print('Working on bin {} ({:.2f}% upper points)'.format(j, fracs[j]*100))
+                
+                bin_mask = (propData > bin_edges[j]) & (prop <= bin_edges[j+1])
+                bin_vs = stack['v{}{}'.format(velComp, norm)][:][binMask]
+                
+                # find the dispersion of the cores in this bin, and associated errors, via 
+                # bootstrap resampling 
+                [vDisp_avg, vDisp_err] = stat.bootstrap_bDispersion(bin_vs, 
+                                                                    size=len(bin_vs)/2, repl = False)
+
+                # normalize the resultant dispersions and errors by the dispersion of the 
+                # entire stacked halo (using proper error propegation for the uncertainty)
+                bin_dispersions[j] = vDisp_avg / vDisp_all
+                bin_disp_errors[j] = bin_dispersions[j] * np.sqrt(vDisp_err**2 + vDisp_allErr**2)
+
+                print('Done. dispersion = {} +- {}'.format(bin_dispersions[j], bin_disp_errors[j]))
+            
+            print('saving segregation data')    
+            dataFile = segrStackFile['step_{}'.format(step)]['{}_segr'.format(prop)]
+            dataFile.create_dataset('bin_center', data = bin_centers)
+            dataFile.create_dataset('bin_width', data = bin_widths)
+            dataFile.create_dataset('bin_vDisp', data = bin_dispersions)
+            dataFile.create_dataset('bin_vDispErr', data = bin_disp_errors)
+
+            print('Done.')    
 
 
 #==============================================================================================
