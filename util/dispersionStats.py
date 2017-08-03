@@ -171,13 +171,14 @@ def bDispersion_err(sigBI, N):
     return d_sigBI
 
 
-def bootstrap_bDispersion_err(vals, size = None, draws = 1000, replace = True):
+def bootstrap_bDispersion(vals, size = None, draws = 1000, repl = True):
 
     if(size == None):
         size = len(vals)
-    results = [bDispersion(np.random.choice(vals, size=size, replace=replace)) for i in range(draws)]
+    results = [bDispersion(np.random.choice(vals, size=size, replace=repl)) for i in range(draws)]
+    avg = np.mean(results)
     err = np.sqrt(np.std(results))
-    return err
+    return [avg, err]
 
 
 def bDispersion_beers(v, iter = True, maxIters=6, tol = 0, C=9.0):

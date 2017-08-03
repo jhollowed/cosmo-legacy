@@ -1,6 +1,6 @@
 '''
 Joe Hollowed
-Last edited 2/7/2017
+Last edited 8/1/2017
 
 Script to stack large cluster-sized dark matter halo cores. This means to normalize each 
 of the cores radius and velocities by properties of its host cluster. The following data 
@@ -15,7 +15,7 @@ saved per core in the stacked (or ensemble) halo:
 	where r is the radial position vector of the core as described above. This radial
 	velocity is then multiplied by the scale factor, a, given by
 	the host halo's redshift.
-- The radial "coreNorm" and "dmNorm"  velocity: the radial velocity above, 
+- The radial "coreNorm" and "haloNorm"  velocity: the radial velocity above, 
 	scaled by the inverse of the core velocity dispersion and dark matter (particle) 
 	velocity dispersion of the host cluster, respectively.
 - The halo-respective cartesian velocity: simply the magnitude of the relative velocity vector
@@ -47,20 +47,20 @@ import coreTools as ct
 from scipy.stats import itemfreq
 import numpy.lib.recfunctions as rcfn
 from numpy.core import umath_tests as npm
-from astropy.cosmology import WMAP9 as cosmo
+from astropy.cosmology import WMAP7 as cosmo
 
 def stackCores(catalog = 0, processed = True):
 
     catalogName = ['BLEVelocity', 'MedianVelocity', 'CentralVelocity'][catalog]
-    processSuffix = ['un', ''][processed]
+    processPrefix = ['un', ''][processed]
     corePath = '/home/jphollowed/data/hacc/alphaQ/coreCatalog/{}'.format(catalogName)
-    stackFile = h5py.File('{}/stackedCores_{}processed.hdf5'.format(corePath, processSuffix), 'w')
+    stackFile = h5py.File('{}/stackedCores_{}processed.hdf5'.format(corePath, processPrefix), 'w')
     print('Read data from {} catalog and created file for stacking'.format(catalogName))
 
     zTool = dtk.StepZ(200, 0, 500)
     boxL = 256
 
-    allHalos = h5py.File('{}/haloCores_{}processed.hdf5'.format(corePath, processSuffix), 'r')
+    allHalos = h5py.File('{}/haloCores_{}processed.hdf5'.format(corePath, processPrefix), 'r')
     halo_steps = [int(step.split('_')[-1]) for step in list(allHalos.keys())]
     halo_zs = np.array([zTool.get_z(step) for step in halo_steps])
     print('Found all redshift groups in {} hdf5 file\nBeginning stacking...'.format(catalogName))
@@ -75,6 +75,7 @@ def stackCores(catalog = 0, processed = True):
         haloTags = list(nextHalos.keys())
         nextZGroup = stackFile.create_group('step_{}'.format(step))
         nextZGroup.attrs.create('z', z)
+        nextZGroup.attrs.create('num_halos_stacked', len(haloTags))
         print('\n{} halos at redshift {:.2f}'.format(len(haloTags), z))
 
         # find total number of cores that will be in this step's stack
@@ -82,16 +83,20 @@ def stackCores(catalog = 0, processed = True):
 
         print('creating datasets')
         # gather data that I already have in the un-stacked core files, faltten, and add to new hdf
-        haveColumns = ['core_tag', 'infall_mass', 'infall_step', 'radius']
+        haveColumns = ['fof_halo_tag', 'core_tag', 'infall_mass', 'infall_step', 'radius']
         for column in haveColumns:
-            values = np.array([nextHalos[tag][column].value for tag in haloTags])
+            if(column == 'fof_halo_tag'): 
+                values = np.array([[int(tag.split('_')[-1])]
+                                    *len(nextHalos[tag]['core_tag']) for tag in haloTags])
+            else: 
+                values = np.array([nextHalos[tag][column].value for tag in haloTags])
             if(len(values)>1): values = np.hstack(values)
             nextZGroup.create_dataset(column , data=values)
 
         # create datasets in new hdf for columns that will be computed below
-        calcColumns = ['r', 'r_norm', 'v', 'v_coreNorm', 'v_dmNorm', 'v_rad', 
-                       'v_rad_coreNorm', 'v_rad_dmNorm', 'v_tan', 'v_tan_coreNorm'
-                       'v_tan_dmNorm', 'r_proj', 'r_proj_norm', 'v_los', 'v_los_coreNorm']
+        calcColumns = ['time_since_infall', 'r', 'r_norm', 'v', 'v_coreNorm', 'v_haloNorm', 'v_rad', 
+                       'v_rad_coreNorm', 'v_rad_haloNorm', 'v_tan', 'v_tan_coreNorm'
+                       'v_tan_haloNorm', 'r_proj', 'r_proj_norm', 'v_los', 'v_los_coreNorm']
         for column in calcColumns:
             nextZGroup.create_dataset(column, shape = (coreTot,))
                             
@@ -112,6 +117,14 @@ def stackCores(catalog = 0, processed = True):
             #if(tag == 709670038):
             #        # skip weird quintuplet halo 
             #        continue
+
+            # calculate lookback time for each  core's redshift of infall, 
+            # and find the time elapsed since infall (the difference in the lookback time
+            # to the redshift of the halo, and the infall redshift
+            infall_zs = zTool.get_z(cores['infall_step'][:]) 
+            infall_lookback = cosmo.lookback_time(infall_zs)
+            halo_lookback = cosmo.lookback_time(z)
+            time_since_infall = (infall_lookback - halo_lookback).value
 
             #----------------------------- 3 DIMENSIONAL ------------------------------------------	
             
@@ -164,17 +177,17 @@ def stackCores(catalog = 0, processed = True):
                 raise ValueError('tangent and radial unit vectors are not orthagonal for all cores')
             if( max(abs(np.linalg.norm(np.column_stack([v_radial, v_tan]), axis=1) 
                         - v_rel_mag)) > 1e-3):
-                raise ValueError('velocity components do not superimpose to original velocity vector')
+                raise ValueError('magnitude of velocity components not equal to velocity vector')
             
             # normalize cartesian and radial velocities and radii with respect to velocity 
             # dispersion and host halo
             r_norm = r_rel_mag / (halo['sod_halo_radius'])
             v_coreNorm = v_rel_mag / halo['core_vel_disp']
-            v_dmNorm = v_rel_mag / halo['sod_halo_vel_disp']
+            v_haloNorm = v_rel_mag / halo['sod_halo_vel_disp']
             v_radial_coreNorm = v_radial / halo['core_vel_disp']
-            v_radial_dmNorm = v_radial / halo['sod_halo_vel_disp']
+            v_radial_haloNorm = v_radial / halo['sod_halo_vel_disp']
             v_tan_coreNorm = v_tan / halo['core_vel_disp']
-            v_tan_dmNorm = v_tan / halo['sod_halo_vel_disp']
+            v_tan_haloNorm = v_tan / halo['sod_halo_vel_disp']
         
             #----------------------------- 1 DIMENSIONAL ------------------------------------------	
             
@@ -190,9 +203,9 @@ def stackCores(catalog = 0, processed = True):
     
             # --------------------------------------------------------------------------------------
             
-            calcColumnData = [r_rel_mag, r_norm, v_rel_mag, v_coreNorm, v_dmNorm, v_radial, 
-                              v_radial_coreNorm, v_radial_dmNorm, v_tan, v_tan_coreNorm, 
-                              v_tan_dmNorm, r_rel_mag_2d, r_2d_norm, v_1d, v_1d_coreNorm]
+            calcColumnData = [time_since_infall, r_rel_mag, r_norm, v_rel_mag, v_coreNorm, v_haloNorm, 
+                              v_radial, v_radial_coreNorm, v_radial_haloNorm, v_tan, v_tan_coreNorm, 
+                              v_tan_haloNorm, r_rel_mag_2d, r_2d_norm, v_1d, v_1d_coreNorm]
             
             for k in range(len(calcColumns)):
                 nextZGroup[calcColumns[k]][startIndex:endIndex] = calcColumnData[k]
