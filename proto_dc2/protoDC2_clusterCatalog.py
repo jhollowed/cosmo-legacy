@@ -63,6 +63,8 @@ def makeCatalog():
 
 # ====================================================================================================
 
+    start = time.time()
+    
     # load halo sod catalog
     haloCatalogPath = '/media/luna1/dkorytov/data/AlphaQ/sod'
     haloCatalog = glob.glob('{}/*.sodproperties'.format(haloCatalogPath))
@@ -87,13 +89,11 @@ def makeCatalog():
     duplicates=0
 
 
-
     # ---------------------------------------------------------------------------------------
 
     # loop through all halos
     for k in range(len(halos)):
         print('\nworking on halo {} ({}/{})'.format(halos[k], k+1, len(halos)))
-        start = time.time()
 
         # boolean mask of current halo galaxy membership
         galMask = [protoDC2['hostHaloTag'][:] == halos[k]]
@@ -179,8 +179,8 @@ def makeCatalog():
                 if(len(haloGroups[j][prop]) != np.sum(galMask[j])):
                     raise ValueError('galaxy population size not the same across columns (bad masks)')
             print('saved all galaxy datasets')
-            print('took {:.2f} s'.format(time.time() - start))
-
+    
+    print('Done. Took {:.2f} s'.format(time.time() - start))
     return 0
 
 
