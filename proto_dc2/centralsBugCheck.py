@@ -1,3 +1,12 @@
+'''
+Joe Hollowed
+COSMO-HEP 2017
+
+This script was written to confirm a suspected bug found by Patricia in September 2017. She
+found that many halos in protoDC2 had numerous central galaxies - up to ~60, when there should
+always only be one. This script preforms the same bug check using my protoDC2 cluster catalog
+'''
+
 import numpy as np
 import matplotlib.pyplot as plt
 import h5py

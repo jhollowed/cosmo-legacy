@@ -51,8 +51,8 @@ def makeCatalog():
       Calculated here:
         -   RA   (median of meber galaxies RA)
         -   Dec  (median of member galaxies declination)
-        -   z    (median of member galaxies z's)
-        -   zErr (standard error of the median - 1.25 * SDOM)
+        -   z    (median of member galaxies observed redshifts (combination of cosmological + peculiar))
+        -   zErr (standard error of the median (1.25 * SDOM) of the above quantity 'z' )
         ** If a more robust statistic turns out to be needed for the last three quanties above, or the 
            redshift error ought to be simulated rather than assumed from a normal distribution, then I 
            will make those changes. But nearly all halos in this catalog have large numbers of member 
@@ -70,10 +70,16 @@ def makeCatalog():
     haloCatalog = glob.glob('{}/*.sodproperties'.format(haloCatalogPath))
     haloSteps = np.array([int(f.split('.')[0].split('-')[-1]) for f in haloCatalog])
 
+    # define desired sod halo properties
+    sodProps = ['sod_halo_radius', 'sod_halo_mass', 'sod_halo_ke', 'sod_halo_vel_disp', 
+                'sod_halo_cdelta', 'sod_halo_cdelta_error', 'sod_halo_c_acc_mass']
+    
     # load protoDC2 catalog
-    protoDC2Path = '/media/luna1/dkorytov/projects/protoDC2/output/mock_shear_full.hdf5'
+    #protoDC2Path = '/media/luna1/dkorytov/projects/protoDC2/output/mock_B_full_nocut.hdf5'
+    protoDC2Path = '/media/luna1/dkorytov/projects/protoDC2/output/mock_shear_nocut_A.hdf5'
+    #path_out = 'data/protoDC2_catalog_pecZ.hdf5'
+    path_out = 'data/protoDC2_clusters_shear_nocut_A.hdf5'
     protoDC2 = h5py.File(protoDC2Path, 'r')
-    path_out = 'data/protoDC2_catalog.hdf5'
     outputFile = h5py.File(path_out, 'w')
 
     # copy global attributes from original catalog
@@ -135,10 +141,20 @@ def makeCatalog():
         # loop through each duplicated halo (only 1 loop in the case of no duplication)
 
         for j in range(len(galMask)):
+            
+            host_quantityModifiers = {
+                'hostHaloMass':'fof_halo_mass',
+                'hostIndex':'halo_index',
+                'hostHaloTag':'fof_halo_tag',
+                'step':'halo_step'
+            }
+            
             if(len(galMask) > 1): print('working on duplicate {} ({} gals)'
                                         .format(j+1, np.sum(galMask[j])))
+            
             galProps = np.array(list(protoDC2.keys()))
-            hostPropIdx = np.where( (['host' in p for p in galProps]) | (galProps == 'step') )[0]
+            hostPropMask = np.array([p in host_quantityModifiers.keys() for p in galProps])
+            hostPropIdx = np.linspace(0, len(galProps)-1, len(galProps), dtype=int)[hostPropMask]
             hostProps = galProps[hostPropIdx]
             galProps = np.delete(galProps, hostPropIdx)
 
@@ -148,30 +164,31 @@ def makeCatalog():
                 data = protoDC2[prop][:][galMask[j]]
                 if( sum(abs(np.diff(data))) != 0):
                     raise ValueError('False sibling galaxies (mebership masking not working properly)')
-                haloGroups[j].attrs.create(prop, data[0])
+                modifiedProp = host_quantityModifiers[prop]
+                haloGroups[j].attrs.create(modifiedProp, data[0])
             
             # calculate some new halo properties not present in the catalog
             galRA = protoDC2['ra'][:][galMask[j]]
             galDec = protoDC2['dec'][:][galMask[j]]
-            galZ = protoDC2['redshift'][:][galMask[j]]
+            galZ = protoDC2['redshiftObserver'][:][galMask[j]]
             medianZErr = 1.25 * (np.std(galZ) / np.sqrt(len(galZ)))
-            haloGroups[j].attrs.create('ra', np.median(galRA))
-            haloGroups[j].attrs.create('dec', np.median(galDec))
-            haloGroups[j].attrs.create('z', np.median(galZ))
-            haloGroups[j].attrs.create('zErr', medianZErr)
+            haloGroups[j].attrs.create('halo_ra', np.median(galRA))
+            haloGroups[j].attrs.create('halo_dec', np.median(galDec))
+            haloGroups[j].attrs.create('halo_z', np.median(galZ))
+            haloGroups[j].attrs.create('halo_z_err', medianZErr)
 
             # save all sod properties of the halo from the haloCatalog as attrbiutes
-            sodStepIdx = np.where(haloSteps == haloGroups[j].attrs['step'])[0][0]
+            sodStepIdx = np.where(haloSteps == haloGroups[j].attrs['halo_step'])[0][0]
             sodTags = gio.gio_read(haloCatalog[sodStepIdx], 'fof_halo_tag')
             sodIdx = np.where(sodTags == halos[k])
-            sodProps = ['sod_halo_radius', 'sod_halo_mass', 'sod_halo_ke', 'sod_halo_vel_disp', 
-                        'sod_halo_cdelta', 'sod_halo_cdelta_error', 'sod_halo_c_acc_mass']
+            
             for prop in sodProps:
                 data = gio.gio_read(haloCatalog[sodStepIdx], prop)[sodIdx]
                 haloGroups[j].attrs.create(prop, data)
             print('saved all halo attributes')
 
             # ------------------------------ GROUP DATASETS ------------------------------
+            # save all protoDC2 galaxy data columns for the current halo's member galaxies
             for p in range(len(galProps)):
                 prop = galProps[p]
                 data = protoDC2[prop][:][galMask[j]]
@@ -179,7 +196,7 @@ def makeCatalog():
                 if(len(haloGroups[j][prop]) != np.sum(galMask[j])):
                     raise ValueError('galaxy population size not the same across columns (bad masks)')
             print('saved all galaxy datasets')
-    
+ 
     print('Done. Took {:.2f} s'.format(time.time() - start))
     return 0
 

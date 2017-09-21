@@ -1,3 +1,14 @@
+'''
+Joe Hollowed
+COSMO-HEP 2017
+
+This script tests my code found in pecZ.py using the AlphaQ core catalog. That is, is uses
+the peculiar velocity of each core, and finds a peculiar redshift. Each halo is then plotted in 3D
+comoving simulation coordinate space (x, y, z), with a velocity vector extending from each core 
+(open points). The color of the velocity vector indicates if the core was correctly found to be blue-
+or red-shifted (peculiar). A large black vector points in the direction of the observer. 
+'''
+
 import numpy as np
 import glob
 import h5py

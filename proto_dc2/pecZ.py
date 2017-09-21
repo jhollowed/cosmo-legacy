@@ -1,5 +1,4 @@
 '''
-
 Joe Hollowed
 COSMO-HEP 2017
 '''

@@ -3,6 +3,9 @@ dtk/
 dtk2/
 dtk3/
 
+# ignore data directories; too much meory to store on github
+data/
+
 # ---------- from the Python.gitignore file at github.com/github/gitignore/blob/master ----------
 
 # Byte-compiled / optimized / DLL files
