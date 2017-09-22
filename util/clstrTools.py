@@ -7,6 +7,7 @@ Providing set of tools for quick calculations and conversions of cluster physics
 
 import pdb
 import math
+import numba
 import numpy as np
 import massConversion as mc
 from astropy import units as u
@@ -46,39 +47,58 @@ def LOS_properVelocity(zi,z, dzi = [], dz = None):
         return [v, dv]
 
 
-def projectedDist(coords, center_coords, z, cosmo = WMAP7, type='comoving', units=0):
+def projectedDist(coords, center_coords, z, cosmo = WMAP7, dist_type='comoving'):
     '''
     Convert RA and Dec coordinate values to angular separation, and then separation distance in Mpc
     :param coords: Array of galaxy coordinates tuples or lists in the form (ra, dec)
     :param center_coords: The coordinate of the cluster center in the form (ra, dec)
     :param z: redshift of cluster
     :param cosmo: AstroPy Cosmology object (default is cosmo = WMAP7)
-    :param type: whether to return proper or comoving distance measurements (default is type=comoving)
-    :param units: boolean argument to return distances as AstroPy Quantity objects or not 
-		  (default is units=0)
+    :param dist_type: whether to return proper or comoving distance measurements 
+                      (default is type=comoving)
     :return: numpy array of projected distance values (if units = 0) or AstroPy Quantity 
 	     objects (if units = 1) in units of Mpc (if type=proper) or Mpc/h (if type=comoving)
     '''
 
     coords = np.array(coords)
-    sep = np.zeros(len(coords), dtype=object)
     dist = np.zeros(len(coords), dtype=object)
     center = SkyCoord(ra=center_coords[0], dec=center_coords[1], unit='deg')
     h = cosmo.h
-
-    for n in range(len(coords)):
-        nextCoord = coords[n]
-        coord = SkyCoord(ra=nextCoord[0], dec=nextCoord[1], unit='deg')
-        sep[n] = coord.separation(center).to('arcmin')
-        if(type=='proper'): 
-            dist[n] = sep[n] * h * (cosmo.kpc_proper_per_arcmin(z)/1000) * (u.Mpc/u.kpc)
-        if(type=='comoving'): 
-            dist[n] = sep[n] * h * (cosmo.kpc_comoving_per_arcmin(z)/1000) * (u.Mpc/u.kpc)
-
-    if(units == 0): return np.array([float(d.value) for d in dist])
-    else: return np.array(dist)
+    
+    if (dist_type == 'comoving'): kpc_per_arcmin = cosmo.kpc_comoving_per_arcmin(z).value
+    elif (dist_type == 'proper'): kpc_per_arcmin = cosmo.kpc_comoving_per_arcmin(z).value
+    else: raise ValueError('type must be either \'proper\' or \'comoving\'')
+    
+    skyCoords = SkyCoord(ra=coords.T[0], dec=coords.T[1], unit='deg')
+    sep = skyCoords.separation(center).to('arcmin').value
+    dist = sep * kpc_per_arcmin / 1000
+    return dist
 
 
+def interpolated_kpc_per_arcmin(z, cosmo = WMAP7, dist_type = 'comoving'):
+    '''
+    Interpolate the astropy kpc_per_arcmin functions
+    :param z: array of redshifts at which to preform the interpolation
+    :param cosmo: an astropy cosmology object instance (default = WMAP7)
+    :param dist_type: whether to return comoving or proper distances
+    :return: the kpc per arcmin separation at the specified redshifts (input param z)
+    '''
+    
+    try: samplePoints = np.load('interpolated_kpc_{}_per_arcmin.npy'.format(dist_type))
+    except FileNotFOundError: 
+        zspace = np.linspace(0, 2, 2000)
+        if(dist_type == 'comoving'): kpc_per_arcmin = cosmo.kpc_comoving_per_arcmin(z).value
+        elif(dist_type == 'proper'): kpc_per_arcmin = cosmo.kpc_proper_per_arcmin(z).value
+        else: raise ValueError('type must be either \'proper\' or \'comoving\'')
+        cols = ['z', 'kpc']
+        samplePoints = np.rec.fromarrays([zspace, kpc_per_arcmin], names=cols)
+        np.save('interpolated_kpc_{}_per_arcmin.npy'.format(dist_type))
+    z_pts = samplePoints['z']
+    kpc_pts = samplePoints['kpc']
+    kpc_interp = np.interp(z, z_pts, kpc_pts)
+    pdb.set_trace()
+    return kpc_interp
+    
 
 def mass_to_radius(mass, z, h = 100, mdef ='200c', cosmo = WMAP7, Msun=1):
     '''
