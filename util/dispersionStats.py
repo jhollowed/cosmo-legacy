@@ -44,7 +44,6 @@ def bAverage(z, tol = 0, maxIters = 6, C=6.0):
     :param C: the"tuning constant" (default value is 6.0
     :returns: the biweight average of the dataset z
     '''
-    z = np.array(z)
     M = np.median(z)
     i = 0
     Cbi = M
@@ -100,7 +99,7 @@ def bootstrap_bAverage_err(vals, size = None, draws = 1000, replace = True):
     return err
 
 
-def bVariance(v, iter=True, tol=0, maxIters=6, C=9.0):
+def bVariance(v, iterate=True, tol=0, maxIters=6, C=9.0):
     '''
     Returns the biweight sample variance of a cluster (Sigma_BI), as presented in Ruel et al. 2014,
     from Mosteller&Tukey 1977
@@ -111,36 +110,27 @@ def bVariance(v, iter=True, tol=0, maxIters=6, C=9.0):
     :param C: tuning constant (default is C=9.0)
     :return: the biweight variance in v
     '''
-    try:
-        N = len(v)
-        v = np.array(v)
-    except TypeError:
-        print('Expected array or array-like object; got {}'.format(type(v)))
-        return
-
-    if(iter): M = bAverage(v, tol, maxIters)
+    
+    if(iterate): M = bAverage(v, tol, maxIters)
     else: M = np.median(v)
-
+    
+    N = len(v)
     u = (v - M) / (MAD(v, M) * C)  # usual biweight weighting
     mask = abs(u) > 1  # find weights whose absolute value is greater than one
     D = np.sum( ((1-(u**2)) * (1-(5*(u**2))))[~mask] )
-    try:
-        #apply mask to both terms of Sigma_BI, calculate dispersion
-        term1v = ((1-u**2)**4)[~mask]
-        term2v = ((v - M)**2)[~mask]
-        num = np.sum(term1v*term2v)
-        den = D * (D - 1)
-        sampleVar = N * (num / den)
-        return sampleVar
 
-    except ZeroDivisionError:
-        #dispersion cannot be calculated on given cluster
-        return None
+    #apply mask to both terms of Sigma_BI, calculate dispersion
+    term1v = ((1-u**2)**4)[~mask]
+    term2v = ((v - M)**2)[~mask]
+    num = np.sum(term1v*term2v)
+    den = D * (D - 1)
+    sampleVar = N * (num / den)
+    return sampleVar
 
 
-def bDispersion(v, iter=True, tol=0, maxIters=6, C=9.0):
+def bDispersion(v, iterate=True, tol=0, maxIters=6, C=9.0):
     '''
-    Returns the biweight (velocity) dispersion of a (cluster) dataset (Sigma_BI), which is the square
+    Returns the biweight scale estimator of a dataset (Sigma_BI), which is the square
     root of the biweight sample variance.
 
     :param v: an array of (velocity) values
@@ -155,31 +145,23 @@ def bDispersion(v, iter=True, tol=0, maxIters=6, C=9.0):
     try:
         N = len(v)
         v = sorted(v)
-        sigBI = np.sqrt(bVariance(v, iter, tol, maxIters, C))
+        sigBI = np.sqrt(bVariance(v, iterate, tol, maxIters, C))
         return sigBI
     except AttributeError:
         #in case the sample variance returned None
         return None
 
 
-def bDispersion_err(sigBI, N):
-    # Find uncertainty in velocity dispersion
-    
-    if(N<15): c = 0.91
-    if(N>=15): c = 0.92 
-    d_sigBI = (c * sigBI) / np.sqrt(N - 1)
-    return d_sigBI
-
-
-def bootstrap_bDispersion(vals, size = None, draws = 1000, repl = True, conf=68.3, avgErr = True):
+def bootstrap_bDispersion(vals, size = None, draws = 1000, repl = True, conf=68.3, avgErr = True,
+                          iterate = True):
 
     if(size == None):
         size = len(vals)
     else:
         size = int(size)
 
-    disp = bDispersion(vals)
-    results = [bDispersion(np.random.choice(vals, size=size, replace=repl)) for i in range(draws)]
+    disp = bDispersion(vals, iterate=iterate)
+    results = [print(bDispersion(np.random.choice(vals, size=size, replace=repl))) for i in range(draws)]
     scatter = results - disp
 
     critPoints = [0+(100-conf)/2, 100-(100-conf)/2]
@@ -191,45 +173,6 @@ def bootstrap_bDispersion(vals, size = None, draws = 1000, repl = True, conf=68.
         return [disp, err]
     else:
         return [confidence[1], disp, confidence[0]]
-
-
-def bDispersion_beers(v, iter = True, maxIters=6, tol = 0, C=9.0):
-    '''
-    Returns the biweight scale estimator (S_BI), as presented in Beers et al. 1990
-
-    :param v: velocity array
-    :param iter: whether or not to use the iteratively computed biweight mean rather than the sample median
-    :param tol: desired tolerance (percent difference bteween last and new value). If
-                tol = 0, then C_BI will be recalculated until maxIters
-    :param maxIters: maximum iterations to force return if desired tolerance not achieves
-    :param C: tuning constant (default is C=9.0)
-    :return: the biweight scale estimator (dispersion) in v
-    '''
-    try:
-        N = len(v)
-        v = np.array(v)
-    except TypeError:
-        print('Expected array or array-like object; got {}'.format(type(v)))
-        return
-
-    if (iter): M = bAverage(v, tol, maxIters)
-    else: M = np.median(v)
-
-    u = (v - M) / (MAD(v, M) * C)  # usual biweight weighting
-    mask = abs(u) > 1  # find weights whose absolute value is greater than one
-    D = np.sum( ((1-(u**2)) * (1-(5*(u**2))))[~mask] )
-    try:
-        #apply mask to both terms of Sigma_BI, calculate dispersion
-        term1v = ((1-u**2)**4)[~mask]
-        term2v = ((v - M)**2)[~mask]
-        num = np.sqrt(np.sum(term1v*term2v))
-        den = abs(D)
-        s_BI = np.sqrt(N) * (num / den)
-        return s_BI
-
-    except ZeroDivisionError:
-        #dispersion cannot be calculated on given cluster
-        return None
 
 
 def gDispersion(v):
@@ -251,12 +194,6 @@ def gDispersion(v):
 
     sigG = (np.sqrt(np.pi))/(n*(n-1)) * np.dot(w,g)
     return sigG
-
-
-def haloDispersion():
-	'''
-	Returns the full 3D velocity dispersion, as defined 	
-	'''
 
 
 def sigmaClip(v, center = None, sigma=3, cutoff=15):

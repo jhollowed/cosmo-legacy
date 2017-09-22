@@ -29,9 +29,127 @@ from mpl_toolkits.mplot3d import Axes3D
 from astropy.cosmology import WMAP7 as cosmo
 from matplotlib.ticker import ScalarFormatter
 
+
 # ===================================================================================================
 # =============================== mass - velocity-dispersion relation ===============================
 # ==================================================================================================
+
+
+def color_segregation_test(mask_var = 'gr', mask_magnitude = False, include_error = True):
+    '''
+    Use the protoDC2 stacked cluster as output from make_protoDC2_stackedCluster to 
+    segregate galaxy population by color (cut in g-r rest magnitue space). Pass the 
+    resultant color-dependent information to color_segregation_plot() to compare 
+    the dispersion statistics of each population (red/blue).
+    
+    :param mask_var: what galaxy property to preform the color cut on. Default is 'gr', 
+                     meaning that the cut will be preformed in g-r space. Other valid 
+                     options are 'sfr' (which will cut at the median of this value)
+    :param mask_magnitude: whether or not to preform a magnitude cut at -16 r-band
+    :param include_error: whether or not to run a bootstrap routine to get confidence intervals 
+                          on dispersions
+    :return: None
+    '''
+
+    valid_maskVars = ['gr', 'sfr']
+    if(mask_var not in valid_maskVars):
+        raise ValueError('mask_var of \'{}\' is not accepted. Available masking properties'\
+                         ' are {}'.format(mask_var, valid_maskVars))
+    
+    protoDC2_stack = h5py.File('data/protoDC2_haloStack_shear_nocut_A.hdf5', 'r')
+    vel = protoDC2_stack['pecV_normed'][:]
+    dist = protoDC2_stack['projDist_normed'][:]
+
+    # do galaxy cut
+    if(mask_var == 'gr'):
+        g_band = protoDC2_stack['magnitude:SDSS_g:rest'][:]
+        r_band = protoDC2_stack['magnitude:SDSS_r:rest'][:]
+        gr_color = g_band - r_band
+        colorMask = gr_color > 0.25
+    elif(mask_var == 'sfr'):
+        sfr = protoDC2_stack['totalStarFormationRate'][:]
+        colorMask = sfr < np.median(sfr)
+
+    vRed = vel[colorMask]
+    vBlue = vel[~colorMask]
+    dRed = dist[colorMask]
+    dBlue = dist[~colorMask]
+
+    # measure dispersions and error. I use 'o' to mean "dispersion" since
+    # it's breif and kinda looks like a sigma
+    if(include_error):
+        tot_o, tot_o_err = stat.bootstrap_bDispersion(vel)
+        red_o, red_o_err = stat.bootstrap_bDispersion(vRed)
+        blue_o, blue_o_err = stat.bootstrap_bDispersion(vBlue)
+    else:
+        tot_o = stat.bDispersion(vel)
+        red_o = stat.bDispersion(vRed)
+        blue_o = stat.bDispersion(vBlue)
+
+    # take the ratio of the red and blue dispersions with that of the entire population, 
+    # and find the random error in said ratios by standard error propegation
+    redRatio = red_o / tot_o
+    blueRatio = blue_o / tot_o
+    if(include_error):
+        redRatio_err = redRatio * np.sqrt( (red_o_err/red_o)**2 + (tot_o_err/tot_o)**2 )
+        blueRatio_err = blueRatio * np.sqrt( (blue_o_err/blue_o)**2 + (tot_o_err/tot_o)**2 )
+    else:
+        redRatio_err = None
+        blueRatio_err = None
+
+    color_segregation_plot(vRed, vBlue, dRed, dBlue, redRatio, blueRatio, 
+                           mask_var, redRatio_err, blueRatio_err)
+
+
+# -------------------------------------------------------------------------------------------------
+
+
+def color_segregation_plot(vr, vb, dr, db, vDispr, vDispb, var, vDispr_err=None, vDispb_err=None):
+    '''
+    Plot the velocity normed distributions for both red and blue galaxy populations
+    from the protoDC2 stacked cluster. This function is meant to be called by color_segregation_test()
+
+    :param vr: LOS peculiar velocities of red galaxies normalized by their host-halo velocity-dispersion
+    :param vb: same as vr for blue galaxies
+    :param dr: projected radial distance of red galaxies nomalized by their host-halo r200 distance
+    :param db: same as dr for blue galaxies
+    :param vDispr: the velocity-dispersion of the red population over the velocity-dispersion 
+                   of the total population
+    :param vDispb: same as vDispr for blue galaxies
+    :param var: the variable used to determine red/blue galaxy cut
+    :param vDispr_err: the random error in vDispr
+    :param vDispb_err: the random error in vDispb
+    :return: None
+    '''
+
+    if(vDispr_err ==None and vDispb_err == None):
+        ansRed = '{:.2f}'.format(vDispr)
+        ansBlue = '{:.2f}'.format(vDispb)
+    else:
+        ansRed = '{:.2f} +/- {:.2f}'.format(vDispr, vDispr_err)
+        ansBlue = '{:.2f} +/- {:.2f}'.format(vDispb, vDispb_err)
+
+    fig = plt.figure(0)
+    fig.clf()
+    ax = fig.add_subplot(111)
+    
+    ax.hist(vr, 100, histtype='step', color='r', normed=True)
+    ax.hist(vb, 100, histtype='step', color='b', normed=True)
+    ax.text(-7.5, 0.26, r'$\sigma_{{ v,\mathrm{{red}} }} / \sigma_{{ v,\mathrm{{all}} }}'\
+                       '= {}$'.format(ansRed), fontsize=18)
+    ax.text(-7.5, 0.24, r'$\sigma_{{ v,\mathrm{{blue}} }} / \sigma_{{ v,\mathrm{{all}} }}'\
+                       '= {}$'.format(ansBlue), fontsize=18)
+    ax.set_xlabel(r'$v/\sigma_{v,\mathrm{all}}$', fontsize=22)
+    ax.set_ylabel('pdf', fontsize=18)
+    plt.grid()
+    plt.savefig('{}.pdf'.format(var))
+    #plt.show()
+
+
+# ===================================================================================================
+# =============================== mass - velocity-dispersion relation ===============================
+# ==================================================================================================
+
 
 def mass_vDisp_relation(mask_magnitude = False):
     '''
@@ -78,7 +196,9 @@ def mass_vDisp_relation(mask_magnitude = False):
  
     plot_mass_vDisp_relation(galDisp, sodDisp, realMass)
 
+
 # -------------------------------------------------------------------------------------------------
+
 
 def plot_mass_vDisp_relation(sigma, sigmadm, realMass):
     '''
@@ -94,8 +214,8 @@ def plot_mass_vDisp_relation(sigma, sigmadm, realMass):
     fig = plt.figure(0)
     fig.clf()
     ax = fig.add_subplot(111)
-    ax.plot(realMass, sigmadm, 'xr', ms=6, mew=1.6, alpha=0.5, label='particle-based dispersions')
-    ax.plot(realMass, sigma, '.b', ms=6, alpha=0.5, label='galaxy-based dispersions')
+    ax.plot(realMass, sigmadm, 'xm', ms=6, mew=1.6, alpha=0.5, label='particle-based dispersions')
+    ax.plot(realMass, sigma, '.g', ms=6, alpha=0.5, label='galaxy-based dispersions')
 
     fitMass = np.linspace(3e13, 8e14, 100)
     fit = lambda sigDM15,alpha: sigDM15 * ((fitMass) / 1e15)**alpha
@@ -189,6 +309,7 @@ def test_pecZ_cores():
 # ===================================================================================================
 # =============================== check for many centrals bug========================================
 # ===================================================================================================
+
 
 def manyCentrals_bug():
     '''
