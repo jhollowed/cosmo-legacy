@@ -161,7 +161,7 @@ def bootstrap_bDispersion(vals, size = None, draws = 1000, repl = True, conf=68.
         size = int(size)
 
     disp = bDispersion(vals, iterate=iterate)
-    results = [print(bDispersion(np.random.choice(vals, size=size, replace=repl))) for i in range(draws)]
+    results = [bDispersion(np.random.choice(vals, size=size, replace=repl)) for i in range(draws)]
     scatter = results - disp
 
     critPoints = [0+(100-conf)/2, 100-(100-conf)/2]
