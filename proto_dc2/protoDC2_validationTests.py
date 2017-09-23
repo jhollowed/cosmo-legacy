@@ -18,6 +18,7 @@ rcParams.update(params)
 
 import pdb
 import h5py
+import time
 import numpy as np
 import pylab as plt
 import simTools as st
@@ -69,6 +70,9 @@ def color_segregation_test(mask_var = 'gr', mask_magnitude = False, include_erro
     elif(mask_var == 'sfr'):
         sfr = protoDC2_stack['totalStarFormationRate'][:]
         colorMask = sfr < np.median(sfr)
+    if(mask_magnitude):
+        magMask = rband > -16
+        colorMask = colorMask & magMask
 
     vRed = vel[colorMask]
     vBlue = vel[~colorMask]
@@ -78,9 +82,22 @@ def color_segregation_test(mask_var = 'gr', mask_magnitude = False, include_erro
     # measure dispersions and error. I use 'o' to mean "dispersion" since
     # it's breif and kinda looks like a sigma
     if(include_error):
+        
+        start = time.time()
+        print('computing total error')
         tot_o, tot_o_err = stat.bootstrap_bDispersion(vel)
+        print(time.time() - start)
+
+        start = time.time()
+        print('computing red error')
         red_o, red_o_err = stat.bootstrap_bDispersion(vRed)
+        print(time.time() - start)
+
+        start = time.time()
+        print('computing blue error')
         blue_o, blue_o_err = stat.bootstrap_bDispersion(vBlue)
+        print(time.time() - start)
+
     else:
         tot_o = stat.bDispersion(vel)
         red_o = stat.bDispersion(vRed)
@@ -97,8 +114,11 @@ def color_segregation_test(mask_var = 'gr', mask_magnitude = False, include_erro
         redRatio_err = None
         blueRatio_err = None
 
-    color_segregation_plot(vRed, vBlue, dRed, dBlue, redRatio, blueRatio, 
-                           mask_var, redRatio_err, blueRatio_err)
+    np.savez('{}_results.npz'.format(mask_var), vRed=vRed, vBlue=vBlue, dRed=dRed, dBlue=dBlue, 
+             redRatio=redRatio, blueRatio=blueRatio, mask_var=mask_var, redRatio_err=redRatio_err, 
+             blueRatio_err=blueRatio_err)
+    #color_segregation_plot(vRed, vBlue, dRed, dBlue, redRatio, blueRatio, 
+    #                       mask_var, redRatio_err, blueRatio_err)
 
 
 # -------------------------------------------------------------------------------------------------
@@ -142,8 +162,7 @@ def color_segregation_plot(vr, vb, dr, db, vDispr, vDispb, var, vDispr_err=None,
     ax.set_xlabel(r'$v/\sigma_{v,\mathrm{all}}$', fontsize=22)
     ax.set_ylabel('pdf', fontsize=18)
     plt.grid()
-    plt.savefig('{}.pdf'.format(var))
-    #plt.show()
+    plt.show()
 
 
 # ===================================================================================================
