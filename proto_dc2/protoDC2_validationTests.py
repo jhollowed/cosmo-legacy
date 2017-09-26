@@ -32,8 +32,8 @@ from matplotlib.ticker import ScalarFormatter
 
 
 # ===================================================================================================
-# =============================== mass - velocity-dispersion relation ===============================
-# ==================================================================================================
+# ============================== velocity segregation by galaxy color ===============================
+# ===================================================================================================
 
 
 def color_segregation_test(mask_var = 'gr', mask_magnitude = False, include_error = True):
@@ -82,22 +82,9 @@ def color_segregation_test(mask_var = 'gr', mask_magnitude = False, include_erro
     # measure dispersions and error. I use 'o' to mean "dispersion" since
     # it's breif and kinda looks like a sigma
     if(include_error):
-        
-        start = time.time()
-        print('computing total error')
         tot_o, tot_o_err = stat.bootstrap_bDispersion(vel)
-        print(time.time() - start)
-
-        start = time.time()
-        print('computing red error')
         red_o, red_o_err = stat.bootstrap_bDispersion(vRed)
-        print(time.time() - start)
-
-        start = time.time()
-        print('computing blue error')
         blue_o, blue_o_err = stat.bootstrap_bDispersion(vBlue)
-        print(time.time() - start)
-
     else:
         tot_o = stat.bDispersion(vel)
         red_o = stat.bDispersion(vRed)
@@ -114,25 +101,25 @@ def color_segregation_test(mask_var = 'gr', mask_magnitude = False, include_erro
         redRatio_err = None
         blueRatio_err = None
 
-    np.savez('{}_results.npz'.format(mask_var), vRed=vRed, vBlue=vBlue, dRed=dRed, dBlue=dBlue, 
-             redRatio=redRatio, blueRatio=blueRatio, mask_var=mask_var, redRatio_err=redRatio_err, 
-             blueRatio_err=blueRatio_err)
-    #color_segregation_plot(vRed, vBlue, dRed, dBlue, redRatio, blueRatio, 
-    #                       mask_var, redRatio_err, blueRatio_err)
+    #np.savez('{}_results.npz'.format(mask_var), vRed=vRed, vBlue=vBlue, dRed=dRed, dBlue=dBlue, 
+    #         redRatio=redRatio, blueRatio=blueRatio, mask_var=mask_var, redRatio_err=redRatio_err, 
+    #         blueRatio_err=blueRatio_err)
+   
+    # plot segregation results as velocity distributions and phase space diagrams
+    color_segregation_plot(vRed, vBlue, redRatio, blueRatio, mask_var, redRatio_err, blueRatio_err)
+    phaseSpace_segregation_plot(vRed, vBlue, dRed, dBlue, mask_var)
 
 
 # -------------------------------------------------------------------------------------------------
 
 
-def color_segregation_plot(vr, vb, dr, db, vDispr, vDispb, var, vDispr_err=None, vDispb_err=None):
+def color_segregation_plot(vr, vb, vDispr, vDispb, var, vDispr_err=None, vDispb_err=None):
     '''
     Plot the velocity normed distributions for both red and blue galaxy populations
     from the protoDC2 stacked cluster. This function is meant to be called by color_segregation_test()
 
     :param vr: LOS peculiar velocities of red galaxies normalized by their host-halo velocity-dispersion
     :param vb: same as vr for blue galaxies
-    :param dr: projected radial distance of red galaxies nomalized by their host-halo r200 distance
-    :param db: same as dr for blue galaxies
     :param vDispr: the velocity-dispersion of the red population over the velocity-dispersion 
                    of the total population
     :param vDispb: same as vDispr for blue galaxies
@@ -146,8 +133,8 @@ def color_segregation_plot(vr, vb, dr, db, vDispr, vDispb, var, vDispr_err=None,
         ansRed = '{:.2f}'.format(vDispr)
         ansBlue = '{:.2f}'.format(vDispb)
     else:
-        ansRed = '{:.2f} +/- {:.2f}'.format(vDispr, vDispr_err)
-        ansBlue = '{:.2f} +/- {:.2f}'.format(vDispb, vDispb_err)
+        ansRed = r'{:.2f} \pm {:.3f}'.format(vDispr, vDispr_err)
+        ansBlue = r'{:.2f} \pm {:.3f}'.format(vDispb, vDispb_err)
 
     fig = plt.figure(0)
     fig.clf()
@@ -162,12 +149,38 @@ def color_segregation_plot(vr, vb, dr, db, vDispr, vDispb, var, vDispr_err=None,
     ax.set_xlabel(r'$v/\sigma_{v,\mathrm{all}}$', fontsize=22)
     ax.set_ylabel('pdf', fontsize=18)
     plt.grid()
+    #plt.show()
+
+
+# -------------------------------------------------------------------------------------------------
+
+
+def phaseSpace_segregation_plot(vr, vb, dr, db, var):
+    '''
+    Plot all galaxies in radial distance-LOS velocity phase space, with two
+    colored populations corresponding to red/blue galaxies
+    
+    :param vr: LOS peculiar velocities of red galaxies normalized by their host-halo velocity-dispersion
+    :param vb: same as vr for blue galaxies
+    :param dr: projected radial distance of red galaxies nomalized by their host-halo r200 distance
+    :param db: same as dr for blue galaxies
+    :param var: the variable used to determine red/blue galaxy cut
+    :return: None
+    '''
+    
+    fig = plt.figure(0)
+    fig.clf()
+    ax = fig.add_subplot(111)
+    
+    bins = np.linspace(0, 2, 30)
+    ax.hist2d(dr, vr, bins=bins, normed=True, cmap='Reds', alpha=0.5)
+    ax.hist2d(db, vb, bins=bins, normed=True, cmap='Blues', alpha=0.5)
     plt.show()
 
 
 # ===================================================================================================
 # =============================== mass - velocity-dispersion relation ===============================
-# ==================================================================================================
+# ===================================================================================================
 
 
 def mass_vDisp_relation(mask_magnitude = False):
@@ -214,6 +227,7 @@ def mass_vDisp_relation(mask_magnitude = False):
         galDisp[j]  = stat.bDispersion(pecV) * aHost
  
     plot_mass_vDisp_relation(galDisp, sodDisp, realMass)
+    plot_vDisp_comparison(galDisp, sodDisp)
 
 
 # -------------------------------------------------------------------------------------------------
@@ -222,7 +236,7 @@ def mass_vDisp_relation(mask_magnitude = False):
 def plot_mass_vDisp_relation(sigma, sigmadm, realMass):
     '''
     Plot the mass-vDisp relation for each halo mass passed, using both the galaxy and particle-based
-    velocity dispersions. This function is meant to be called by findMasses() below.
+    velocity dispersions. This function is meant to be called by mass_vDisp_relation() above.
 
     :param sigma: An array of galaxy-based dispersions
     :param sigmadm: An array of particle-based dispersions
@@ -257,6 +271,33 @@ def plot_mass_vDisp_relation(sigma, sigmadm, realMass):
     ax.set_ylabel(r'$\sigma_v$ (km/s)', fontsize=20)
     ax.set_xlabel(r'$m_{200}$ (M$_{sun} h^{-1}$)', fontsize=20)
     ax.legend(loc='upper left', fontsize=12)
+    plt.show()
+
+
+# -------------------------------------------------------------------------------------------------
+
+
+def plot_vDisp_comparison(sigma, sigmadm):
+    '''
+    Plot the particle_based vs glaxy-based velocity distribution for each halo as passed.
+    This function is meant to be called by mass_vDisp_relation() above.
+
+    :param sigma: An array of galaxy-based dispersions
+    :param sigmadm: An array of particle-based dispersions
+    '''
+    
+    fig = plt.figure(0)
+    fig.clf()
+    ax = fig.add_subplot(111)
+    ax.plot(sigmadm, sigma, 'xb', ms=6, mew=1.6, alpha=0.5)
+    ax.plot([200, 1300], [200, 1300], '--k', lw=2)
+
+    ax.set_ylim([200, 1000])
+    ax.set_xlim([200, 1000])
+    ax.grid()
+
+    ax.set_ylabel(r'$\sigma_{v,\mathrm{particles}}$ (km/s)', fontsize=20)
+    ax.set_xlabel(r'$\sigma_{v,\mathrm{galaxies}}$ (km/s)', fontsize=20)
     plt.show()
 
 

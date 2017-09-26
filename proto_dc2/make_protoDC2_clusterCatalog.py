@@ -1,6 +1,10 @@
 '''
 Joe Hollowed 
 COSMO-HEP 2017
+
+There are two functions here (each described in detail in their docstrings), makeCatalog() and
+makeCatalog_steps(). The former operates on the protoDC2 catalog, which is produced via a
+a light cone, and the latter operates on the upstream step-version of the protoDC2 catalog.
 '''
 
 import pdb
@@ -19,7 +23,7 @@ def makeCatalog():
     as an hdf5 file as follows: 
 
     - The attributes of the root group '/' give information on the cosmology of the simulation
-    - The root group had a child group for each halo of mass > 1e14, the names of which being the 
+    - The root group has a child group for each halo of mass > 1e14, the names of which being the 
       halo's fof tag. For example, the halo with tag 123456 is found at '/123456' in the hdf file
     - If duplicates of a halo were found (or at least, the same tag was used again in a later snapshot),
       then the step number of the halo is appended to the end of the group name. For example, if 
@@ -94,7 +98,6 @@ def makeCatalog():
     nGals = uniqueTags[1]
     duplicates=0
 
-
     # ---------------------------------------------------------------------------------------
 
     # loop through all halos
@@ -103,8 +106,6 @@ def makeCatalog():
 
         # boolean mask of current halo galaxy membership
         galMask = [protoDC2['hostHaloTag'][:] == halos[k]]
-
-
 
         # -----------------------------------------------------------------------------------
         # check for duplication
@@ -134,8 +135,6 @@ def makeCatalog():
                           for step in uniqueSteps]
         else:
             haloGroups = [outputFile.create_group('{}'.format(halos[k]))]
-
-
         
         # -----------------------------------------------------------------------------------
         # loop through each duplicated halo (only 1 loop in the case of no duplication)
@@ -200,6 +199,154 @@ def makeCatalog():
     print('Done. Took {:.2f} s'.format(time.time() - start))
     return 0
 
+
+# ====================================================================================================
+
+
+def makeCatalog_steps():
+    '''
+    This function takes the protoDC2 step-wise galaxy catalog and reformats it as a cluster catalog, 
+    structured as an hdf5 file as follows: 
+
+    - The attributes of the root group '/' give information on the cosmology of the simulation
+    - The root group has a child group for each halo of mass > 1e14, the names being sequential labels. 
+      For example, the tenth halo located by the code is found at '/halo_10' in the hdf file
+    - Each halo group contains x datasets which correspond to the data columns of the original 
+      protoDC2 catalog, with consistent column names, for all of that halo's member galaxies. If a 
+      halo is the host to 120 galaxies, then each of the x data columns are 120 elements long.
+    - A few columns from the original catalog are missing from the halo group datasets. This is because
+      the galaxy catalog has a few columns that apply halo-wide. For instance, the hostHaloMass is the 
+      same value for every galaxy in the halo. Rather than repeating the information for every member
+      galaxy, halo-wide properties are saved as group attributes. In addition to this data, the SO 
+      properties of each halo are also saved as attributes, as well as a few other quantities 
+      calculated in this code. Each halo group has the following attributes:
+      
+      From protoDC2:
+        -   hostHaloMass (equivalent to the FOF mass)
+        -   hostHaloTag  (the FOF tag)
+        -   hostIndex
+        -   step
+      From the SO catalog:
+        -   sod_halo_mass      (m200)
+        -   sod_halo_radius    (r200)
+        -   sod_halo_vel_disp  (km/s)
+        -   sod_halo_ke
+        -   sod_halo_cdelta
+        -   sod_halo_cdelta_error
+        -   sod_halo_c_acc_mass
+      Calculated here:
+        -   Nothing is calculated here as in the makeCatalog() function, as there is no "observer"
+            in the step catalog, and all galaxies are found at the same cosmological redshift (the step)
+    Finally - this code as it stands should be run on datastar
+    '''
+
+# ====================================================================================================
+
+    start = time.time()
+    
+    # load halo sod catalog
+    haloCatalogPath = '/media/luna1/dkorytov/data/AlphaQ/sod'
+    haloCatalog = glob.glob('{}/*.sodproperties'.format(haloCatalogPath))
+    haloSteps = np.array([int(f.split('.')[0].split('-')[-1]) for f in haloCatalog])
+
+    # define desired sod halo properties
+    sodProps = ['sod_halo_radius', 'sod_halo_mass', 'sod_halo_ke', 'sod_halo_vel_disp', 
+                'sod_halo_cdelta', 'sod_halo_cdelta_error', 'sod_halo_c_acc_mass']
+    
+    # load protoDC2 catalog
+    #protoDC2Path = '/media/luna1/dkorytov/projects/protoDC2/output/mock_B_full_nocut.hdf5'
+    protoDC2Path = '/media/luna1/dkorytov/projects/protoDC2/output/snapshot_box/mock_nocut_A.hdf5'
+    #path_out = 'data/protoDC2_catalog_pecZ.hdf5'
+    path_out = 'data/protoDC2_STEPS_clusters_nocut_A.hdf5'
+    protoDC2 = h5py.File(protoDC2Path, 'r')
+    outputFile = h5py.File(path_out, 'w')
+    haloNum = 0
+
+    # copy global attributes from original catalog
+    # (as of right now, this does nothing, the step-wise catalog does not contain the cosmology 
+    # of the simulation as attributes)
+    globalAttrs = list(protoDC2.attrs.keys())
+    for attr in globalAttrs:
+        outputFile.attrs.create(attr, protoDC2.attrs[attr])
+
+    # ===========================================================================================
+    # ============================ loop through each simulation step ============================
+
+    steps = list(protoDC2.keys())
+
+    for i in range(len(steps)):
+        
+        step = int(steps[i])
+        stepGals = protoDC2[steps[i]]
+        print('\n------------ working on STEP {} ({}/{}) ------------'.format(step, i+1, len(steps)))
+
+        # find all unique halo tags in protoDC2
+        massMask = stepGals['hostHaloMass'][:] > 1e14 
+        uniqueTags = np.unique(stepGals['hostHaloTag'][:][massMask], return_counts = True)
+        halos = uniqueTags[0]
+        nGals = uniqueTags[1]
+        duplicates=0
+
+        # ---------------------------------------------------------------------------------------
+
+        # loop through all halos found in the current step
+        for k in range(len(halos)):
+            print('\nworking on halo {} ({}/{})'.format(halos[k], k+1, len(halos)))
+
+            # boolean mask of current halo galaxy membership
+            galMask = stepGals['hostHaloTag'][:] == halos[k]
+            # makeCatalog() checks for lightcone halo duplication here, which of course is not needed
+            haloNum += 1
+            haloGroup = outputFile.create_group('halo_{}'.format(haloNum))
+            print('created hdf group at {}'.format(haloGroup.name))
+
+            # ------------------------------ GROUP ATTRIBUTES ------------------------------
+            
+            host_quantityModifiers = {
+                'hostHaloMass':'fof_halo_mass',
+                'hostIndex':'halo_index',
+                'hostHaloTag':'fof_halo_tag',
+            }
+            
+            galProps = np.array(list(stepGals.keys()))
+            hostPropMask = np.array([p in host_quantityModifiers.keys() for p in galProps])
+            hostPropIdx = np.linspace(0, len(galProps)-1, len(galProps), dtype=int)[hostPropMask]
+            hostProps = galProps[hostPropIdx]
+            galProps = np.delete(galProps, hostPropIdx)
+            
+            # save all halo-wide properties as group attributes
+            for prop in hostProps:
+                data = stepGals[prop][:][galMask]
+                if( sum(abs(np.diff(data))) != 0):
+                    raise ValueError('False sibling galaxies (mebership masking not working properly)')
+                modifiedProp = host_quantityModifiers[prop]
+                haloGroup.attrs.create(modifiedProp, data[0])
+           
+            # save step number as group attribute rather than root group name
+            haloGroup.attrs.create('halo_step', step)
+
+            # save all sod properties of the halo from the haloCatalog as attrbiutes
+            sodStepIdx = np.where(haloSteps == step)[0][0]
+            sodTags = gio.gio_read(haloCatalog[sodStepIdx], 'fof_halo_tag')
+            sodIdx = np.where(sodTags == halos[k])
+            
+            for prop in sodProps:
+                data = gio.gio_read(haloCatalog[sodStepIdx], prop)[sodIdx]
+                haloGroup.attrs.create(prop, data)
+            print('saved all halo attributes')
+
+            # ------------------------------ GROUP DATASETS ------------------------------
+            # save all protoDC2 galaxy data columns for the current halo's member galaxies
+            for p in range(len(galProps)):
+                prop = galProps[p]
+                data = stepGals[prop][:][galMask]
+                haloGroup.create_dataset(prop, data=data)
+                if(len(haloGroup[prop]) != np.sum(galMask)):
+                    raise ValueError('galaxy population size not the same across columns (bad masks)')
+            print('saved all galaxy datasets')
+
+    print('Done. Took {:.2f} s'.format(time.time() - start))
+    return 0
 
 
 # ====================================================================================================
