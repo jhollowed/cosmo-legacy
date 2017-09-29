@@ -8,9 +8,9 @@ import astropy.constants as const
 import pdb
 from astropy.cosmology import WMAP7 as cosmo
 
-def pecZ(x, y, z, vx, vy, vz, z_hubb, obs=np.zeros(3)):
+def pecZ(x, y, z, vx, vy, vz, z_hubb=0, obs=np.zeros(3), vPec_only=False):
     '''
-    This function calculates peculiar z_hubbs for n-body simulation objects, given
+    This function calculates peculiar zs for n-body simulation objects, given
     their comoving position and velocity, and returns some other useful products of the calculation. 
 
     :param x: x-position for each object, in form [x1, x2,... xn]
@@ -21,6 +21,9 @@ def pecZ(x, y, z, vx, vy, vz, z_hubb, obs=np.zeros(3)):
     :param vz: z-velocity for each object, in form of param vx
     :param z_hubb: cosmological redshifts for each object, in form [z1, z2,... zn]
     :param obs: The coordinates of the observer, in form [x, y, z]
+    :param vPec_only: end function early and return just the comoving peculiar velocity
+                      (this is probably the only case in which you'd want to leave the 
+                       z_hubb parameter at it's default of 0)
     :return: - the peculair z_hubb in each object in form of param redshift
              - the total observed z_hubb (cosmological+peculiar)
              - the peculiar velocity of each object, in the form of param vx, where negative 
@@ -41,6 +44,7 @@ def pecZ(x, y, z, vx, vy, vz, z_hubb, obs=np.zeros(3)):
     v = np.array([vx, vy, vz]).T
     v_mag = np.linalg.norm(v, axis=1)
     v_pec = npm.inner1d(v, r_rel_hat)
+    if(vPec_only): return v_pec
 
     # find total and peculiar z_hubb (full relativistic expression)
     c = const.c.value / 1000

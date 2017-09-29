@@ -23,6 +23,7 @@ import numpy as np
 import pylab as plt
 import simTools as st
 import clstrTools as ct
+import calc_peculiar_z as cpz
 import dispersionStats as stat
 import matplotlib.pyplot as plt
 import matplotlib.ticker as plticker
@@ -191,7 +192,7 @@ def mass_vDisp_relation(mask_magnitude = False):
     SOD velocity-dispersions. If the galaxies are placed correctly, and the observed redshifts are 
     constructed correctly, then we should see the vDisp-Mass relation roughly match, whether we are 
     using galaxy or particle based dispersions. This rough match should include a systematic bias in
-    the galaxy-based dispersions. This function is meant to call makePlots() above.
+    the galaxy-based dispersions. This function is meant to call makePlots() below.
 
     :param mask_magnitude: whether or not to preform a magnitude cut at -16 r-band
     :return: None
@@ -227,7 +228,6 @@ def mass_vDisp_relation(mask_magnitude = False):
         galDisp[j]  = stat.bDispersion(pecV) * aHost
  
     plot_mass_vDisp_relation(galDisp, sodDisp, realMass)
-    plot_vDisp_comparison(galDisp, sodDisp)
 
 
 # -------------------------------------------------------------------------------------------------
@@ -242,7 +242,6 @@ def plot_mass_vDisp_relation(sigma, sigmadm, realMass):
     :param sigmadm: An array of particle-based dispersions
     :param realMass: the SO mass of the halo
     '''
-
     
     fig = plt.figure(0)
     fig.clf()
@@ -255,11 +254,6 @@ def plot_mass_vDisp_relation(sigma, sigmadm, realMass):
     fitDisp = fit(1082.9, 0.3361)
 
     ax.plot(fitMass, fitDisp, '--k', lw=2, label='Evrard+ 2003')
-
-    ax.set_yscale('log')
-    ax.set_xscale('log')
-    ax.set_ylim([200, 1300])
-    ax.set_xlim([3e13, 8e14])
     ax.grid()
 
     ax.yaxis.set_major_formatter(ScalarFormatter())
@@ -274,26 +268,103 @@ def plot_mass_vDisp_relation(sigma, sigmadm, realMass):
     plt.show()
 
 
+# ===================================================================================================
+# =============================== galaxy-particle dispersion 1:1 ====================================
+# ===================================================================================================
+
+
+def galaxy_particle_disp_1to1(mask_magnitude = False, include_stepCatalog = False):
+    '''
+    This function gathers the necessary data to compare the particle based dispersions and galaxy
+    based dispersions of protoDC2 halos. Optionally, it also preforms halo matching across catalogs
+    to compare the velocity dispersions of the upstream step catalog to that of the lightcone
+    catalog.
+
+    :param mask_magnitude: whether or not to preform a magnitude cut at -16 r-band
+    :param include_stepCatalog: whether or not to match to the step catalog and include this data
+    :return: None
+    '''
+    
+    protoDC2 = h5py.File('data/protoDC2_clusters_shear_nocut_A.hdf5', 'r')
+    halos = list(protoDC2.keys())
+    n = len(halos)
+    galDisp = np.zeros(n)
+    sodDisp = np.zeros(n)
+    if(include_stepCatalog):
+        protoDC2_steps = h5py.File('/media/luna1/jphollowed/protoDC2/'\
+                                   'protoDC2_STEPS_clusters_nocut_A.hdf5', 'r')
+        halos_steps = np.array([protoDC2_steps[h].attrs['fof_halo_tag'] 
+                                for h in list(protoDC2_steps.keys())])
+        steps = np.array([protoDC2_steps[h].attrs['halo_step'] 
+                          for h in list(protoDC2_steps.keys())])
+        galDisp_steps = np.zeros(n)
+    
+    for j in range(n):
+        halo = protoDC2[halos[j]]
+
+        # get halo properties, including particle-based dispersion and mass
+        zHost = halo.attrs['halo_z']
+        zHost_err = halo.attrs['halo_z_err']
+        sodDisp[j] = halo.attrs['sod_halo_vel_disp']
+        
+        # mask faint galaxies (less negative than -16 in rest r-band)
+        rMag = halo['magnitude:SDSS_r:rest'][:]
+        if(mask_magnitude): rMag_mask = (rMag > -16)
+        else: rMag_mask = np.ones(len(rMag), dtype=bool)
+
+        # use redshifts of galaxies surviving the mask to calculate galaxy-based dispersion
+        z = halo['redshiftObserver'][:][rMag_mask]
+        pecV = ct.LOS_properVelocity(z, zHost)
+        galDisp[j]  = stat.bDispersion(pecV)
+       
+        # do halo matching across step catalog, measure peculiar LOS velocites, and dispersions
+        if(include_stepCatalog):
+            lightcone_equivStep = halo.attrs['halo_step']
+            step_mask =  (steps == lightcone_equivStep)
+            halo_mask = (halos_steps == int(halos[j]))
+            mask = (halo_mask & step_mask)
+            if(np.sum(mask) > 1): 
+                raise ValueError('too many matches found for halo {} in step catalog (bad masking)'
+                                 .format(halos[j]))
+            pdb.set_trace()
+            halo_step = protoDC2_steps[np.array(list(protoDC2_steps.keys()))[mask][0]]
+            pecV_step = cpz.pecZ(halo_step['x'], halo_step['y'], halo_step['z'], halo_step['vx'],
+                                 halo_step['vy'], halo_step['vz'], vPec_only=True)
+            galDisp_steps[j] = stat.bDispersion(pecV_step)
+            pdb.set_trace()
+ 
+    if(include_stepCatalog): 
+        plot_galaxy_particle_disp_1to1(galDisp, sodDisp, include_stepCatalog=True, 
+                                       sigma_step = galDisp_steps)
+    else: plot_galaxy_particle_disp_1to1(galDisp, sodDisp)
+
+
 # -------------------------------------------------------------------------------------------------
 
 
-def plot_vDisp_comparison(sigma, sigmadm):
+def plot_galaxy_particle_disp_1to1(sigma, sigmadm, include_stepCatalog = False, sigma_step=None):
     '''
     Plot the particle_based vs glaxy-based velocity distribution for each halo as passed.
     This function is meant to be called by mass_vDisp_relation() above.
 
     :param sigma: An array of galaxy-based dispersions
     :param sigmadm: An array of particle-based dispersions
+    :param include_stepCatalog: whether or not to include compairson data from the step catalog
     '''
+
+    if(include_stepCatalog and sigma_step==None):
+            raise ValueError('step catalog dipsersions must be passed if include_stepCatalog == True')
     
     fig = plt.figure(0)
     fig.clf()
     ax = fig.add_subplot(111)
     ax.plot(sigmadm, sigma, 'xb', ms=6, mew=1.6, alpha=0.5)
-    ax.plot([200, 1300], [200, 1300], '--k', lw=2)
+    if(include_stepCatalog):
+        ax.plot(sigmadm_step, sigma_step, 'xg', ms=6, mew=1.6, alpha=0.5)
+    ax.plot([200, 1800], [200, 1800], '--k', lw=2)
 
-    ax.set_ylim([200, 1000])
-    ax.set_xlim([200, 1000])
+    ax.set_ylim([200, 1800])
+    ax.set_xlim([200, 1800])
     ax.grid()
 
     ax.set_ylabel(r'$\sigma_{v,\mathrm{particles}}$ (km/s)', fontsize=20)

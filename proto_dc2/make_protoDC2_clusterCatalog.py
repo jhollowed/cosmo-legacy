@@ -40,7 +40,7 @@ def makeCatalog():
       calculated in this code. Each halo group has the following attributes:
       
       From protoDC2:
-        -   hostHaloMass (equivalent to the FOF mass)
+        -   hostHaloMass (equivalent to the merger-tree mass (the FOF mass minus any fragments))
         -   hostHaloTag  (the FOF tag)
         -   hostIndex
         -   step
@@ -142,7 +142,7 @@ def makeCatalog():
         for j in range(len(galMask)):
             
             host_quantityModifiers = {
-                'hostHaloMass':'fof_halo_mass',
+                'hostHaloMass':'host_halo_mass',
                 'hostIndex':'halo_index',
                 'hostHaloTag':'fof_halo_tag',
                 'step':'halo_step'
@@ -222,7 +222,7 @@ def makeCatalog_steps():
       calculated in this code. Each halo group has the following attributes:
       
       From protoDC2:
-        -   hostHaloMass (equivalent to the FOF mass)
+        -   hostHaloMass (equivalent to the merger-tree halo mass (FOF mass minus fragments))
         -   hostHaloTag  (the FOF tag)
         -   hostIndex
         -   step
@@ -278,10 +278,12 @@ def makeCatalog_steps():
         
         step = int(steps[i])
         stepGals = protoDC2[steps[i]]
+        h = 0.702
+        
         print('\n------------ working on STEP {} ({}/{}) ------------'.format(step, i+1, len(steps)))
 
         # find all unique halo tags in protoDC2
-        massMask = stepGals['hostHaloMass'][:] > 1e14 
+        massMask = (stepGals['hostHaloMass'][:] / h) > 1e14
         uniqueTags = np.unique(stepGals['hostHaloTag'][:][massMask], return_counts = True)
         halos = uniqueTags[0]
         nGals = uniqueTags[1]
@@ -291,6 +293,7 @@ def makeCatalog_steps():
 
         # loop through all halos found in the current step
         for k in range(len(halos)):
+
             print('\nworking on halo {} ({}/{})'.format(halos[k], k+1, len(halos)))
 
             # boolean mask of current halo galaxy membership
@@ -303,7 +306,7 @@ def makeCatalog_steps():
             # ------------------------------ GROUP ATTRIBUTES ------------------------------
             
             host_quantityModifiers = {
-                'hostHaloMass':'fof_halo_mass',
+                'hostHaloMass':'host_halo_mass',
                 'hostIndex':'halo_index',
                 'hostHaloTag':'fof_halo_tag',
             }
@@ -321,6 +324,7 @@ def makeCatalog_steps():
                     raise ValueError('False sibling galaxies (mebership masking not working properly)')
                 modifiedProp = host_quantityModifiers[prop]
                 haloGroup.attrs.create(modifiedProp, data[0])
+            haloGroup.attrs['host_halo_mass'] = haloGroup.attrs['host_halo_mass'] / h
            
             # save step number as group attribute rather than root group name
             haloGroup.attrs.create('halo_step', step)
@@ -334,7 +338,7 @@ def makeCatalog_steps():
                 data = gio.gio_read(haloCatalog[sodStepIdx], prop)[sodIdx]
                 haloGroup.attrs.create(prop, data)
             print('saved all halo attributes')
-
+            
             # ------------------------------ GROUP DATASETS ------------------------------
             # save all protoDC2 galaxy data columns for the current halo's member galaxies
             for p in range(len(galProps)):
@@ -344,7 +348,7 @@ def makeCatalog_steps():
                 if(len(haloGroup[prop]) != np.sum(galMask)):
                     raise ValueError('galaxy population size not the same across columns (bad masks)')
             print('saved all galaxy datasets')
-
+           
     print('Done. Took {:.2f} s'.format(time.time() - start))
     return 0
 
