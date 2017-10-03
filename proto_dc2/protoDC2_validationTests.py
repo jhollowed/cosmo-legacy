@@ -275,8 +275,6 @@ def plot_mass_vDisp_relation(sigma, sigmadm, realMass):
 
 def galaxy_particle_disp_1to1(mask_magnitude = False, observed = True, include_stepCatalog = False):
     '''
-    WORK IN PROGRESS - DO NOT USE THIS FUNCTION AS OF THIS COMMIT
-
     This function gathers the necessary data to compare the particle based dispersions and galaxy
     based dispersions of protoDC2 halos. Optionally, it also preforms halo matching across catalogs
     to compare the velocity dispersions of the upstream step catalog to that of the lightcone
@@ -291,7 +289,7 @@ def galaxy_particle_disp_1to1(mask_magnitude = False, observed = True, include_s
     '''
     
     protoDC2 = h5py.File('data/protoDC2_clusters_shear_nocut_A.hdf5', 'r')
-    obsSuff = ['3d', '1d'][observed]
+    obsSuff = ['1d', 'obs'][observed]
     halos = list(protoDC2.keys())
     n = len(halos)
     galDisp = np.zeros(n)
@@ -318,28 +316,27 @@ def galaxy_particle_disp_1to1(mask_magnitude = False, observed = True, include_s
         zHost = halo.attrs['halo_z']
         zHost_err = halo.attrs['halo_z_err']
         sodDisp[j] = halo.attrs['sod_halo_vel_disp']
-        
-        # mask faint galaxies (less negative than -16 in rest r-band)
-        rMag = halo['magnitude:SDSS_r:rest'][:]
-        if(mask_magnitude): rMag_mask = (rMag > -16)
-        else: rMag_mask = np.ones(len(rMag), dtype=bool)
+        if(observed): galDisp[j] = halo.attrs['gal_vel_disp_obs']
+        else: galDisp[j] = halo.attrs['gal_vel_disp_1d']
 
-        if(observed):
-            # use redshifts of galaxies surviving the mask to calculate galaxy-based dispersion
-            z = halo['redshiftObserver'][:][rMag_mask]
-            pecV = ct.LOS_properVelocity(z, zHost)
-            galDisp[j]  = stat.bDispersion(pecV)
-        else:
-            print('{}/{}'.format(j+1, n))
-            velMag = np.linalg.norm(np.array([halo['vx'], halo['vy'], halo['vz']]).T, axis=1)
-            galDisp[j] = stat.bDispersion(velMag)
+        # if magnitude should be masked, dispersions must be recalculated with new populations
+        # as given by a -16 r-band magnitude cut
+        if(mask_magnitude): 
+            rMag_mask = (rMag > -16)
+            if(observed):
+                # use redshifts of galaxies surviving the mask to calculate galaxy-based dispersion
+                z = halo['redshiftObserver'][:][rMag_mask]
+                pecV = ct.LOS_properVelocity(z, zHost)
+                galDisp[j]  = stat.bDispersion(pecV)
+            else:
+                galDisp[j] = stat.dmDispersion(halo['vx'], halo['vy'], halo['vz'])
 
         # do halo matching across step catalog, measure peculiar LOS velocites, and dispersions
         if(include_stepCatalog and not bypass_snapshotLoop):
             print('matching to snapshot catalog for halo {}/{}'.format(j+1, n))
             lightcone_equivStep = halo.attrs['halo_step']
             step_mask =  (steps == lightcone_equivStep)
-            halo_mask = (halos_steps == int(halos[j].split('-')[0]))
+            halo_mask = (halos_steps == halo.attrs['fof_halo_tag'])
             mask = (halo_mask & step_mask)
             if(np.sum(mask) > 1): 
                 raise ValueError('too many matches found for halo {} in step catalog (bad masking)'
@@ -351,11 +348,9 @@ def galaxy_particle_disp_1to1(mask_magnitude = False, observed = True, include_s
                                      halo_step['vy'], halo_step['vz'], vPec_only=True)
                 galDisp_steps[j] = stat.bDispersion(pecV_step)
             else:
-                velMag = np.linalg.norm(np.array(
-                                        [halo_step['vx'], halo_step['vy'], halo_step['vz']]).T, axis=1)
-                galDisp_steps[j] = stat.bDispersion(velMag) 
+                galDisp_steps[j] = stat.dmDispersion(halo_step['vx'], halo_step['vy'], halo_step['vz'])
 
-            np.save('data/dispersion_1to1_snapshot_datai_{}.npy'.format(obsSuff), galDisp_steps)
+            np.save('data/dispersion_1to1_snapshot_data_{}.npy'.format(obsSuff), galDisp_steps)
 
     if(include_stepCatalog): 
         plot_galaxy_particle_disp_1to1(galDisp, sodDisp, include_stepCatalog=True, 
@@ -376,19 +371,20 @@ def plot_galaxy_particle_disp_1to1(sigma, sigmadm, include_stepCatalog = False, 
     :param include_stepCatalog: whether or not to include compairson data from the step catalog
     '''
 
-    if(include_stepCatalog and sigma_step==None):
+    if(include_stepCatalog and sigma_step is None):
             raise ValueError('step catalog dipsersions must be passed if include_stepCatalog == True')
     
     fig = plt.figure(0)
     fig.clf()
     ax = fig.add_subplot(111)
-    ax.plot(sigmadm, sigma, 'xb', ms=6, mew=1.6, alpha=0.5)
+    ax.plot(sigma, sigmadm, 'xb', ms=7, mew=1.6, alpha=0.5, label='lightcone data')
     if(include_stepCatalog):
-        ax.plot(sigmadm, sigma_step, 'xg', ms=6, mew=1.6, alpha=0.5)
+        ax.plot(sigma_step, sigmadm, 'xg', ms=7, mew=1.6, alpha=0.5, label='snapshot data')
     ax.plot([200, 1800], [200, 1800], '--k', lw=2)
 
     ax.set_ylim([200, 1800])
     ax.set_xlim([200, 1800])
+    ax.legend(loc='lower right')
     ax.grid()
 
     ax.set_ylabel(r'$\sigma_{v,\mathrm{particles}}$ (km/s)', fontsize=20)
