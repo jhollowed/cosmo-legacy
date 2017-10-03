@@ -7,14 +7,19 @@ makeCatalog_steps(). The former operates on the protoDC2 catalog, which is produ
 a light cone, and the latter operates on the upstream step-version of the protoDC2 catalog.
 '''
 
+import sys, os
+sys.path.append(os.path.join(os.path.dirname(__file__), '..', 'util'))
+
 import pdb
 import glob
+import time
 import h5py
 import numpy as np
 from dtk import gio
+import clstrTools as ct
 import matplotlib as mpl
+import dispersionStats as stat
 import matplotlib.pyplot as plt
-import time
 
 
 def makeCatalog():
@@ -24,14 +29,13 @@ def makeCatalog():
 
     - The attributes of the root group '/' give information on the cosmology of the simulation
     - The root group has a child group for each halo of mass > 1e14, the names of which being the 
-      halo's fof tag. For example, the halo with tag 123456 is found at '/123456' in the hdf file
+      an incrementing integer. For example, the first halo found in this code with tag 123456 is found 
+      at '/halo_1' in the hdf file, with the 'fof_halo_tag' group attribute set to '123456'
     - If duplicates of a halo were found (or at least, the same tag was used again in a later snapshot),
-      then the step number of the halo is appended to the end of the group name. For example, if 
-      halo with tag 456789 was found twice at step 286 and 247, the two hdf groups are created as 
-      '/456789-286' and '/456789-247'
-    - Each halo group contains 97 datasets which correspond to the data columns of the original 
+      then they are both saved and can be differentiated by the group attribute 'halo_step' 
+    - Each halo group contains x datasets which correspond to the data columns of the original 
       protoDC2 catalog, with consistent column names, for all of that halo's member galaxies. If a 
-      halo is the host to 120 galaxies, then each of the 97 data columns are 120 elements long.
+      halo is the host to 120 galaxies, then each of the x data columns are 120 elements long.
     - A few columns from the original catalog are missing from the halo group datasets. This is because
       the galaxy catalog has a few columns that apply halo-wide. For instance, the hostHaloMass is the 
       same value for every galaxy in the halo. Rather than repeating the information for every member
@@ -53,14 +57,20 @@ def makeCatalog():
         -   sod_halo_cdelta_error
         -   sod_halo_c_acc_mass
       Calculated here:
-        -   RA   (median of meber galaxies RA)
-        -   Dec  (median of member galaxies declination)
-        -   z    (median of member galaxies observed redshifts (combination of cosmological + peculiar))
-        -   zErr (standard error of the median (1.25 * SDOM) of the above quantity 'z' )
-        ** If a more robust statistic turns out to be needed for the last three quanties above, or the 
-           redshift error ought to be simulated rather than assumed from a normal distribution, then I 
-           will make those changes. But nearly all halos in this catalog have large numbers of member 
-           galaxies (on order 10^3) **
+        -   halo_ra   (median of meber galaxies RA)
+        -   halo_dec  (median of member galaxies declination)
+        -   halo_z    (median of member galaxies observed redshifts 
+                       (combination of cosmological + peculiar))
+        -   halo_z_err (standard error of the median (1.25 * SDOM) of the above quantity 'z' )
+        -   gal_vel_disp_obs - the "observed" velocity dispersion of the halo's protoDC2 galaxies, 
+                               obtained using only the derived observed redshift of each galaxy
+        -   gal_vel_disp_1d  - the 1d velocity dispersion of the halo's protoDC2 galaxies, obtained
+                               using their 3-dimensional velocity vector components (Evrard+ 2003)
+
+        ** If a more robust statistic turns out to be needed for the first three calculated quanties 
+           above, or the redshift error ought to be simulated rather than assumed from a normal 
+           distribution, then I will make those changes. But nearly all halos in this catalog have 
+           large numbers of member galaxies (on order 10^3) **
 
     Finally - this code as it stands should be run on datastar
     '''
@@ -131,10 +141,10 @@ def makeCatalog():
             print('{} of {} duplicates kept after cluster mass cut'
                   .format(len(duplMassMask) - np.sum(duplMassMask == False), len(duplMassMask))) 
 
-            haloGroups = [outputFile.create_group('{}-{}'.format(halos[k], step)) 
+            haloGroups = [outputFile.create_group('halo_{}'.format(k+1)) 
                           for step in uniqueSteps]
         else:
-            haloGroups = [outputFile.create_group('{}'.format(halos[k]))]
+            haloGroups = [outputFile.create_group('halo_{}'.format(k+1))]
         
         # -----------------------------------------------------------------------------------
         # loop through each duplicated halo (only 1 loop in the case of no duplication)
@@ -170,11 +180,22 @@ def makeCatalog():
             galRA = protoDC2['ra'][:][galMask[j]]
             galDec = protoDC2['dec'][:][galMask[j]]
             galZ = protoDC2['redshiftObserver'][:][galMask[j]]
-            medianZErr = 1.25 * (np.std(galZ) / np.sqrt(len(galZ)))
-            haloGroups[j].attrs.create('halo_ra', np.median(galRA))
-            haloGroups[j].attrs.create('halo_dec', np.median(galDec))
-            haloGroups[j].attrs.create('halo_z', np.median(galZ))
-            haloGroups[j].attrs.create('halo_z_err', medianZErr)
+            hostRA = np.median(galRA)
+            hostDec = np.median(galDec)
+            hostZ = np.median(galZ)
+            hostZErr = 1.25 * (np.std(galZ) / np.sqrt(len(galZ)))
+            pecV = ct.LOS_properVelocity(galZ, hostZ)
+            galDisp_obs = stat.bDispersion(pecV)
+            galDisp_1d = stat.dmDispersion(protoDC2['vx'][:][galMask[j]], 
+                                           protoDC2['vy'][:][galMask[j]], 
+                                           protoDC2['vz'][:][galMask[j]])
+            
+            haloGroups[j].attrs.create('halo_ra', hostRA)
+            haloGroups[j].attrs.create('halo_dec', hostDec)
+            haloGroups[j].attrs.create('halo_z', hostZ)
+            haloGroups[j].attrs.create('halo_z_err', hostZErr)
+            haloGroups[j].attrs.create('gal_vel_disp_obs', galDisp_obs)
+            haloGroups[j].attrs.create('gal_vel_disp_1d', galDisp_1d)
 
             # save all sod properties of the halo from the haloCatalog as attrbiutes
             sodStepIdx = np.where(haloSteps == haloGroups[j].attrs['halo_step'])[0][0]

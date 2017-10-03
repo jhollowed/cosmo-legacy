@@ -273,31 +273,43 @@ def plot_mass_vDisp_relation(sigma, sigmadm, realMass):
 # ===================================================================================================
 
 
-def galaxy_particle_disp_1to1(mask_magnitude = False, include_stepCatalog = False):
+def galaxy_particle_disp_1to1(mask_magnitude = False, observed = True, include_stepCatalog = False):
     '''
+    WORK IN PROGRESS - DO NOT USE THIS FUNCTION AS OF THIS COMMIT
+
     This function gathers the necessary data to compare the particle based dispersions and galaxy
     based dispersions of protoDC2 halos. Optionally, it also preforms halo matching across catalogs
     to compare the velocity dispersions of the upstream step catalog to that of the lightcone
     catalog.
 
     :param mask_magnitude: whether or not to preform a magnitude cut at -16 r-band
+    :param observed: whether ot not to calculate the galaxy velocity dispersion as an observer would
+                     find it (use the observed redshifts to get LOS velocities). If not, use 3d 
+                     galay velocities
     :param include_stepCatalog: whether or not to match to the step catalog and include this data
     :return: None
     '''
     
     protoDC2 = h5py.File('data/protoDC2_clusters_shear_nocut_A.hdf5', 'r')
+    obsSuff = ['3d', '1d'][observed]
     halos = list(protoDC2.keys())
     n = len(halos)
     galDisp = np.zeros(n)
     sodDisp = np.zeros(n)
     if(include_stepCatalog):
-        protoDC2_steps = h5py.File('/media/luna1/jphollowed/protoDC2/'\
-                                   'protoDC2_STEPS_clusters_nocut_A.hdf5', 'r')
-        halos_steps = np.array([protoDC2_steps[h].attrs['fof_halo_tag'] 
-                                for h in list(protoDC2_steps.keys())])
-        steps = np.array([protoDC2_steps[h].attrs['halo_step'] 
-                          for h in list(protoDC2_steps.keys())])
-        galDisp_steps = np.zeros(n)
+        try:
+            galDisp_steps = np.load('data/dispersion_1to1_snapshot_data_{}.npy'.format(obsSuff))
+            bypass_snapshotLoop = 1
+        except FileNotFoundError:
+            print('loading snapshot catalog')
+            protoDC2_steps = h5py.File('/media/luna1/jphollowed/protoDC2/'\
+                                       'protoDC2_STEPS_clusters_nocut_A.hdf5', 'r')
+            halos_steps = np.array([protoDC2_steps[h].attrs['fof_halo_tag'] 
+                                    for h in list(protoDC2_steps.keys())])
+            steps = np.array([protoDC2_steps[h].attrs['halo_step'] 
+                              for h in list(protoDC2_steps.keys())])
+            galDisp_steps = np.zeros(n)
+            bypass_snapshotLoop = 0
     
     for j in range(n):
         halo = protoDC2[halos[j]]
@@ -312,27 +324,39 @@ def galaxy_particle_disp_1to1(mask_magnitude = False, include_stepCatalog = Fals
         if(mask_magnitude): rMag_mask = (rMag > -16)
         else: rMag_mask = np.ones(len(rMag), dtype=bool)
 
-        # use redshifts of galaxies surviving the mask to calculate galaxy-based dispersion
-        z = halo['redshiftObserver'][:][rMag_mask]
-        pecV = ct.LOS_properVelocity(z, zHost)
-        galDisp[j]  = stat.bDispersion(pecV)
-       
+        if(observed):
+            # use redshifts of galaxies surviving the mask to calculate galaxy-based dispersion
+            z = halo['redshiftObserver'][:][rMag_mask]
+            pecV = ct.LOS_properVelocity(z, zHost)
+            galDisp[j]  = stat.bDispersion(pecV)
+        else:
+            print('{}/{}'.format(j+1, n))
+            velMag = np.linalg.norm(np.array([halo['vx'], halo['vy'], halo['vz']]).T, axis=1)
+            galDisp[j] = stat.bDispersion(velMag)
+
         # do halo matching across step catalog, measure peculiar LOS velocites, and dispersions
-        if(include_stepCatalog):
+        if(include_stepCatalog and not bypass_snapshotLoop):
+            print('matching to snapshot catalog for halo {}/{}'.format(j+1, n))
             lightcone_equivStep = halo.attrs['halo_step']
             step_mask =  (steps == lightcone_equivStep)
-            halo_mask = (halos_steps == int(halos[j]))
+            halo_mask = (halos_steps == int(halos[j].split('-')[0]))
             mask = (halo_mask & step_mask)
             if(np.sum(mask) > 1): 
                 raise ValueError('too many matches found for halo {} in step catalog (bad masking)'
                                  .format(halos[j]))
-            pdb.set_trace()
             halo_step = protoDC2_steps[np.array(list(protoDC2_steps.keys()))[mask][0]]
-            pecV_step = cpz.pecZ(halo_step['x'], halo_step['y'], halo_step['z'], halo_step['vx'],
-                                 halo_step['vy'], halo_step['vz'], vPec_only=True)
-            galDisp_steps[j] = stat.bDispersion(pecV_step)
-            pdb.set_trace()
- 
+
+            if(observed):
+                pecV_step = cpz.pecZ(halo_step['x'], halo_step['y'], halo_step['z'], halo_step['vx'],
+                                     halo_step['vy'], halo_step['vz'], vPec_only=True)
+                galDisp_steps[j] = stat.bDispersion(pecV_step)
+            else:
+                velMag = np.linalg.norm(np.array(
+                                        [halo_step['vx'], halo_step['vy'], halo_step['vz']]).T, axis=1)
+                galDisp_steps[j] = stat.bDispersion(velMag) 
+
+            np.save('data/dispersion_1to1_snapshot_datai_{}.npy'.format(obsSuff), galDisp_steps)
+
     if(include_stepCatalog): 
         plot_galaxy_particle_disp_1to1(galDisp, sodDisp, include_stepCatalog=True, 
                                        sigma_step = galDisp_steps)
@@ -360,7 +384,7 @@ def plot_galaxy_particle_disp_1to1(sigma, sigmadm, include_stepCatalog = False, 
     ax = fig.add_subplot(111)
     ax.plot(sigmadm, sigma, 'xb', ms=6, mew=1.6, alpha=0.5)
     if(include_stepCatalog):
-        ax.plot(sigmadm_step, sigma_step, 'xg', ms=6, mew=1.6, alpha=0.5)
+        ax.plot(sigmadm, sigma_step, 'xg', ms=6, mew=1.6, alpha=0.5)
     ax.plot([200, 1800], [200, 1800], '--k', lw=2)
 
     ax.set_ylim([200, 1800])

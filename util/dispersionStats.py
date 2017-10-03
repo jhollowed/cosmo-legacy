@@ -196,6 +196,31 @@ def gDispersion(v):
     return sigG
 
 
+def dmDispersion(vx, vy, vz):
+    '''
+    Returns the 1D velocity dispersion estiamted from the full 3d component velocity vectors of each
+    system member (as applied to halo simulation particles, or simulated galaxies), as given in 
+    Evrard+ 2003
+
+    :param vx: an array of x-component velocity values
+    :param vy: an array of x-component velocity values
+    :param vz: an array of x-component velocity values
+    :return: the 1d dispersion of the input velocities
+    '''
+    if( sum(abs(np.diff([len(vx), len(vy), len(vz)]))) != 0 ):
+        raise ValueError('velocity component arrays must all be of equal length')
+    
+    Np = len(vx)
+    vx_diff = vx - np.median(vx)
+    vy_diff = vy - np.median(vy)
+    vz_diff = vz - np.median(vz)
+    comps = [vx_diff, vy_diff, vz_diff]
+
+    var = 1/(3*Np) * np.sum([comp**2 for comp in comps])
+    disp = np.sqrt(var)
+    return disp
+
+
 def sigmaClip(v, center = None, sigma=3, cutoff=15):
     '''
     Preforms sigma clipping on a (velocity) array of data. In this context, the variance is taken to be
