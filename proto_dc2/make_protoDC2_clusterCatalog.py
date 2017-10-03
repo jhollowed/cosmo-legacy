@@ -107,6 +107,7 @@ def makeCatalog():
     halos = uniqueTags[0]
     nGals = uniqueTags[1]
     duplicates=0
+    nHalos = 1
 
     # ---------------------------------------------------------------------------------------
 
@@ -140,12 +141,16 @@ def makeCatalog():
             galMask = galMask[duplMassMask]
             print('{} of {} duplicates kept after cluster mass cut'
                   .format(len(duplMassMask) - np.sum(duplMassMask == False), len(duplMassMask))) 
-
-            haloGroups = [outputFile.create_group('halo_{}'.format(k+1)) 
-                          for step in uniqueSteps]
+            
+            haloGroups = [outputFile.create_group('halo_{}'.format(nHalos+i))
+                          for i in range(len(uniqueSteps))]
+            print('created halo groups {}'.format([r.name for r in haloGroups]))
+            nHalos += len(uniqueSteps)
         else:
-            haloGroups = [outputFile.create_group('halo_{}'.format(k+1))]
-        
+            haloGroups = [outputFile.create_group('halo_{}'.format(nHalos))]
+            print('created halo group {}'.format(haloGroups[0].name))
+            nHalos += 1
+
         # -----------------------------------------------------------------------------------
         # loop through each duplicated halo (only 1 loop in the case of no duplication)
 
