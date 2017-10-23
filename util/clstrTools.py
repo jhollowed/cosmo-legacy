@@ -9,6 +9,7 @@ import pdb
 import math
 import numba
 import numpy as np
+import simTools as st
 import massConversion as mc
 from astropy import units as u
 from astropy.cosmology import WMAP7
@@ -20,12 +21,16 @@ c = const.c.value
 Msun = const.M_sun.value
 
 
+# ==========================================================================================
+
+
 def LOS_properVelocity(zi,z, dzi = [], dz = None):
     '''
     Returns the line of sight peculiar velocity of a galaxy or galaxies (Ruel et al. 2014).
 
     :param zi: an array-like of redshift values
-    :param z: the redshift of the cluster that contains the member galaxy (biweight average of z)
+    :param z: the redshift of the cluster that contains the member galaxy
+              (biweight average of z)
     :param dzi: error in redshift values
     :param dz: error in cluster redshift
     :returns: array of proper velocities in km/s
@@ -47,9 +52,13 @@ def LOS_properVelocity(zi,z, dzi = [], dz = None):
         return [v, dv]
 
 
+# ==========================================================================================
+
+
 def projectedDist(coords, center_coords, z, cosmo = WMAP7, dist_type='comoving'):
     '''
-    Convert RA and Dec coordinate values to angular separation, and then separation distance in Mpc
+    Convert RA and Dec coordinate values to angular separation, and then separation distance 
+    in Mpc
     :param coords: Array of galaxy coordinates tuples or lists in the form (ra, dec)
     :param center_coords: The coordinate of the cluster center in the form (ra, dec)
     :param z: redshift of cluster
@@ -73,6 +82,9 @@ def projectedDist(coords, center_coords, z, cosmo = WMAP7, dist_type='comoving')
     sep = skyCoords.separation(center).to('arcmin').value
     dist = sep * kpc_per_arcmin / 1000
     return dist
+
+
+# ===========================================================================================
 
 
 def interpolated_kpc_per_arcmin(z, cosmo = WMAP7, dist_type = 'comoving'):
@@ -100,18 +112,23 @@ def interpolated_kpc_per_arcmin(z, cosmo = WMAP7, dist_type = 'comoving'):
     return kpc_interp
     
 
+# ===========================================================================================
+
+
 def mass_to_radius(mass, z, h = 100, mdef ='200c', cosmo = WMAP7, Msun=1):
     '''
     spherical radius overdensity as a function of the input mass usign halotools
-    :param mass: cluster mass(es) in units of M_sun/h or M_sun/h70 (factor of 10^14 is assumed)
+    :param mass: cluster mass(es) in units of M_sun/h or M_sun/h70 
+                 (factor of 10^14 is assumed)
     :param z: redshift of given cluster
     :param h: the kind of dimensionless hubble parameter (either h (h=100) or h70 (h=70), 
-	      default is h = 100)
+	          default is h = 100)
     :param mdef: mass definition (default is mdef = '200c')
     :param cosmo: AstroPy Cosmology object instance (default is cosmo = WMAP7)
-    :param Msun: whether ot not masses are given in units of M_sun. If 0, then divide all masses
-                 by M_sun. If 1, don't do anything (default is Msun=1)
-    :return: scalar or array of halo radii in Mpc/h with the same overdesnity as the mass definition
+    :param Msun: whether ot not masses are given in units of M_sun. If 0, then divide all 
+                 masses by M_sun. If 1, don't do anything (default is Msun=1)
+    :return: scalar or array of halo radii in Mpc/h with the same overdesnity as the mass 
+             definition
     '''
 
     mass = np.atleast_1d(mass)
@@ -121,7 +138,7 @@ def mass_to_radius(mass, z, h = 100, mdef ='200c', cosmo = WMAP7, Msun=1):
     if(Msun == 0): mass = mass / const.M_sun.value
 
     if(h == 70):
-        mass = (mass / h70()) * cosmo.h
+        mass = (mass / st.h70()) * cosmo.h
     elif(h != 100):
         raise ValueError('Masses must be given in units of M_sun/h70 or M_sun/h')
         return None
@@ -136,6 +153,8 @@ def mass_to_radius(mass, z, h = 100, mdef ='200c', cosmo = WMAP7, Msun=1):
     else: return radii[0]
 
 
+# ===========================================================================================
+
 
 def richness_to_m200(l):
     '''
@@ -143,11 +162,14 @@ def richness_to_m200(l):
     mass richness relation from http://arxiv.org/abs/1603.06953
     
     :param l: richness of cluster
-    :return: m200, the mass of the cluster with respect to the critical density, in units of M_sun/h_70
+    :return: m200, the mass of the cluster with respect to the critical density, 
+                   in units of M_sun/h_70
     '''
     m200 = 1e14*np.exp(1.48 + 1.06*np.log(l/60.0))
     return m200
 
+
+# ==========================================================================================
 
 
 def richness_to_arcmin(l,z, cosmo = WMAP7, mdef='200c', h=70):
@@ -159,14 +181,20 @@ def richness_to_arcmin(l,z, cosmo = WMAP7, mdef='200c', h=70):
     return arcmin
 
 
+# ===========================================================================================
+
 
 def classifyType(spectra):
     '''
-    Classifies galaxies by type according to criteria given by Bayliss et al. (2016) =, Table 5.
-    :param spectra: list of lists. Each list is a galaxies spectral info including their OII emission, 
-		    H_delta emission, and certainties for each expressed in sigmas. 
-		    Expected form: [OII, OII_erorr, Hd, Hd_error]
-    :return: list of galaxy types in order passed. 0 = passive, 1 = post-starburst, 2 = star-forming
+    Classifies galaxies by type according to criteria given by Bayliss et al. (2016) =, 
+    Table 5.
+    :param spectra: list of lists. Each list is a galaxies spectral info including their 
+                    OII emission, H_delta emission, and certainties for each expressed in 
+                    sigmas. 
+		            Expected form: [OII, OII_erorr, Hd, Hd_error]
+    :return: list of galaxy types in order passed. 0 = passive, 
+                                                   1 = post-starburst, 
+                                                   2 = star-forming
     '''
 
     types = np.zeros(len(spectra), dtype = int)
@@ -179,6 +207,9 @@ def classifyType(spectra):
         else: types[n] = 2
 
     return types
+
+
+# ==========================================================================================
 
 
 def convertMass(mass, mdef, z, mdef_out = 200, h = 100, cosmo = WMAP7):
@@ -197,7 +228,7 @@ def convertMass(mass, mdef, z, mdef_out = 200, h = 100, cosmo = WMAP7):
     z = np.atleast_1d(z)
 
     if (h == 70):
-        mass = (mass / h70()) * cosmo.h
+        mass = (mass / st.h70()) * cosmo.h
     elif (h != 100):
         raise ValueError('Masses must be given in units of M_sun/h70 or M_sun/h')
         return
@@ -216,6 +247,9 @@ def convertMass(mass, mdef, z, mdef_out = 200, h = 100, cosmo = WMAP7):
     return newMass
 
 
+# ===========================================================================================
+
+
 def meanVirialDensity(z, cosmo = WMAP7):
     '''
     Compute the virial overdensity of a halo with respect to the
@@ -229,85 +263,3 @@ def meanVirialDensity(z, cosmo = WMAP7):
     dv_d = 1 + x
     dv = dv_n/dv_d
     return dv
-
-
-def h70(z = 0, cosmo = WMAP7):
-    '''
-    Return the value of h_70 at a redshift z
-    :param z: redshift at which to measure the Hubble parameter (default is z=0)
-    :param cosmo: instance of an astropy Cosmology object (default is WMAP7)
-    :return: h_70
-    '''
-    h70 = (cosmo.H(z) / (70 * u.km/(u.Mpc *u.s))).value
-    return h70
-
-
-def h(z = 0, cosmo = WMAP7):
-    '''
-    Return the value of h at a redshift z
-    :param z: redshift (or array of redshifts) at which to measure the Hubble parameter (default is z=0)
-    :param cosmo: instance of an astropy Cosmology object
-    :return: h, the hubble constant over 100
-    '''
-    h = cosmo.H(z).value / 100
-    return h
-
-
-def saroRelation(sigBI, z, A=939, B=2.91, C=0.33):
-    '''
-    Returns the inferred mass of a cluster with a measured
-    velocity dispersion, via the realtion provided by Saro et al. (2013)
-    :param sigBI: the measured velocity dispersion of the cluster
-    :param z: The redshift of the cluster
-    :param A: constant
-    :param B: constant
-    :param C: constant
-    :return: inferred mass from given velocity dispersion in units of Msun
-    '''
-    hz = np.array([h70(zi) for zi in z])
-    mass = ((sigBI / (A*(hz**C)))**B) * 1e15
-    return mass
-
-
-def evrardRelation(sigma = None, m200 = None, z = 0, sigDM15 = 1082.9, sigDM15_err = 4.0, 
-                   a = 0.3361, a_err = 0.0026):
-    '''
-    Returns the inferred dark matter (subhalo) velocty dispersion with a
-    measured SZ-based mass, via the relation provided by Evrard et al.
-    :param sigma: The velocity dispersion(s) of the cluster(s)
-    :param mass: cluster mass(es) expressed in M_200
-    :param z: cluster redshift(s)
-    :param sigDM15: log slope parameter (default best fit from Evrard+ 2003)
-    :param sigDM15_err: error in fit parameter sigDM15 (default best fit from Evrard+ 2003)
-    :param a: log intercept parameter (best fit from Evrard+ 2003)
-    :param a_err: error in fit parameter a (default best fit from Evrard+ 2003)
-    :return: if m200 passed, return inferred velocity dispersion (in km s^-1).
-             if sigma passed, return inferred mass (in m200)
-    '''
-
-    if(sum([val is None for val in [sigma, m200]]) != 1):
-        raise ValueError('Either the sigma or mass must be passed (not none, and not both)')
-    
-    if(sigma == None):
-
-        # calculate velocty dispersion using input mass
-        sigma = sigDM15 * ( (h(z)*m200) / 1e15 )**a
-
-        # error propegation
-        partial_a = sigDM15 * a * (h(z)*m200/1e15)**(a-1)
-        partial_sig = (h(z)*m200/1e15) ** a
-        sigma_err = np.sqrt( (partial_a * a_err)**2 + (partial_sig * sigDM15_err)**2)
-        
-        return np.array([sigma, sigma_err])
-
-    elif(m200 == None):
-
-        # calculate mass using inpit velocity dispersion
-        m200 = 1e15 * (sigma/sigDM15)**(1/a) / h(z)
-
-        # error propegation
-        partial_a = - ((1e15/h(z)) * (sigma/sigDM15)**(1/a) * np.log(sigma/sigDM15)) / a**2
-        partial_sig = - ((1e15/h(z)) * (sigma/sigDM15)**(1/a)) / (a*sigDM15)
-        m200_err =  np.sqrt( (partial_a * a_err)**2 + (partial_sig * sigDM15_err)**2)
-
-        return np.array([m200, m200_err])

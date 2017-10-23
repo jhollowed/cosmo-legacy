@@ -16,40 +16,23 @@ import pdb
 
 def sig_interlopers(galZs, galZs_err=[], vCut=4500, binZ=True):
     '''
-    Preform 3-sigma clipping on a set of galaxy redshifts, by computing their corresponding proper
-    velocity. Proper velocity is found by finding the biweight average in the galaxy redshifts and
-    considering it to be the cluster redshift. Once velocities are found, an initial hard velocity
-    cut is applied, then clipping begins until it converges.
+    Preform 3-sigma clipping on a set of galaxy redshifts, by computing their corresponding
+    proper velocity. Proper velocity is found by finding the biweight average in the galaxy 
+    redshifts and considering it to be the cluster redshift. Once velocities are found, an 
+    initial hard velocity cut is applied, then clipping begins until it converges.
     :param galZs: array-like of galaxy redshifts
     :param galZs_err: error in galaxy redshifts (optional)
     :param vCut: velocity in km/s to cut at before clipping
     :return: boolean clip mask, galaxy velocities (in km/s), and cluster redshift 
-             (and clipped galaxy redshifts)
     '''
 
     galZs =np.array(galZs)
-
-    if(binZ):
-        # bin data into four large bins, and consider the most populated bin to be most likely
-        # to contain members. Calculate cluster redshift and distribution center around only
-        # the values in this bin.
-        bins = np.linspace(min(galZs), max(galZs), 4)
-        binPops = np.histogram(galZs, bins)[0]
-        binPlaces = np.digitize(galZs, bins)
-        binnedZs = galZs[binPlaces == np.argmax(binPops)+1]
-
-        # Calculate cluster redshifts (z), or the biweight averages of the galaxy redshifts
-        # (also called the biweight location estimator in Beers et al. (1990)
-        center = stat.bAverage(binnedZs)
-        center_err = stat.bootstrap_bAverage_err(binnedZs)
-    else:
-        center = stat.bAverage(galZs)
-        center_err = stat.bootstrap_bAverage_err(galZs)
-
+    center = np.median(galZs)
+    center_err = 1.2533 * (np.std(galZs)/np.sqrt(len(galZs)))
     initialZs = galZs
 
     # calculate galaxy velocities of all cluster members, using cluster redshift relation
-    # remove all galaxies above 4,000 km/s from the center (or other specified vCut)
+    # remove all galaxies above vCut km/s from the center
     # (galVs is returned in km/s by LOS_properVelocity)
     galVs = np.array((LOS_properVelocity(galZs, center))) 
 

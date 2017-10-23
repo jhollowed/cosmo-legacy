@@ -4,12 +4,17 @@ Last edited 1/17/2017
 
 Module containing tools for preforming analysis on core catalogs
 """
-import matplotlib.pyplot as plt
-from mpl_toolkits.mplot3d import Axes3D
-import dispersionStats as stat
-import numpy as np
 import pdb
 import math
+import numpy as np
+import dispersionStats as stat
+import matplotlib.pyplot as plt
+from mpl_toolkits.mplot3d import Axes3D
+from numpy.core import umath_tests as npm
+
+
+# ==================================================================================================
+
 
 def core_velDisp(cores, err = False, dim=3):
     """
@@ -37,6 +42,9 @@ def core_velDisp(cores, err = False, dim=3):
         return velDisp
 
 
+# ==================================================================================================
+
+
 def mask_tags(tags):
     """
     For all negative core tags, mask the first 16 bits to obtain original 
@@ -47,6 +55,86 @@ def mask_tags(tags):
     """
     mask = 281474976710655
     return abs(tags) & mask
+
+
+# ==================================================================================================
+
+
+def get_velocity_components(x, y, z, vx, vy, vz):
+    '''
+    This function takes the positions and velocities of simulation objects within a halo,
+    and returns their total, radial, and tangential velocity magnitudes, with respect to the
+    halo center (defined as the median of the passed positions)
+
+    :param x: an array of the comoving x-coordinates in Mpc/h
+    :param y: an array of the comoving y-coordinates in Mpc/h
+    :param z: an array of the comoving z-coordinates in Mpc/h
+    :param vx: an arrray of the x-component of the velocities in comoving km/s
+    :param vy: an arrray of the y-component of the velocities in comoving km/s
+    :param vz: an arrray of the z-component of the velocities in comoving km/s
+    :return: the total velocity magnitude, the radial component, and the tangential component
+    '''
+    n = len(x)
+    r = np.array([x, y, z]).T
+    v = np.array([vx, vy, vz]).T
+    if(n > 100):
+        halo_center = np.median(r.T, axis=1)
+        halo_vel = np.median(v.T, axis=1)
+    else:
+        halo_center = [stat.bAverage(p) for p in [x, y, z]]
+        halo_vel = [stat.bAverage(vp) for vp in [vx, vy, vz]]
+    
+    # get positions and velocities in halocentric frame 
+    r_rel = r - halo_center
+    v_rel = v - halo_vel
+    v_rel_mag = np.linalg.norm(v_rel, axis=1)
+    
+    # get radial velocity component
+    r_rel_mag = np.linalg.norm(r_rel, axis=1)
+    r_rel_hat = np.divide(r_rel, np.array([r_rel_mag]).T)
+    v_rad = npm.inner1d(v_rel, r_rel_hat)
+     
+    # get tangential velocity component
+    tan_dir = np.cross( np.cross(v_rel, r_rel, axisa=1), r_rel, axisa=1)
+    tan_dir_mag = np.linalg.norm(tan_dir, axis=1)
+    tan_dir_hat = np.divide(tan_dir, np.array([tan_dir_mag]).T)
+    v_tan = npm.inner1d(v_rel, tan_dir_hat)
+    
+    # consistency check
+    v_rel_mag_check = np.sqrt(v_rad**2 + v_tan**2)
+    diff = [stat.percentDiff(v_rel_mag_check[k], v_rel_mag[k]) for k in range(len(v))]
+    if( max(diff) > 0.001):
+        raise ValueError('component quad is not recovering velocity magnitude (bug)')
+    
+    return v_rel_mag, v_rad, v_tan
+
+
+# ==================================================================================================
+
+
+def get_radial_distance(x, y, z):
+    '''
+    This function takes the comiving positions of simulation objects within a halo, and gives
+    the radial distance of each object to the halo center in Mpc/h
+
+    :param x: an array of the comoving x-coordinates in Mpc/h
+    :param y: an array of the comoving y-coordinates in Mpc/h
+    :param z: an array of the comoving z-coordinates in Mpc/h
+    '''
+
+    n = len(x)
+    r = np.array([x, y, z]).T
+    if(n > 100):
+        halo_center = np.median(r.T, axis=1)
+    else:
+        halo_center = [stat.bAverage(p) for p in [x, y, z]]
+    
+    r_rad = r - halo_center
+    r_rad_mag = np.linalg.norm(r_rad, axis=1)
+    return r_rad_mag
+
+
+# ==================================================================================================
 
 
 def unwrap_position(pos, center, boxL=256):
@@ -70,6 +158,9 @@ def unwrap_position(pos, center, boxL=256):
                 pos[n][i] = p[i] + boxL
 
     return pos
+
+
+# ==================================================================================================
 
 
 def process_cores(masses, radii, printarg=False, mass_cut=10**11.27, disrupt_rad=0.05):

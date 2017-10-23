@@ -2,11 +2,13 @@
 Joe Hollowed
 COSMO-HEP 2017
 '''
-import numpy as np
-from numpy.core import umath_tests as npm
-import astropy.constants as const
+
 import pdb
+import numpy as np
+import astropy.constants as const
+from numpy.core import umath_tests as npm
 from astropy.cosmology import WMAP7 as cosmo
+
 
 def pecZ(x, y, z, vx, vy, vz, z_hubb=0, obs=np.zeros(3), vPec_only=False):
     '''

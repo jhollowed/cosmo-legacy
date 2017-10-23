@@ -22,7 +22,10 @@ import time
 import numpy as np
 import pylab as plt
 import simTools as st
+import plotTools as pt
 import clstrTools as ct
+import coreTools as cot
+import matplotlib as mpl
 import calc_peculiar_z as cpz
 import dispersionStats as stat
 import matplotlib.pyplot as plt
@@ -72,13 +75,14 @@ def color_segregation_test(mask_var = 'gr', mask_magnitude = False, include_erro
         sfr = protoDC2_stack['totalStarFormationRate'][:]
         colorMask = sfr < np.median(sfr)
     if(mask_magnitude):
-        magMask = rband > -16
-        colorMask = colorMask & magMask
+        magMask = r_band > -16
+    else:
+        magMask = np.ones(len(r_band))
 
-    vRed = vel[colorMask]
-    vBlue = vel[~colorMask]
-    dRed = dist[colorMask]
-    dBlue = dist[~colorMask]
+    vRed = vel[colorMask][magMask]
+    vBlue = vel[~colorMask][magMask]
+    dRed = dist[colorMask][magMask]
+    dBlue = dist[~colorMask][magMask]
 
     # measure dispersions and error. I use 'o' to mean "dispersion" since
     # it's breif and kinda looks like a sigma
@@ -321,7 +325,8 @@ def galaxy_particle_disp_1to1(mask_magnitude = False, observed = True, include_s
 
         # if magnitude should be masked, dispersions must be recalculated with new populations
         # as given by a -16 r-band magnitude cut
-        if(mask_magnitude): 
+        if(mask_magnitude):
+            rMag = halo['magnitude:SDSS_r:rest'][:]
             rMag_mask = (rMag > -16)
             if(observed):
                 # use redshifts of galaxies surviving the mask to calculate galaxy-based dispersion
@@ -357,9 +362,7 @@ def galaxy_particle_disp_1to1(mask_magnitude = False, observed = True, include_s
                                        sigma_step = galDisp_steps)
     else: plot_galaxy_particle_disp_1to1(galDisp, sodDisp)
 
-
 # -------------------------------------------------------------------------------------------------
-
 
 def plot_galaxy_particle_disp_1to1(sigma, sigmadm, include_stepCatalog = False, sigma_step=None):
     '''
@@ -372,7 +375,7 @@ def plot_galaxy_particle_disp_1to1(sigma, sigmadm, include_stepCatalog = False, 
     '''
 
     if(include_stepCatalog and sigma_step is None):
-            raise ValueError('step catalog dipsersions must be passed if include_stepCatalog == True')
+        raise ValueError('step catalog dipsersions must be passed if include_stepCatalog == True')
     
     fig = plt.figure(0)
     fig.clf()
@@ -391,6 +394,107 @@ def plot_galaxy_particle_disp_1to1(sigma, sigmadm, include_stepCatalog = False, 
     ax.set_xlabel(r'$\sigma_{v,\mathrm{galaxies}}$ (km/s)', fontsize=20)
     plt.show()
 
+
+# ===================================================================================================
+# ============================ velocity-component preference by color ===============================
+# ===================================================================================================
+
+
+def vel_component_preference(mask_var = 'gr', mask_type = 'cut', mask_magnitude = False):
+    '''
+    This function finds the radial and tangential velocity component of each protoDC2 galaxy, 
+    in order to inspect the preference of red vs. blue galaxies. The idea is that blue galaxies should,
+    if well-modeled, prefer radial velocities, whereas red galaxies are more virialized.
+
+    :param mask_var: what galaxy property to preform the color cut on. Default is 'gr', 
+                     meaning that the cut will be preformed in g-r space. Other valid 
+                     options are 'sfr' (which will cut at the median of this value)
+    :param mask_magnitude: whether or not to apply a cut in r-band magnitude space of -16
+    :return: nothing
+    '''
+
+    protoDC2_stack = h5py.File('data/protoDC2_haloStack_shear_nocut_A.hdf5', 'r')
+    g_band = protoDC2_stack['magnitude:SDSS_g:rest'][:]
+    r_band = protoDC2_stack['magnitude:SDSS_r:rest'][:]
+    gr_color = g_band - r_band
+    sfr = protoDC2_stack['totalStarFormationRate'][:]
+
+    # do galaxy cut
+    if(mask_var == 'gr'):
+        if(mask_type == 'cut'): 
+            redMask = gr_color > 0.25
+            blueMask = ~redMask
+        elif(mask_type == 'percentile'):
+            raise ValueError('cannot use mask_type \'percentile\' with mask_var \'gr\'')
+    elif(mask_var == 'sfr'):
+        if(mask_type == 'cut'): 
+            redMask = sfr < np.median(sfr)
+            blueMask = ~redMask
+        elif(mask_type == 'percentile'): 
+            redMask = sfr <= np.percentile(sfr, 15)
+            blueMask = sfr >= np.percentile(sfr, 85)
+    if(mask_magnitude):
+        magMask = r_band > -16
+    else:
+        magMask = np.ones(len(r_band), dtype=bool)
+
+    vMag = protoDC2_stack['vMag_normed'][:]
+    vRad = protoDC2_stack['vRad_normed'][:]
+    vTan = protoDC2_stack['vTan_normed'][:]
+    radDist = protoDC2_stack['radDist_normed'][:]
+    iMag = protoDC2_stack['magnitude:SDSS_i:rest'][:]
+    sfr = protoDC2_stack['totalStarFormationRate'][:] / protoDC2_stack['totalMassStellar'][:]
+    plot_vel_component_preference(radDist, vMag, vRad, vTan, gr_color, iMag, sfr, redMask, blueMask)
+
+# -------------------------------------------------------------------------------------------------
+
+def plot_vel_component_preference(r, v, vRad, vTan, gr_colors, i, sfr, redMask, blueMask):
+    '''
+    This function plots galaxy velocity component ratios as a histogram, in order to visually 
+    inspect for component preference in red galaxies vs. blue galaxies. 
+    '''
+    
+    fig = plt.figure(0)
+    fig.clf()
+    ax = fig.add_subplot(111)
+    binVar = r
+
+    n_bins = 100
+    sortMask = np.argsort(binVar)
+    rbins = np.array_split(binVar[sortMask], n_bins)
+    vbins = np.array_split(vRad[sortMask], n_bins)
+    avg_r = np.array([np.mean(rb) for rb in rbins])
+    avg_v = np.array([np.mean(vb) for vb in vbins])
+    err = np.array([np.std(vb)/np.sqrt(len(vb)) for vb in vbins])
+    meanRedRad = np.median(r[redMask])
+    meanBlueRad = np.median(r[blueMask])
+    meanRedVel = np.median(vRad[redMask])
+    meanBlueVel = np.median(vRad[blueMask])
+    pdb.set_trace()
+
+    if(not np.array_equal(binVar, sfr)):
+        redHist = np.histogram2d(binVar[redMask], vRad[redMask], bins=40, normed=False) 
+        blueHist = np.histogram2d(binVar[blueMask], vRad[blueMask], bins=40, normed=False) 
+        pt.hist2d_to_contour(redHist, ax=ax,  log=True, cmap='Reds')    
+        pt.hist2d_to_contour(blueHist, ax=ax, log=True, cmap='Blues')    
+
+    ax.plot(avg_r, avg_v, '-om', ms=8, label='average')
+    ax.plot(avg_r, avg_v, '-k', alpha=0.1)
+    ax.plot([ax.get_xlim()[0], ax.get_xlim()[1]], [0, 0], '--k', lw=2, label='zero')
+    ax.fill_between(avg_r, avg_v + err, avg_v - err, color = [1, .8, .8])
+    if(np.array_equal(binVar, sfr)):
+        ax.set_xscale('log')
+    plt.plot([0, 0], [0, 0], '-r', label='red gals')
+    plt.plot([0, 0], [0, 0], '-b', label='blue gals')
+
+    ax.grid()
+    #ax.set_xlabel(r'$\mathrm{SFR} / M_{\mathrm{stellar}}$', fontsize=24)
+    ax.set_xlabel(r'$\mathrm{r} / r_{200}$', fontsize=24)
+    ax.set_ylabel(r'$v_{\mathrm{radial}}/\sigma_{v}$', fontsize=24)
+    ax.legend(loc='upper right')
+    ax.set_xlim([0, 3])
+    ax.set_ylim([-6.2, 6.2])
+    plt.show()
 
 # ===================================================================================================
 # =============================== check peculiar redshifts on cores =================================

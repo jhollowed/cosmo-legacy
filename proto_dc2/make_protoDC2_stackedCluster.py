@@ -11,6 +11,7 @@ import h5py
 import time
 import numpy as np
 import clstrTools as ct
+import coreTools as cot
 
 def stackGalaxies():
     
@@ -23,7 +24,7 @@ def stackGalaxies():
     for j in range(len(clusters)):
        
         halo = clusterCatalog[clusters[j]]
-        print('working on halo {} ({}/{})'.format(halo.attrs['fof_halo_tag'], j, len(clusters)))
+        print('\nworking on halo {} ({}/{})'.format(halo.attrs['fof_halo_tag'], j, len(clusters)))
 
         # get cluster properties
         zHost = halo.attrs['halo_z']
@@ -39,18 +40,32 @@ def stackGalaxies():
         z = halo['redshiftObserver'][:]
         pecV = ct.LOS_properVelocity(z, zHost)
         galCoords = np.array([halo['ra'][:], halo['dec'][:]]).T / 3600
-        galDistances = ct.projectedDist(galCoords, hostCoords, zHost, dist_type='comoving')
-       
-        # normalize peculiar velocity of each cluster member by this clusters 
-        # particle-based dispersion, and each radial distance by this cluster's r200. 
+        galProjDistances = ct.projectedDist(galCoords, hostCoords, zHost, dist_type='comoving')
+      
+        # get velocity magnitude, in total, radial, and tangential components,
+        # and 3d-based radial distances
+        print('finding velocity components')
+        vMag, vRad, vTan = cot.get_velocity_components(halo['x'], halo['y'], halo['z'],
+                                                        halo['vx'], halo['vy'], halo['vz'])
+        galDistances = cot.get_radial_distance(halo['x'], halo['y'], halo['z'])
+        
+        # normalize velocities of each cluster member by this clusters 
+        # particle-based dispersion, and each distance by this cluster's r200. 
         # The particle-based dispersion is used here so that this value is insensitive 
         # to the statistics used to find the galaxy-based dispersion (details of estimator 
         # matter more since sample sizes are far smaller than those of particles)
-        print('normalizing quantities')
+        print('normalizing projected quantities')
         pecV_norm = (pecV / sodDisp)
-        galDistances_norm = (galDistances / hostRadius)
-        newData = [pecV_norm, galDistances_norm]
+        galProjDistances_norm = (galProjDistances / hostRadius)
+        newData = [pecV_norm, galProjDistances_norm]
         newColumns = ['pecV_normed', 'projDist_normed']
+        print('normalizing 3d quantities')
+        vMag_norm = (vMag / sodDisp)
+        vRad_norm = (vRad / sodDisp)
+        vTan_norm = (vTan / sodDisp)
+        galDistances_norm = (galDistances / hostRadius)
+        newData.extend([vMag_norm, vRad_norm, vTan_norm, galDistances_norm])
+        newColumns.extend(['vMag_normed', 'vRad_normed', 'vTan_normed', 'radDist_normed'])
 
         print('appendnig data to stack columns')
         for column in list(halo.keys()):
@@ -77,5 +92,6 @@ def stackGalaxies():
                 stackedCatalog[column][currSize:newSize] = data
     
     print(time.time()-start)
+
 if __name__ == '__main__':
     stackGalaxies()
