@@ -58,8 +58,7 @@ def makehdf5():
 
         # organize host cluster data (get dispersion, mass, radius, etc.)
         print('finding cluster properties')
-        host_vDisp = stat.bDispersion(gal_vs[mask])
-        host_vDispErr = stat.bootstrap_bDispersion(gal_vs[mask])
+        host_vDisp, host_vDispErr = stat.bootstrap_bDispersion(gal_vs[mask])
         host_nMem = len(gal_vs[mask])
     
         try:
@@ -76,8 +75,8 @@ def makehdf5():
             skipped_ids += [host_id]
             continue
        
-        print('dispersion:{:.2f}, z:{:.2f}, sz_z:{:.2f}, m200:{:.2f} x 10^14, r200:{:.2f}'
-              .format(host_vDisp, host_z, host['REDSHIFT'][0], host_m200/1e14, host_r200))
+        print('dispersion: {:.2f} +- {:.2f}\nz:{:.2f} +- {:.2f}\nsz_z:{:.2f}\nm200:{:.2f} x 10^14, r200:{:.2f}'
+              .format(host_vDisp, host_vDispErr, host_z, host_zErr, host['REDSHIFT'][0], host_m200/1e14, host_r200))
 
         # define column names for final data outputs
         print('saving data')
@@ -103,11 +102,41 @@ def makehdf5():
             try: hostGroup.attrs.create(host_cols[k], host_data[k])
             except TypeError: hostGroup.attrs.create(host_cols[k], np.string_(host_data[k]))
         for k in range(len(gal_cols)):
-            try: hostGroup.attrs.create(gal_cols[k], gal_data[k])
-            except TypeError: hostGroup.attrs.create(gal_cols[k], np.string_(gal_data[k]))
+            try: hostGroup.create_dataset(gal_cols[k], data = gal_data[k])
+            except TypeError: hostGroup.create_dataset(gal_cols[k], data = [np.string_(d) for d in gal_data[k]])
         print('copied all data to hdf5')    
-    
     print('Done.\n\n skipped Ids: {}'.format(skipped_ids))
+
+
+def stackedCluster():
+    '''
+    This function makes a stacked or ensemble cluster of the SPTGMOS galaxies. That is, this simply makes a 
+    catalog where all galaxies lie in the primary group of an hdf5 file, and their velocities are normalized by
+    that of their host
+    '''
+
+    sptData = h5py.File('data/sptgmos_clusters.hdf5', 'r')
+    outFile = h5py.File('data/sptgmos_stackedCluster.hdf5', 'w')
+    clusters = [sptData[idx] for idx in list(sptData.keys())]
+
+    for j in range(len(clusters)):
+        cluster = clusters[j]
+        for column in list(cluster.keys()):
+            data = cluster[column]
+            if(column in ['v', 'vErr']):
+                data = data / cluster.attrs['v_disp']
+                column = '{}_norm'.format(column)
+            if(j == 0):
+                try:outFile.create_dataset(column, (len(data),), maxshape=(None,), data=data)
+                except: pdb.set_trace()
+            else:
+                currSize = outFile[column].shape[0]
+                incrSize = len(data)
+                newSize = currSize + incrSize
+                outFile[column].resize((currSize + incrSize,))
+                outFile[column][currSize:newSize] = data
+
 
 if(__name__ == '__main__'):
     makehdf5()
+    stackedCluster()

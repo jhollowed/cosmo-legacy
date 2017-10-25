@@ -36,11 +36,11 @@ from matplotlib.ticker import ScalarFormatter
 
 
 # ===================================================================================================
-# ============================== velocity segregation by galaxy color ===============================
+# ============================== velocity distribution by galaxy color ==============================
 # ===================================================================================================
 
 
-def color_segregation_test(mask_var = 'gr', mask_magnitude = False, include_error = True):
+def color_distributions_test(mask_var = 'gr', mask_magnitude = False, include_error = True):
     '''
     Use the protoDC2 stacked cluster as output from make_protoDC2_stackedCluster to 
     segregate galaxy population by color (cut in g-r rest magnitue space). Pass the 
@@ -111,14 +111,14 @@ def color_segregation_test(mask_var = 'gr', mask_magnitude = False, include_erro
     #         blueRatio_err=blueRatio_err)
    
     # plot segregation results as velocity distributions and phase space diagrams
-    color_segregation_plot(vRed, vBlue, redRatio, blueRatio, mask_var, redRatio_err, blueRatio_err)
-    phaseSpace_segregation_plot(vRed, vBlue, dRed, dBlue, mask_var)
+    color_distributions_plot(vRed, vBlue, redRatio, blueRatio, mask_var, redRatio_err, blueRatio_err)
+    phaseSpace_colors_plot(vRed, vBlue, dRed, dBlue, mask_var)
 
 
 # -------------------------------------------------------------------------------------------------
 
 
-def color_segregation_plot(vr, vb, vDispr, vDispb, var, vDispr_err=None, vDispb_err=None):
+def color_distributions_plot(vr, vb, vDispr, vDispb, var, vDispr_err=None, vDispb_err=None):
     '''
     Plot the velocity normed distributions for both red and blue galaxy populations
     from the protoDC2 stacked cluster. This function is meant to be called by color_segregation_test()
@@ -160,7 +160,7 @@ def color_segregation_plot(vr, vb, vDispr, vDispb, var, vDispr_err=None, vDispb_
 # -------------------------------------------------------------------------------------------------
 
 
-def phaseSpace_segregation_plot(vr, vb, dr, db, var):
+def phaseSpace_color_plot(vr, vb, dr, db, var):
     '''
     Plot all galaxies in radial distance-LOS velocity phase space, with two
     colored populations corresponding to red/blue galaxies
@@ -180,6 +180,117 @@ def phaseSpace_segregation_plot(vr, vb, dr, db, var):
     bins = np.linspace(0, 2, 30)
     ax.hist2d(dr, vr, bins=bins, normed=True, cmap='Reds', alpha=0.5)
     ax.hist2d(db, vb, bins=bins, normed=True, cmap='Blues', alpha=0.5)
+    plt.show()
+
+
+# ===================================================================================================
+# ========================== velocity segregation and compare to spt=================================
+# ===================================================================================================
+
+def organize_velocity_data():
+    '''
+    Pilot function meant to run velocity_segregation_test for real and mock data, and then run 
+    plotting routines
+    '''
+
+    sptStack = h5py.File('../observation_analysis/spt/data/sptgmos_stackedCluster.hdf5', 'r')
+    protoDC2_stack = h5py.File('data/protoDC2_haloStack_shear_nocut_A.hdf5', 'r')
+    v_pdc2 = protoDC2_stack['pecV_normed']
+    interloperMask = sptStack['member'][:]
+    v_spt = sptStack['v_norm'][interloperMask]
+
+    pdc2_sfr = protoDC2_stack['totalStarFormationRate'][:]
+    colorMask_pdc2 = pdc2_sfr < np.median(pdc2_sfr)
+    colorMask_spt = sptStack['gal_type'][interloperMask] == b'k_'
+
+    if(not os.path.isfile('data/pdc2_segr.npz')):
+        print('measuring protoDC2 segregation')
+        p_pdc2, v_pdc2, v_pdc2_err = velocity_segregation_test(v_pdc2, colorMask_pdc2, gaussian=True)
+        np.savez('data/pdc2_segr.npz', p_pdc2=p_pdc2, v_pdc2=v_pdc2, v_pdc2_err=v_pdc2_err)
+    else:
+        pdc2_file = np.load('data/pdc2_segr.npz')
+        p_pdc2 = pdc2_file['p_pdc2']
+        v_pdc2 = pdc2_file['v_pdc2']
+        v_pdc2_err = pdc2_file['v_pdc2_err']
+    if(not os.path.isfile('data/spt_segr.npz')):
+        print('measuring spt segregation')
+        p_spt, v_spt, v_spt_err = velocity_segregation_test(v_spt, colorMask_spt)
+        np.savez('data/spt_segr.npz', p_spt=p_spt, v_spt=v_spt, v_spt_err=v_spt_err)
+    else:
+        pdc2_file = np.load('data/spt_segr.npz')
+        p_spt = pdc2_file['p_spt']
+        v_spt = pdc2_file['v_spt']
+        v_spt_err = pdc2_file['v_spt_err']
+    velocity_segregation_plot(p_pdc2, p_spt, v_pdc2, v_spt, v_pdc2_err, v_spt_err)
+
+
+def velocity_segregation_test(v, popMask, gaussian = False, resamples=14):
+    '''
+    This function preforms velocity segregation as presented in Bayliss+2016. In this 
+    test, we begin with a population of galaxies whose velocity dispersion is VD. Next, 
+    we split the population into red and blue subsamples. An ensemble distribution
+    is then constructed from a% red galaxies, and b% blue galaxies (where a+b=100). The color ratio a/b 
+    is varied from 0 to 1 in #resmaples steps, and at each step the velocity dispersion of the ensemble 
+    distribution, VE, is measured. The ultimate return of this function is VE/VD as a function of a/b (two
+    lists of length #resamples).
+    In general, of course, this function can be executed to segregate on any galaxy property other than color, 
+    such as magnitude, given the details of the parameter popMask.
+
+    :param v: an array of galaxy LOS velocities
+    :param popMask: a boolean mask indicating the color of each galaxy as in the array v. 
+                     It is assumed that True = Red, and False = Blue
+    :return: See function docstring
+    '''
+
+    if gaussian: 
+        vDisp_all = np.std(v)
+        vDisp_all_err = vDisp_all / np.sqrt(len(v))
+    else: vDisp_all, vDisp_all_err = stat.bootstrap_bDispersion(v)
+
+    pcen = np.linspace(0, 1, resamples)
+    vrat = np.zeros(resamples)
+    vrat_err = np.zeros(resamples)
+    maxPop = int(min([np.sum(popMask), np.sum(~popMask)]))
+    pop1_size = [int(f) for f in np.ceil(pcen * maxPop)]
+    pop2_size = [int(f) for f in np.floor((1-pcen) * maxPop)]
+    
+    for j in range(len(pcen)):
+        print('working on ensemble {}/{}'.format(j, len(pcen)))
+
+        #pop1 = stat.random_choice_noreplace(v[popMask], 1000, pop1_size[j])
+        #pop2 = stat.random_choice_noreplace(v[~popMask], 1000, pop2_size[j])
+        #realizations = [np.hstack([pop1[i], pop2[i]]) for i in range(1000)]
+        #if gaussian: vDisp_rlz = [np.std(realization) for realization in realizations]
+        #else: vDisp_rlz = [stat.bDispersion(realization) for realization in realizations]
+       
+        pdb.set_trace()
+        pop1 = v[popMask][0:pop1_size[j]]
+        pop2 = v[~popMask][0:pop2_size[j]]
+        sample = np.hstack([pop1, pop2])
+        resamples = stat.random_choice_noreplace(sample, 1000, int(maxPop/3))
+        vDisp_rlz = [stat.bDispersion(realization) for realization in resamples]
+        
+
+        vDisp = np.mean(vDisp_rlz)
+        vDisp_err = np.std(vDisp_rlz)/np.sqrt(len(vDisp_rlz))
+        vrat[j] = vDisp / vDisp_all
+        vrat_err[j] = vrat[j] * np.sqrt((vDisp/vDisp_err)**2 + (vDisp_all/vDisp_all_err)**2)
+
+    return pcen, vrat, vrat_err
+   
+
+def velocity_segregation_plot(p_pdc2, p_spt, v_pdc2, v_spt, v_pdc2_err, v_spt_err, xlabel='% Passive'):
+    
+    fig = plt.figure(0)
+    fig.clf()
+    ax = fig.add_subplot(111)
+    ax.plot(p_spt, v_spt, marker='o', linestyle='-', color='m', ms=8, label='SPT-GMOS')
+    ax.fill_between(p_spt, v_spt-v_spt_err, v_spt+v_spt_err, color='m', alpha=0.3)
+    ax.plot(p_pdc2, v_pdc2, marker='s', linestyle='-', color='c', ms=8, label='ProtoDC2')
+    ax.fill_between(p_pdc2, v_pdc2-v_pdc2_err, v_pdc2+v_pdc2_err, color='c', alpha=0.3)
+    ax.set_xlabel(xlabel)
+    ax.legend()
+    ax.set_ylabel(r'$\sigma_v / \sigma_{v,\mathrm{All}}$', fontsize=24)
     plt.show()
 
 
@@ -495,6 +606,7 @@ def plot_vel_component_preference(r, v, vRad, vTan, gr_colors, i, sfr, redMask, 
     ax.set_xlim([0, 3])
     ax.set_ylim([-6.2, 6.2])
     plt.show()
+
 
 # ===================================================================================================
 # =============================== check peculiar redshifts on cores =================================
