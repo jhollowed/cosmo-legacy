@@ -27,16 +27,22 @@ def makeCatalog():
     This function takes the protoDC2 galaxy catalog and reformats it as a cluster catalog, structured 
     as an hdf5 file as follows: 
 
-    - The attributes of the root group '/' give information on the cosmology of the simulation
-    - The root group has a child group for each halo of mass > 1e14, the names of which being the 
+    - The root group has two main groups, '/metaData' and '/clusters' 
+    - The simulation (cosmology) parameters, galacticus parameters, and other catalog metadata are all
+           given in the group '/metaData'
+    - The '/clusters' group has a child group for each halo of mass > 1e14, the names of which being
       an incrementing integer. For example, the first halo found in this code with tag 123456 is found 
       at '/halo_1' in the hdf file, with the 'fof_halo_tag' group attribute set to '123456'
     - If duplicates of a halo were found (or at least, the same tag was used again in a later snapshot),
       then they are both saved and can be differentiated by the group attribute 'halo_step' 
-    - Each halo group contains x datasets which correspond to the data columns of the original 
-      protoDC2 catalog, with consistent column names, for all of that halo's member galaxies. If a 
-      halo is the host to 120 galaxies, then each of the x data columns are 120 elements long.
-    - A few columns from the original catalog are missing from the halo group datasets. This is because
+    - Each halo group contains datasets which correspond to the data columns of the original 
+      protoDC2 catalog's '/galaxyProperties' group, with consistent column names, for all of that halo's 
+      member galaxies. If a halo is the host to 120 galaxies, then each of the data columns are 120 elements 
+      long.
+    - The '/galaxyProperties' group in the original catalog also has a few child groups, including '/morphology', 
+      etc. These are still maintained, and present for each halo (the morphology porperties of the galaxies 
+      belonging to some halo at index i would be found in '/clusters/halo_i/morphology')
+    - A few datasets from the original catalog are missing from the halo group datasets. This is because
       the galaxy catalog has a few columns that apply halo-wide. For instance, the hostHaloMass is the 
       same value for every galaxy in the halo. Rather than repeating the information for every member
       galaxy, halo-wide properties are saved as group attributes. In addition to this data, the SO 
@@ -48,6 +54,8 @@ def makeCatalog():
         -   hostHaloTag  (the FOF tag)
         -   hostIndex
         -   step
+        -   halo_ra   (RA of the central galaxy)
+        -   halo_dec  (Dec of the central galaxy)
       From the SO catalog:
         -   sod_halo_mass      (m200)
         -   sod_halo_radius    (r200)
@@ -57,9 +65,7 @@ def makeCatalog():
         -   sod_halo_cdelta_error
         -   sod_halo_c_acc_mass
       Calculated here:
-        -   halo_ra   (median of meber galaxies RA)
-        -   halo_dec  (median of member galaxies declination)
-        -   halo_z    (median of member galaxies observed redshifts 
+        -   halo_z    (median of member galaxies observed redshifts) 
                        (combination of cosmological + peculiar))
         -   halo_z_err (standard error of the median (1.25 * SDOM) of the above quantity 'z' )
         -   gal_vel_disp_obs - the "observed" velocity dispersion of the halo's protoDC2 galaxies, 
@@ -90,20 +96,35 @@ def makeCatalog():
     
     # load protoDC2 catalog
     #protoDC2Path = '/media/luna1/dkorytov/projects/protoDC2/output/mock_B_full_nocut.hdf5'
-    protoDC2Path = '/media/luna1/dkorytov/projects/protoDC2/output/mock_shear_nocut_A.hdf5'
+    protoDC2Path = '/media/luna1/dkorytov/projects/protoDC2/output/mock_full_nocut_dust_elg_shear2_mod.hdf5'
     #path_out = 'data/protoDC2_catalog_pecZ.hdf5'
-    path_out = 'data/protoDC2_clusters_shear_nocut_A.hdf5'
+    path_out = '/media/luna1/jphollowed/protoDC2/protoDC2_clusters_full_shear_nocut_dust_elg_shear2_mod.hdf5'
     protoDC2 = h5py.File(protoDC2Path, 'r')
     outputFile = h5py.File(path_out, 'w')
 
+    # -------- OLD --------
     # copy global attributes from original catalog
-    globalAttrs = list(protoDC2.attrs.keys())
-    for attr in globalAttrs:
-        outputFile.attrs.create(attr, protoDC2.attrs[attr])
+    #globalAttrs = list(protoDC2.attrs.keys())
+    #for attr in globalAttrs:
+    #    outputFile.attrs.create(attr, protoDC2.attrs[attr])
+
+    # copy metaData group from original catalog
+    output_clusters = outputFile.create_group('clusters')
+    output_metaData = outputFile.create_group('metaData')
+    metaData = protoDC2['metaData']
+    metaData_keys = []
+    metaData.visit(metaData_keys.append)
+    metaData_keys = np.array(metaData_keys)
+    metaData_objType = np.array([isinstance(metaData[key], h5py.Group) for key in metaData_keys])
+    metaData_groups = metaData_keys[metaData_objType]
+    metaData_datasets = metaData_keys[~metaData_objType]
+    for group in metaData_groups: output_metaData.create_group(group)
+    for dataset in metaData_datasets: output_metaData.create_dataset(dataset, data=metaData[dataset])
 
     # find all unique halo tags in protoDC2
-    massMask = protoDC2['hostHaloMass'][:] > 1e14 
-    uniqueTags = np.unique(protoDC2['hostHaloTag'][:][massMask], return_counts = True)
+    protoDC2g = protoDC2['galaxyProperties']
+    massMask = protoDC2g['hostHaloMass'][:] > 1e14 
+    uniqueTags = np.unique(protoDC2g['hostHaloTag'][:][massMask], return_counts = True)
     halos = uniqueTags[0]
     nGals = uniqueTags[1]
     duplicates=0
@@ -116,21 +137,21 @@ def makeCatalog():
         print('\nworking on halo {} ({}/{})'.format(halos[k], k+1, len(halos)))
 
         # boolean mask of current halo galaxy membership
-        galMask = [protoDC2['hostHaloTag'][:] == halos[k]]
+        galMask = [protoDC2g['hostHaloTag'][:] == halos[k]]
 
         # -----------------------------------------------------------------------------------
         # check for duplication
 
-        hostSteps = protoDC2['step'][:][galMask[0]] 
+        hostSteps = protoDC2g['step'][:][galMask[0]] 
         if( sum(abs(np.diff(hostSteps))) != 0):
             duplicates += 1
             print('Found duplicate ({})'.format(duplicates))
             uniqueSteps = np.unique(hostSteps)
-            galMask = np.array([np.logical_and(galMask[0], protoDC2['step'][:] == step) 
+            galMask = np.array([np.logical_and(galMask[0], protoDC2g['step'][:] == step) 
                        for step in uniqueSteps])
             
             # make sure all duplicates still fit the cluster mass criteria
-            duplMasses = [protoDC2['hostHaloMass'][:][mask] for mask in galMask]
+            duplMasses = [protoDC2g['hostHaloMass'][:][mask] for mask in galMask]
             
             for masses in duplMasses:
                 if( sum(abs(np.diff(masses))) != 0):
@@ -142,12 +163,12 @@ def makeCatalog():
             print('{} of {} duplicates kept after cluster mass cut'
                   .format(len(duplMassMask) - np.sum(duplMassMask == False), len(duplMassMask))) 
             
-            haloGroups = [outputFile.create_group('halo_{}'.format(nHalos+i))
+            haloGroups = [output_clusters.create_group('halo_{}'.format(nHalos+i))
                           for i in range(len(uniqueSteps))]
             print('created halo groups {}'.format([r.name for r in haloGroups]))
             nHalos += len(uniqueSteps)
         else:
-            haloGroups = [outputFile.create_group('halo_{}'.format(nHalos))]
+            haloGroups = [output_clusters.create_group('halo_{}'.format(nHalos))]
             print('created halo group {}'.format(haloGroups[0].name))
             nHalos += 1
 
@@ -166,7 +187,9 @@ def makeCatalog():
             if(len(galMask) > 1): print('working on duplicate {} ({} gals)'
                                         .format(j+1, np.sum(galMask[j])))
             
-            galProps = np.array(list(protoDC2.keys()))
+            galProps = []
+            protoDC2g.visit(galProps.append)
+            galProps = np.array(galProps)
             hostPropMask = np.array([p in host_quantityModifiers.keys() for p in galProps])
             hostPropIdx = np.linspace(0, len(galProps)-1, len(galProps), dtype=int)[hostPropMask]
             hostProps = galProps[hostPropIdx]
@@ -175,25 +198,32 @@ def makeCatalog():
             # ------------------------------ GROUP ATTRIBUTES ------------------------------
             # save all halo-wide properties as group attributes
             for prop in hostProps:
-                data = protoDC2[prop][:][galMask[j]]
+                data = protoDC2g[prop][:][galMask[j]]
                 if( sum(abs(np.diff(data))) != 0):
                     raise ValueError('False sibling galaxies (mebership masking not working properly)')
                 modifiedProp = host_quantityModifiers[prop]
                 haloGroups[j].attrs.create(modifiedProp, data[0])
             
             # calculate some new halo properties not present in the catalog
-            galRA = protoDC2['ra'][:][galMask[j]]
-            galDec = protoDC2['dec'][:][galMask[j]]
-            galZ = protoDC2['redshiftObserver'][:][galMask[j]]
-            hostRA = np.median(galRA)
-            hostDec = np.median(galDec)
+            centralGal_mask = np.array(protoDC2g['isCentral'][:][galMask[j]], dtype=bool)
+            centralGal_index = np.r_[0:np.sum(galMask):1][centralGal_mask]
+            if(len(centralGal_index) != 1): 
+                print('more than one central in this halo!')
+                galRAs = protoDC2g['ra'][:][galMask[j]]
+                hostRA = np.median(galRAs)
+                galDecs = protoDC2g['dec'][:][galMask[j]]
+                hostDec = np.median(galDecs)
+            else:
+                hostRA = protoDC2g['ra'][:][galMask[j]][centralGal_index]
+                hostDec = protoDC2g['dec'][:][galMask[j]][centralGal_index]
+            galZ = protoDC2g['redshift'][:][galMask[j]]
             hostZ = np.median(galZ)
             hostZErr = 1.25 * (np.std(galZ) / np.sqrt(len(galZ)))
             pecV = ct.LOS_properVelocity(galZ, hostZ)
             galDisp_obs = stat.bDispersion(pecV)
-            galDisp_1d = stat.dmDispersion(protoDC2['vx'][:][galMask[j]], 
-                                           protoDC2['vy'][:][galMask[j]], 
-                                           protoDC2['vz'][:][galMask[j]])
+            galDisp_1d = stat.dmDispersion(protoDC2g['vx'][:][galMask[j]], 
+                                           protoDC2g['vy'][:][galMask[j]], 
+                                           protoDC2g['vz'][:][galMask[j]])
             
             haloGroups[j].attrs.create('halo_ra', hostRA)
             haloGroups[j].attrs.create('halo_dec', hostDec)
@@ -214,11 +244,17 @@ def makeCatalog():
 
             # ------------------------------ GROUP DATASETS ------------------------------
             # save all protoDC2 galaxy data columns for the current halo's member galaxies
-            for p in range(len(galProps)):
-                prop = galProps[p]
-                data = protoDC2[prop][:][galMask[j]]
-                haloGroups[j].create_dataset(prop, data=data)
-                if(len(haloGroups[j][prop]) != np.sum(galMask[j])):
+            galProps_objType = np.array([isinstance(protoDC2g[key], h5py.Group) for key in galProps])
+            gal_groups = galProps[galProps_objType]
+            gal_datasets = galProps[~galProps_objType]
+            for g in range(len(gal_groups)):
+                group = gal_groups[g]
+                haloGroups[j].create_group(group)
+            for d in range(len(gal_datasets)):
+                dset = gal_datasets[d]
+                data = protoDC2g[dset][:][galMask[j]]
+                haloGroups[j].create_dataset(dset, data=data)
+                if(len(haloGroups[j][dset]) != np.sum(galMask[j])):
                     raise ValueError('galaxy population size not the same across columns (bad masks)')
             print('saved all galaxy datasets')
  

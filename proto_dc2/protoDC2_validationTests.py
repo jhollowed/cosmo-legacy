@@ -205,7 +205,7 @@ def organize_velocity_data():
 
     if(not os.path.isfile('data/pdc2_segr.npz')):
         print('measuring protoDC2 segregation')
-        p_pdc2, v_pdc2, v_pdc2_err = velocity_segregation_test(v_pdc2, colorMask_pdc2, gaussian=True)
+        p_pdc2, v_pdc2, v_pdc2_err = velocity_segregation_test(v_pdc2, colorMask_pdc2)
         np.savez('data/pdc2_segr.npz', p_pdc2=p_pdc2, v_pdc2=v_pdc2, v_pdc2_err=v_pdc2_err)
     else:
         pdc2_file = np.load('data/pdc2_segr.npz')
@@ -214,7 +214,7 @@ def organize_velocity_data():
         v_pdc2_err = pdc2_file['v_pdc2_err']
     if(not os.path.isfile('data/spt_segr.npz')):
         print('measuring spt segregation')
-        p_spt, v_spt, v_spt_err = velocity_segregation_test(v_spt, colorMask_spt)
+        p_spt, v_spt, v_spt_err = velocity_segregation_test(v_spt, colorMask_spt, obs=True)
         np.savez('data/spt_segr.npz', p_spt=p_spt, v_spt=v_spt, v_spt_err=v_spt_err)
     else:
         pdc2_file = np.load('data/spt_segr.npz')
@@ -224,7 +224,7 @@ def organize_velocity_data():
     velocity_segregation_plot(p_pdc2, p_spt, v_pdc2, v_spt, v_pdc2_err, v_spt_err)
 
 
-def velocity_segregation_test(v, popMask, gaussian = False, resamples=14):
+def velocity_segregation_test(v, popMask, obs = False, resamples=14, conf = 68.3):
     '''
     This function preforms velocity segregation as presented in Bayliss+2016. In this 
     test, we begin with a population of galaxies whose velocity dispersion is VD. Next, 
@@ -239,21 +239,30 @@ def velocity_segregation_test(v, popMask, gaussian = False, resamples=14):
     :param v: an array of galaxy LOS velocities
     :param popMask: a boolean mask indicating the color of each galaxy as in the array v. 
                      It is assumed that True = Red, and False = Blue
+    :param conf: the confidence within which to return the error - default is 1sigma or 68.3%
     :return: See function docstring
     '''
 
-    if gaussian: 
-        vDisp_all = np.std(v)
-        vDisp_all_err = vDisp_all / np.sqrt(len(v))
-    else: vDisp_all, vDisp_all_err = stat.bootstrap_bDispersion(v)
+    prefix = ['pdc2', 'spt'][obs]
+    if( not os.path.isfile('data/{}_vDispAll.npz'.format(prefix))):
+        print('file not found; computing dispersion for entire {} sample'.format(prefix))
+        vDisp_all, vDisp_all_err = stat.bootstrap_bDispersion(v)
+        np.savez('data/{}_vDispAll.npz'.format(prefix), vDisp_all=vDisp_all, vDisp_all_err=vDisp_all_err)
+    else:
+        print('vDispAll file found for {}'.format(prefix))
+        vDispInfo = np.load('data/{}_vDispAll.npz'.format(prefix))
+        vDisp_all = vDispInfo['vDisp_all']
+        vDisp_all_err = vDispInfo['vDisp_all_err']
 
     pcen = np.linspace(0, 1, resamples)
     vrat = np.zeros(resamples)
     vrat_err = np.zeros(resamples)
     maxPop = int(min([np.sum(popMask), np.sum(~popMask)]))
+    #resampleSize = int(min( max(maxPop/10, 200), maxPop ))
+    resampleSize = int(maxPop/2)
     pop1_size = [int(f) for f in np.ceil(pcen * maxPop)]
     pop2_size = [int(f) for f in np.floor((1-pcen) * maxPop)]
-    
+  
     for j in range(len(pcen)):
         print('working on ensemble {}/{}'.format(j, len(pcen)))
 
@@ -263,34 +272,45 @@ def velocity_segregation_test(v, popMask, gaussian = False, resamples=14):
         #if gaussian: vDisp_rlz = [np.std(realization) for realization in realizations]
         #else: vDisp_rlz = [stat.bDispersion(realization) for realization in realizations]
        
-        pdb.set_trace()
         pop1 = v[popMask][0:pop1_size[j]]
         pop2 = v[~popMask][0:pop2_size[j]]
         sample = np.hstack([pop1, pop2])
-        resamples = stat.random_choice_noreplace(sample, 1000, int(maxPop/3))
-        vDisp_rlz = [stat.bDispersion(realization) for realization in resamples]
-        
-
-        vDisp = np.mean(vDisp_rlz)
-        vDisp_err = np.std(vDisp_rlz)/np.sqrt(len(vDisp_rlz))
+        vDisp = stat.bDispersion(sample)
         vrat[j] = vDisp / vDisp_all
-        vrat_err[j] = vrat[j] * np.sqrt((vDisp/vDisp_err)**2 + (vDisp_all/vDisp_all_err)**2)
+        
+        # estimate error in dispersion via bootstrap
+        resamples = np.array([np.random.choice(sample, size=resampleSize, replace=False) for i in range(1000)])
+        if(resampleSize > 15):
+            vDisp_realizations = stat.bDispersion(resamples)
+        else:
+            vDisp_realizations = stat.gDispersion(resamples)
 
+        
+        #vDisp_err = np.std(vDisp_realizations)/np.sqrt(1000)
+        scatter = vDisp_realizations - vDisp
+        critPoints = [0+(100-conf)/2, 100-(100-conf)/2]
+        critVals = [np.percentile(scatter, critPoints[i], interpolation='nearest') for i in range(2)]
+        confidence = [vDisp - crit for crit in critVals]
+        vDisp_err= np.mean(abs(confidence - vDisp)) 
+        vrat_err[j] = vrat[j] * np.sqrt((vDisp_err/vDisp)**2 + (vDisp_all_err/vDisp_all)**2)
+        print(vrat[j], vrat_err[j])
+    
     return pcen, vrat, vrat_err
    
 
-def velocity_segregation_plot(p_pdc2, p_spt, v_pdc2, v_spt, v_pdc2_err, v_spt_err, xlabel='% Passive'):
+def velocity_segregation_plot(p_pdc2, p_spt, v_pdc2, v_spt, v_pdc2_err, v_spt_err, xlabel='\% \> Passive'):
     
     fig = plt.figure(0)
     fig.clf()
     ax = fig.add_subplot(111)
     ax.plot(p_spt, v_spt, marker='o', linestyle='-', color='m', ms=8, label='SPT-GMOS')
-    ax.fill_between(p_spt, v_spt-v_spt_err, v_spt+v_spt_err, color='m', alpha=0.3)
+    ax.fill_between(p_spt, v_spt-v_spt_err, v_spt+v_spt_err, color='m', alpha=0.15)
     ax.plot(p_pdc2, v_pdc2, marker='s', linestyle='-', color='c', ms=8, label='ProtoDC2')
-    ax.fill_between(p_pdc2, v_pdc2-v_pdc2_err, v_pdc2+v_pdc2_err, color='c', alpha=0.3)
-    ax.set_xlabel(xlabel)
+    ax.fill_between(p_pdc2, v_pdc2-v_pdc2_err, v_pdc2+v_pdc2_err, color='c', alpha=0.15)
     ax.legend()
-    ax.set_ylabel(r'$\sigma_v / \sigma_{v,\mathrm{All}}$', fontsize=24)
+    #ax.set_ylim([0.7, 1.3])
+    ax.set_xlabel(r'$\mathrm{{ {} }}$'.format(xlabel), fontsize=24)
+    ax.set_ylabel(r'$\sigma_v \> / \> \sigma_{v,\mathrm{All}}$', fontsize=24)
     plt.show()
 
 
@@ -313,8 +333,9 @@ def mass_vDisp_relation(mask_magnitude = False):
     :return: None
     '''
     
-    protoDC2 = h5py.File('data/protoDC2_clusters_shear_nocut_A.hdf5', 'r')
-    halos = list(protoDC2.keys())
+    #protoDC2 = h5py.File('data/protoDC2_clusters_shear_nocut_A.hdf5', 'r')
+    protoDC2 = h5py.File('/media/luna1/jphollowed/protoDC2/protoDC2_clusters_full_shear_nocut_dust_elg_shear2_mod.hdf5', 'r')
+    halos = list(protoDC2['clusters'].keys())
     n = len(halos)
     galDisp = np.zeros(n)
     sodDisp = np.zeros(n)
@@ -322,7 +343,7 @@ def mass_vDisp_relation(mask_magnitude = False):
     ez = np.zeros(n)
     
     for j in range(n):
-        halo = protoDC2[halos[j]]
+        halo = protoDC2['clusters'][halos[j]]
 
         # get halo properties, including particle-based dispersion and mass
         zHost = halo.attrs['halo_z']
@@ -333,12 +354,13 @@ def mass_vDisp_relation(mask_magnitude = False):
         sodDisp[j] = halo.attrs['sod_halo_vel_disp'] * aHost
         
         # mask faint galaxies (less negative than -16 in rest r-band)
-        rMag = halo['magnitude:SDSS_r:rest'][:]
-        if(mask_magnitude): rMag_mask = (rMag > -16)
-        else: rMag_mask = np.ones(len(rMag), dtype=bool)
+        #rMag = halo['magnitude:SDSS_r:rest'][:]
+        #if(mask_magnitude): rMag_mask = (rMag > -16)
+        #else: rMag_mask = np.ones(len(rMag), dtype=bool)
+        rMag_mask = np.ones(len(halo['x'][:]), dtype=bool)
 
         # use redshifts of galaxies surviving the mask to calculate galaxy-based dispersion
-        z = halo['redshiftObserver'][:][rMag_mask]
+        z = halo['redshift'][:][rMag_mask]
         pecV = ct.LOS_properVelocity(z, zHost)
         galDisp[j]  = stat.bDispersion(pecV) * aHost
  
@@ -361,25 +383,39 @@ def plot_mass_vDisp_relation(sigma, sigmadm, realMass):
     fig = plt.figure(0)
     fig.clf()
     ax = fig.add_subplot(111)
-    ax.plot(realMass, sigmadm, 'xm', ms=6, mew=1.6, alpha=0.5, label='particle-based dispersions')
-    ax.plot(realMass, sigma, '.g', ms=6, alpha=0.5, label='galaxy-based dispersions')
+    #ax.plot(realMass, sigmadm, 'xm', ms=6, mew=1.6, alpha=0.5, label='particle-based dispersions')
+    #ax.plot(realMass, sigma, '.g', ms=6, alpha=0.5, label='galaxy-based dispersions')
+    ax.scatter(realMass/1e14, sigma, color='b', edgecolor=np.array([111,168,220])/255,
+               alpha=0.6, s=30, marker='o', label='protoDC2')
+    ax.set_xscale('log')
+    ax.set_yscale('log')
 
-    fitMass = np.linspace(3e13, 8e14, 100)
+    fitMass = np.linspace(2e13, 8e14, 100)
     fit = lambda sigDM15,alpha: sigDM15 * ((fitMass) / 1e15)**alpha
+    fitErr = lambda sigDM15, alpha, sigDM15Err, alphaErr: \
+        np.sqrt( ((fitMass/1e15)**alpha)**2 * sigDM15Err**2 + \
+                 (sigDM15*(fitMass/1e15)**alpha*np.log(alpha))**2 * alphaErr**2)
     fitDisp = fit(1082.9, 0.3361)
+    fitDispErr = fitErr(1082.9, 0.3361, 4, 0.0026)
 
-    ax.plot(fitMass, fitDisp, '--k', lw=2, label='Evrard+ 2003')
+    ax.plot(fitMass/1e14, fitDisp, '--k', lw=2, label='Evrard+ 2008')
+    ax.fill_between(fitMass/1e14, fitDisp-fitDispErr, fitDisp+fitDispErr, color='k', alpha=0.2)
     ax.grid()
-
+    
     ax.yaxis.set_major_formatter(ScalarFormatter())
+    ax.xaxis.set_major_formatter(ScalarFormatter())
     locy = plticker.MultipleLocator(base=100)
     ax.yaxis.set_major_locator(locy)
-    locx = plticker.MultipleLocator(base=5e13)
+    locx = plticker.MultipleLocator(base=1)
     ax.xaxis.set_major_locator(locx)
+    
+    ax.set_xlim([.2, 8])
+    ax.set_ylim([200, 1300])
 
     ax.set_ylabel(r'$\sigma_v$ (km/s)', fontsize=20)
-    ax.set_xlabel(r'$m_{200}$ (M$_{sun} h^{-1}$)', fontsize=20)
-    ax.legend(loc='upper left', fontsize=12)
+    ax.set_xlabel(r'$m_{200}$ ($10^{14}$M$_{\odot} h^{-1}$)', fontsize=20)
+    ax.legend(loc='upper left', fontsize=15)
+    for tick in ax.xaxis.get_major_ticks(): tick.label.set_fontsize(14)
     plt.show()
 
 
@@ -607,6 +643,65 @@ def plot_vel_component_preference(r, v, vRad, vTan, gr_colors, i, sfr, redMask, 
     ax.set_ylim([-6.2, 6.2])
     plt.show()
 
+
+# ===================================================================================================
+# =============================== visualize redshift-space distortion ===============================
+# ===================================================================================================
+
+def comp_halo_shapes():
+    '''
+    This function plots halos in 3 dimensions of RA vs Dec vs Mpc to show
+    their 3d shapes, before and after redshift distortion
+    '''
+    pFile = 'protoDC2_clusters_full_shear_nocut_dust_elg_shear2_mod.hdf5'
+    protoDC2 = h5py.File('/media/luna1/jphollowed/protoDC2/{}'.format(pFile), 'r')
+    halosGroup = protoDC2['clusters']
+    halos = [halosGroup[key] for key in list(halosGroup.keys())]
+
+    for halo in halos:
+
+        if(halo.name != '/clusters/halo_231'): continue
+        ra = halo['ra'][:] / 60 / 60
+        dec = halo['dec'][:] / 60 / 60
+        x = halo['x']
+        y = halo['y']
+        z = halo['z']
+        zHubb = halo['redshiftHubble'][:]
+        zDist = halo['redshift'][:]
+        print(halo)
+        if(np.mean(zHubb) > 0.2): continue
+        fig = plt.figure(1)
+        fig.clf()
+        plt.hold(True)
+        ax1 = plt.subplot2grid([3,2], [0,0], rowspan=2, projection='3d')
+        ax2 = plt.subplot2grid([3,2], [0,1], rowspan=2, projection='3d')
+        ax1.scatter(cosmo.comoving_distance(zHubb), dec, ra, color=np.array([111,168,220])/255)
+        ax2.scatter(cosmo.comoving_distance(zDist), dec, ra, color=np.array([111,168,220])/255)
+        #ax1.scatter(z, dec, ra)
+        ax1.set_xlim(ax2.get_xlim())
+        ax1.set_ylim(ax2.get_ylim())
+        ax1.set_zlim(ax2.get_zlim())
+        for ax in [ax1, ax2]:
+            ax.set_xlabel('comoving LOS distance (Mpc)', fontsize=14, labelpad=9)
+            ax.set_ylabel('Dec (deg)', fontsize=14, labelpad=14)
+            ax.set_zlabel('RA (deg)', fontsize=14, labelpad=14)
+
+        ax3 = plt.subplot2grid([3,2], [2,0])
+        ax4 = plt.subplot2grid([3,2], [2,1])
+        ax3.hist(zHubb, 5, histtype='step', lw=2.1, color=np.array([246,178,107])/255)
+        ax4.hist(zDist, 20, histtype='step', lw=2.1, color=np.array([246,178,107])/255)
+        ax3.hist(zHubb, 5, lw=0, color=np.array([246,178,107])/255, alpha=0.4)
+        ax4.hist(zDist, 20, lw=0, color=np.array([246,178,107])/255, alpha=0.4)
+        ax4.set_xlim([min(zDist), max(zDist)])
+        ax3.set_xlim(ax4.get_xlim())
+        ax4.set_ylim(ax3.get_ylim())
+        ax3.set_xlabel(r'$z$', fontsize=22)
+        ax4.set_xlabel(r'$z$', fontsize=22)
+        ax3.set_ylabel(r'$N$', fontsize=22)
+        ax3.grid()
+        ax4.grid()
+
+        plt.show()
 
 # ===================================================================================================
 # =============================== check peculiar redshifts on cores =================================

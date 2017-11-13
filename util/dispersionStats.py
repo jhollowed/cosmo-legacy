@@ -101,9 +101,9 @@ def bAverage(z, tol = 0, iterate = True, maxIters = 6, C = 6.0):
         # calculate C_BI
         num = np.sum(term1*term2, axis=-1)
         den = np.sum(term2, axis=-1)
-        Cbi = M.flatten() + (num/den)
+        Cbi = Cbi + np.reshape( (num/den), (len(M), 1))
 
-    return Cbi
+    return Cbi.flatten()
 
 # ---------------------------------------------------------------------------------------------------
 
@@ -121,7 +121,7 @@ def bAverage_err(sigBI,z,N):
 
 # ---------------------------------------------------------------------------------------------------
 
-def bootstrap_bAverage_err(vals, draws = 1000, conf=68.3, avgErr=True, iterate=True):
+def bootstrap_bAverage(vals, draws = 1000, conf=68.3, avgErr=True, iterate=True):
     '''
     Simulates the error in the biweight location estimator via a bootstrap resampling approach. 
     1000 resamples are drawn from the input data vector, with replacement. For
@@ -145,13 +145,13 @@ def bootstrap_bAverage_err(vals, draws = 1000, conf=68.3, avgErr=True, iterate=T
 
     critPoints = [0+(100-conf)/2, 100-(100-conf)/2]
     critVals = [np.percentile(scatter, critPoints[i], interpolation='nearest') for i in range(2)]
-    confidence = [disp - crit for crit in critVals]
+    confidence = [avg - crit for crit in critVals]
     
     if(avgErr):
         err = np.mean(abs(confidence - avg))
         return [avg, err]
     else:
-        return [confidence[1], disp, confidence[0]]
+        return [confidence[1], avg, confidence[0]]
 
 
 # ==============================================================================================================
@@ -237,14 +237,14 @@ def bootstrap_bDispersion(vals, size = None, draws = 1000, conf=68.3, avgErr = T
     '''
 
     if(size == None):
-        size = int(len(vals)/2)
+        size = int( len(vals)/2)
         if not ignoreWarn and size < 15: 
             warnings.warn('resample size is less than 15; consider using gapper scale estimator')
     else:
         size = int(size)
 
     disp = bDispersion(vals, iterate=iterate)
-    results = bDispersion( random_choice_noreplace(vals, draws, size) )
+    results = bDispersion( np.array([np.random.choice(vals, size=size) for i in range(draws)]) )
     scatter = results - disp
 
     critPoints = [0+(100-conf)/2, 100-(100-conf)/2]
@@ -299,13 +299,12 @@ def bootstrap_gDispersion(vals, size = None, draws = 1000, conf=68.3, avgErr = T
     '''
 
     if(size == None):
-        if(repl): size = len(vals)
-        else: size = int(len(vals)/2)
+        size = int( min( max(len(vals)/10, 200), len(vals)))
     else:
         size = int(size)
 
     disp = gDispersion(vals)
-    results = gDispersion( random_choice_noreplace(vals, draws, size) )
+    results = bDispersion( np.array([np.random.choice(vals, size=size) for i in range(draws)]) )
     scatter = results - disp
 
     critPoints = [0+(100-conf)/2, 100-(100-conf)/2]
