@@ -232,11 +232,12 @@ int main( int argc, char** argv ) {
   
   MPI_Init(&argc, &argv);
 
+  char cart[3] = {'x', 'y', 'z'};
   string input_lc_dir,out_dir;
   input_lc_dir = string(argv[1]);
   out_dir = string(argv[2]);
   vector<string> step_strings;
-  std::cout << "using lightcone at ";
+  std::cout << "\nusing lightcone at ";
   std::cout << input_lc_dir << std::endl;
    
   // build step_strings vector out of all command line arguments after the input
@@ -245,22 +246,21 @@ int main( int argc, char** argv ) {
   char* p;
   bool isInt;
   int lastStep_idx;
-  std::cout << "step strings: ";
+  std::cout << "steps to include: ";
   for(int i = 3; i<argc; ++i){
     strtol(argv[i], &p, 10);
     isInt = (*p == 0);
     if(isInt){
     	step_strings.push_back(string(argv[i]));
-	std::cout << string(argv[i]);
+	    std::cout << string(argv[i]) << " ";
     }else{
-	lastStep_idx = i;
-	break;
+	    lastStep_idx = i;
+	    break;
     }
   }
   std::cout << std::endl;
 
-  // set parameter defaults
-  float observer[3] = {0.0, 0.0, 0.0};
+  // set defaults
   float theta_cut[2] = {85.0*ARCSEC, 90.0*ARCSEC};
   float phi_cut[2]   = {0.0,         5.0 *ARCSEC};
   double haloPos[3];
@@ -291,12 +291,7 @@ int main( int argc, char** argv ) {
   // search argument vector for options, update default parameters if found 
   for(int i=lastStep_idx; i<argc; ++i){
 
-    if(strcmp(argv[i],"-o")==0 || strcmp(argv[i],"--observer")==0){
-	observer[0] = std::strtof(argv[++i], NULL);
-	observer[1] = std::strtof(argv[++i], NULL);
-	observer[2] = std::strtof(argv[++i], NULL);
-    }
-    else if(strcmp(argv[i],"-t")==0 || strcmp(argv[i],"--theta")==0){
+    if(strcmp(argv[i],"-t")==0 || strcmp(argv[i],"--theta")==0){
 	theta_cut[0] = std::strtof(argv[++i], NULL) * ARCSEC;
 	theta_cut[1] = std::strtof(argv[++i], NULL) * ARCSEC;
     }
@@ -316,12 +311,19 @@ int main( int argc, char** argv ) {
     }
   }
 
-  // A box size must be passed if pointing lightcone toward custom halo position,
-  // in order to set the angular bounds
-  if(customHalo^customBox){ 
-	throw std::invalid_argument("-h and -b options must accompany eachother");
+  if(customHalo){
+      std::cout << "target halo: ";
+      for(int i=0;i<3;++i){ std::cout << cart[i] << "=" << haloPos[i] << " ";}
+      std::cout << std::endl;
+      std::cout << "box length: " << boxLength << " Mpc";
+  }else{
+      std::cout << "theta bounds: ";
+      std::cout << theta_cut[0]/ARCSEC << " -> " << theta_cut[1]/ARCSEC <<" deg"<<std::endl;
+      std::cout << "phi bounds: ";
+      std::cout << phi_cut[0]/ARCSEC << " -> " << phi_cut[1]/ARCSEC <<" deg";
   }
-  
+  std::cout << "\n" << std::endl;
+      
   // call overloaded processing function
   if(customHalo){
   	//processLC(input_lc_dir, out_dir, step_strings, observer, haloPos, boxLength);
