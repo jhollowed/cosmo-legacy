@@ -95,10 +95,11 @@ def makeCatalog():
                 'sod_halo_cdelta', 'sod_halo_cdelta_error', 'sod_halo_c_acc_mass']
     
     # load protoDC2 catalog
-    #protoDC2Path = '/media/luna1/dkorytov/projects/protoDC2/output/mock_B_full_nocut.hdf5'
-    protoDC2Path = '/media/luna1/dkorytov/projects/protoDC2/output/mock_full_nocut_dust_elg_shear2_mod.hdf5'
-    #path_out = 'data/protoDC2_catalog_pecZ.hdf5'
-    path_out = '/media/luna1/jphollowed/protoDC2/protoDC2_clusters_full_shear_nocut_dust_elg_shear2_mod.hdf5'
+    protoDC2Path='/media/luna1/dkorytov/projects/protoDC2/output/versions/mock_v2.1.1.hdf5'
+    #protoDC2Path='/media/luna1/dkorytov/projects/protoDC2/output/'\
+    #             'mock_full_nocut_dust_elg_shear3_test.hdf5'
+    path_out = '/media/luna1/jphollowed/protoDC2/versions/mock_clusters_v2.1.1.hdf5'
+    #path_out = '/media/luna1/jphollowed/protoDC2/mock_clusters_v2.1.1_test_noattrs.hdf5'
     protoDC2 = h5py.File(protoDC2Path, 'r')
     outputFile = h5py.File(path_out, 'w')
 
@@ -176,9 +177,13 @@ def makeCatalog():
         # loop through each duplicated halo (only 1 loop in the case of no duplication)
 
         for j in range(len(galMask)):
-            
+
+            # create a halo-property and galaxy-property group in each halo_k group
+            galPropGroup = haloGroups[j].create_group('galaxyProperties')
+            haloPropGroup = haloGroups[j].create_group('haloProperties')
+
             host_quantityModifiers = {
-                'hostHaloMass':'host_halo_mass',
+                'hostHaloMass':'halo_mass',
                 'hostIndex':'halo_index',
                 'hostHaloTag':'fof_halo_tag',
                 'step':'halo_step'
@@ -202,7 +207,8 @@ def makeCatalog():
                 if( sum(abs(np.diff(data))) != 0):
                     raise ValueError('False sibling galaxies (mebership masking not working properly)')
                 modifiedProp = host_quantityModifiers[prop]
-                haloGroups[j].attrs.create(modifiedProp, data[0])
+                # -- OLD HALO ATTRIBUTES -- haloGroups[j].attrs.create(modifiedProp, data[0])
+                haloPropGroup.create_dataset(modifiedProp, data=data[0])
             
             # calculate some new halo properties not present in the catalog
             centralGal_mask = np.array(protoDC2g['isCentral'][:][galMask[j]], dtype=bool)
@@ -210,36 +216,45 @@ def makeCatalog():
             if(len(centralGal_index) != 1): 
                 print('more than one central in this halo!')
                 galRAs = protoDC2g['ra'][:][galMask[j]]
-                hostRA = np.median(galRAs)
+                hostRA = np.median(galRAs)[0]
                 galDecs = protoDC2g['dec'][:][galMask[j]]
-                hostDec = np.median(galDecs)
+                hostDec = np.median(galDecs)[0]
             else:
-                hostRA = protoDC2g['ra'][:][galMask[j]][centralGal_index]
-                hostDec = protoDC2g['dec'][:][galMask[j]][centralGal_index]
+                hostRA = protoDC2g['ra'][:][galMask[j]][centralGal_index][0]
+                hostDec = protoDC2g['dec'][:][galMask[j]][centralGal_index][0]
             galZ = protoDC2g['redshift'][:][galMask[j]]
             hostZ = np.median(galZ)
             hostZErr = 1.25 * (np.std(galZ) / np.sqrt(len(galZ)))
             pecV = ct.LOS_properVelocity(galZ, hostZ)
-            galDisp_obs = stat.bDispersion(pecV)
-            galDisp_1d = stat.dmDispersion(protoDC2g['vx'][:][galMask[j]], 
+            galDisp_obs = stat.bDispersion(pecV)[0]
+            galDisp_3d = stat.dmDispersion(protoDC2g['vx'][:][galMask[j]], 
                                            protoDC2g['vy'][:][galMask[j]], 
                                            protoDC2g['vz'][:][galMask[j]])
             
-            haloGroups[j].attrs.create('halo_ra', hostRA)
-            haloGroups[j].attrs.create('halo_dec', hostDec)
-            haloGroups[j].attrs.create('halo_z', hostZ)
-            haloGroups[j].attrs.create('halo_z_err', hostZErr)
-            haloGroups[j].attrs.create('gal_vel_disp_obs', galDisp_obs)
-            haloGroups[j].attrs.create('gal_vel_disp_1d', galDisp_1d)
+            # -- OLD HALO ATTRIBUTES --
+            #haloGroups[j].attrs.create('halo_ra', hostRA)
+            #haloGroups[j].attrs.create('halo_dec', hostDec)
+            #haloGroups[j].attrs.create('halo_z', hostZ)
+            #haloGroups[j].attrs.create('halo_z_err', hostZErr)
+            #haloGroups[j].attrs.create('gal_vel_disp_obs', galDisp_obs)
+            #haloGroups[j].attrs.create('gal_vel_disp_1d', galDisp_1d)
+            haloPropGroup.create_dataset('halo_ra', data = hostRA)
+            haloPropGroup.create_dataset('halo_dec', data = hostDec)
+            haloPropGroup.create_dataset('halo_z', data = hostZ)
+            haloPropGroup.create_dataset('halo_z_err', data = hostZErr)
+            haloPropGroup.create_dataset('gal_vel_disp_obs', data = galDisp_obs)
+            haloPropGroup.create_dataset('gal_vel_disp', data = galDisp_3d)
 
             # save all sod properties of the halo from the haloCatalog as attrbiutes
-            sodStepIdx = np.where(haloSteps == haloGroups[j].attrs['halo_step'])[0][0]
+            # -- OLD HALO ATTRIBUTES -- sodStepIdx = np.where(haloSteps == haloGroups[j].attrs['halo_step'])[0][0]
+            sodStepIdx = np.where(haloSteps == haloPropGroup['halo_step'])[0][0]
             sodTags = gio.gio_read(haloCatalog[sodStepIdx], 'fof_halo_tag')
             sodIdx = np.where(sodTags == halos[k])
             
             for prop in sodProps:
-                data = gio.gio_read(haloCatalog[sodStepIdx], prop)[sodIdx]
-                haloGroups[j].attrs.create(prop, data)
+                data = gio.gio_read(haloCatalog[sodStepIdx], prop)[sodIdx][0]
+                # -- OLD HALO ATTRIBUTES -- haloGroups[j].attrs.create(prop, data)
+                haloPropGroup.create_dataset(prop, data=data)
             print('saved all halo attributes')
 
             # ------------------------------ GROUP DATASETS ------------------------------
@@ -249,12 +264,15 @@ def makeCatalog():
             gal_datasets = galProps[~galProps_objType]
             for g in range(len(gal_groups)):
                 group = gal_groups[g]
-                haloGroups[j].create_group(group)
+                # -- OLD HALO ATTRIBUTES -- haloGroups[j].create_group(group)
+                galPropGroup.create_group(group)
             for d in range(len(gal_datasets)):
                 dset = gal_datasets[d]
                 data = protoDC2g[dset][:][galMask[j]]
-                haloGroups[j].create_dataset(dset, data=data)
-                if(len(haloGroups[j][dset]) != np.sum(galMask[j])):
+                # -- OLD HALO ATTRIBUTES -- haloGroups[j].create_dataset(dset, data=data)
+                galPropGroup.create_dataset(dset, data=data)
+                # -- OLD HALO ATTRIBUTES -- if(len(haloGroups[j][dset]) != np.sum(galMask[j])):
+                if(len(galPropGroup[dset]) != np.sum(galMask[j])):
                     raise ValueError('galaxy population size not the same across columns (bad masks)')
             print('saved all galaxy datasets')
  
