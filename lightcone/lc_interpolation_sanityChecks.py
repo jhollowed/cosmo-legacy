@@ -16,7 +16,7 @@ def binData():
     '''
     dataPath = '/homes/jphollowed/data/hacc/alphaQ/lc_output_downs'
     interp_data = '{}/lc_intrp_output_d.432'.format(dataPath)
-    extrap_data = '{}/lc_intrp_output_d.432'.format(dataPath)
+    extrap_data = '{}/lc_intrp_output_d_old.432'.format(dataPath)
 
     print('Reading interpolation data')
     ix = gio.gio_read(interp_data, 'x')
@@ -69,7 +69,7 @@ def binData():
     hist_ezx = np.histogram2d(ez, ex, bins=[hist_ez[1], hist_ex[1]])
 
     print('zipping')
-    np.savez('lc_hists.npz', ix=hist_ix[0], ex=hist_ex[0], binx=binx,
+    np.savez('lc_binned_data.npz', ix=hist_ix[0], ex=hist_ex[0], binx=binx,
                              iy=hist_iy[0], ey=hist_ey[0], biny=biny,
                              iz=hist_iz[0], ez=hist_ez[0], binz=binz,
                              ivx=hist_ivx[0], evx=hist_evx[0], binvx=binvx,
