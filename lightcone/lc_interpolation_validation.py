@@ -1,14 +1,18 @@
-from dtk import gio
-from dtk import sort
 import numpy as np
 import pdb
+from matplotlib.ticker import FormatStrFormatter
 import matplotlib.pyplot as plt
+import matplotlib as mpl
+from cycler import cycler
 from mpl_toolkits.mplot3d import Axes3D
+from matplotlib import rcParams
+import matplotlib.ticker as plticker
+
 '''
 This file contains functions for inspecting the lightcone output
 '''
 
-def saveParticlePathData(diffRange = 'max', plot=True):
+def saveParticlePathData(diffRange = 'max', plot=True, magDiffOnly=True):
     '''
     This function loads particle from the lightcone output, and inspects the 
     difference in position resulting from the extrapolation and interpolation
@@ -24,6 +28,8 @@ def saveParticlePathData(diffRange = 'max', plot=True):
                  x,y,z data of the 10 particle paths, from the extrapolated
                  lightcone, interpolated lightcone, and snapshots
     '''
+    from dtk import gio
+    from dtk import sort
 
     epath = "/home/jphollowed/data/hacc/alphaQ/downsampled_particle_extrp_lc"
     ipath = "/home/jphollowed/data/hacc/alphaQ/downsampled_particle_intrp_lc"
@@ -90,9 +96,10 @@ def saveParticlePathData(diffRange = 'max', plot=True):
     
     f = plt.figure(0)
     ax =  f.add_subplot(111)
-    ax.hist(magDiff, 1000)
+    ax.hist(magDiff, 500)
     ax.set_yscale('log')
     plt.show()
+    if(magDiff_only): return
 
     if(diffRange == 'max'):
         diffVals = np.argsort(magDiff)[::-1][0:10]
@@ -221,3 +228,100 @@ def saveParticlePathData(diffRange = 'max', plot=True):
             ax2.set_ylabel(coord2)
             ax2.set_zlabel(coord3)
             plt.show()
+
+
+def plotParticlePaths(diffRange = 'max'):
+    '''
+    This function plots the same thing as the one above. Instead of doing the particle
+    matching and position diffing, however, it reads the outpt of saveParticlePathData()
+    in the case that that function was run with plot=False. This is to enable local 
+    plotting for better 3d display without having to be on datastar
+    '''
+
+    rcParams.update({'figure.autolayout': True})
+    params = {'text.usetex': False, 'mathtext.fontset': 'stixsans'}
+    rcParams.update(params)
+    cmap=plt.cm.cool
+    colors = cmap(np.linspace(0.2, 0.8, 3))
+    c = cycler('color', colors)
+    plt.rcParams["axes.prop_cycle"] = c
+    
+    path = '/home/joe/gdrive2/work/HEP/data/hacc/alphaQ/lc_particle_paths'
+    data = '{}/{}_diff'.format(path, diffRange)
+
+    for i in range(10):
+
+        ix = np.load('{}/ix_{}.npy'.format(data, i))
+        iy = np.load('{}/iy_{}.npy'.format(data, i))
+        iz = np.load('{}/iz_{}.npy'.format(data, i))
+        ia = np.load('{}/ia_{}.npy'.format(data, i))
+        ex = np.load('{}/ex_{}.npy'.format(data, i))
+        ey = np.load('{}/ey_{}.npy'.format(data, i))
+        ez = np.load('{}/ez_{}.npy'.format(data, i))
+        ea = np.load('{}/ea_{}.npy'.format(data, i))
+        truex = np.load('{}/truex_{}.npy'.format(data, i))
+        truey = np.load('{}/truey_{}.npy'.format(data, i))
+        truez = np.load('{}/truez_{}.npy'.format(data, i))
+        truea = np.load('{}/truea_{}.npy'.format(data, i))
+
+        ax = plt.subplot2grid((3,3), (0,0), rowspan=2, colspan=2, projection='3d')
+        x = np.random.randn(10)
+        y = np.random.randn(10)
+        z = np.random.randn(10)
+        ax.plot(truex, truey, truez, '--k.')
+        ax.plot(ex, ey, ez, '-o', lw=2)
+        ax.plot([truex[0]], [truey[0]], [truez[0]], '*', ms=10)
+        ax.plot(ix, iy, iz, '-o', lw=2)
+        ax.set_xlabel(r'$x\>\>\mathrm{(Mpc/h)}$', fontsize=12, labelpad=12)
+        ax.set_ylabel(r'$y\>\>\mathrm{(Mpc/h)}$', fontsize=12, labelpad=12)
+        ax.set_zlabel(r'$z\>\>\mathrm{(Mpc/h)}$', fontsize=12, labelpad=12)
+        ax.tick_params(axis='both', which='major', labelsize=8)
+        for t in range(len(ax.xaxis.get_major_ticks())): 
+            if(t%2 == 1): 
+                ax.xaxis.get_major_ticks()[t].label.set_color([1, 1, 1]) 
+                ax.xaxis.get_major_ticks()[t].label.set_fontsize(0) 
+        for t in range(len(ax.yaxis.get_major_ticks())): 
+            if(t%2 == 1): 
+                ax.yaxis.get_major_ticks()[t].label.set_color([1, 1, 1]) 
+                ax.yaxis.get_major_ticks()[t].label.set_fontsize(0) 
+        for t in range(len(ax.zaxis.get_major_ticks())): 
+            if(t%2 == 1): 
+                ax.zaxis.get_major_ticks()[t].label.set_color([1, 1, 1]) 
+                ax.zaxis.get_major_ticks()[t].label.set_fontsize(0) 
+        
+        ax_xa = plt.subplot2grid((3,3), (2,0), colspan=2)
+        ax_xa.plot(truex, (1/truea)-1, '--k.')
+        ax_xa.plot(ex, (1/ea)-1, '-o', lw=2)
+        ax_xa.plot(truex[0], (1/truea[0])-1, '*', ms=10)
+        ax_xa.plot(ix, (1/ia)-1, '-o', lw=2)
+        ax_xa.set_xlabel(r'$x\>\>\mathrm{(Mpc/h)}$', fontsize=14, labelpad=6)
+        ax_xa.set_ylabel(r'$\mathrm{redshift}$', fontsize=14, labelpad=6)
+        ax_xa.set_yticks((1/truea)-1)
+        ax_xa.yaxis.set_major_formatter(FormatStrFormatter('%.3f'))
+        ax_xa.yaxis.tick_right()
+        ax_xa.yaxis.set_label_position("right")
+        ax_xa.invert_yaxis()
+        ax_xa.grid()
+
+
+        ax_za = plt.subplot2grid((3,3), (0,2), rowspan=2)
+        ax_za.plot((1/truea)-1, truez, '--k.', label='true path')
+        ax_za.plot((1/ea)-1, ez, '-o', lw=2, label = 'extrapolation')
+        ax_za.plot((1/truea[0])-1, truez[0], '*', ms=10, label='starting position')
+        ax_za.plot((1/ia)-1, iz, '-o', lw=2, label='interpolation')
+        ax_za.set_ylabel(r'$z\>\>\mathrm{(Mpc/h)}$', fontsize=14, labelpad=6)
+        ax_za.set_xlabel(r'$\mathrm{redshift}$', fontsize=14, labelpad=6)
+        ax_za.set_xticks(1/(truea)-1)
+        for tick in ax_za.get_xticklabels(): tick.set_rotation(90)
+        ax_za.xaxis.set_major_formatter(FormatStrFormatter('%.3f'))
+        ax_za.yaxis.tick_right()
+        ax_za.yaxis.set_label_position("right")
+        ax_za.grid()
+        ax_za.legend(bbox_to_anchor=(1.12, -0.35))
+
+
+        plt.gcf().set_size_inches(8, 6)
+        plt.gcf().tight_layout()
+
+        plt.gcf().canvas.manager.window.move(540, 200)
+        plt.show()
