@@ -7,6 +7,7 @@ from cycler import cycler
 from mpl_toolkits.mplot3d import Axes3D
 from matplotlib import rcParams
 import matplotlib.ticker as plticker
+import h5py as h5
 
 '''
 This file contains functions for inspecting the lightcone output
@@ -21,7 +22,7 @@ def config(cmap):
     plt.rcParams["axes.prop_cycle"] = c
     
 
-def saveParticlePathData(diffRange='max', plot=True, posDiffOnly=True, duplicatesOnly=False):
+def saveParticlePathData(diffRange='max', plot=True, posDiffOnly=False):
     '''
     This function loads particle from the lightcone output, and inspects the 
     difference in position resulting from the extrapolation and interpolation
@@ -42,10 +43,10 @@ def saveParticlePathData(diffRange='max', plot=True, posDiffOnly=True, duplicate
     
     config(cmap=plt.cm.plasma)
 
-    epath = "/home/jphollowed/data/hacc/alphaQ/downsampled_particle_extrp_lc"
-    ipath = "/home/jphollowed/data/hacc/alphaQ/downsampled_particle_intrp_lc"
-    spath = "/home/jphollowed/data/hacc/alphaQ/downsampled_particles"
-
+    epath="/home/jphollowed/data/hacc/alphaQ/lightcone/downsampled_particle_extrp_lc/step442"
+    ipath="/home/jphollowed/data/hacc/alphaQ/lightcone/downsampled_particle_intrp_lc/step442"
+    spath="/home/jphollowed/data/hacc/alphaQ/particles/downsampled_particles"
+   
     coord = 'x'
     coord2 = 'y'
     coord3 = 'z'
@@ -136,8 +137,9 @@ def saveParticlePathData(diffRange='max', plot=True, posDiffOnly=True, duplicate
     ax3.set_xlabel(r'$\left|z_\mathrm{extrap} - z_\mathrm{interp}\right|$', fontsize=18)
     
     plt.show()
-    if(posDiff_only): return
+    if(posDiffOnly): return
 
+    print('matching to specified range ({})'.format(diffRange))
     if(diffRange == 'max'):
         diffVals = np.argsort(posDiff)[::-1][0:10]
         savePath = "lc_particle_paths/max_diff"
@@ -147,11 +149,17 @@ def saveParticlePathData(diffRange='max', plot=True, posDiffOnly=True, duplicate
     if(diffRange == 'min'):
         diffVals = np.argsort(posDiff)[0:10]
         savePath = "lc_particle_paths/min_diff"
-    if(duplicatesOnly):
-        dups_intrp = h5.File('/home/jphollowed/code/lc_duplicates/output/dups_intrp.hdf5')
+    if(diffRange == 'dupl'):
+        dups_intrp = h5.File(
+                     '/home/jphollowed/code/lc_duplicates/output/dups_interp.hdf5','r')
         dupIds = dups_intrp['id'][:]
-        diffVals = posDiff[np.where(iid == dupIds)]
-        pdb.set_trace()
+        dupMask = np.in1d(iid2[iMask], dupIds)
+        
+        iMask = iMask[dupMask]
+        eMask = eMask[dupMask]
+        posDiff = posDiff[dupMask]
+        diffVals = np.argsort(posDiff)[::-1][0:20]
+        savePath = "lc_particle_paths/dupl_diff"
 
 
     print("Reading timestep files")
