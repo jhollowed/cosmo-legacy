@@ -8,6 +8,7 @@ from mpl_toolkits.mplot3d import Axes3D
 from matplotlib import rcParams
 import matplotlib.ticker as plticker
 import h5py as h5
+import glob
 
 '''
 This file contains functions for inspecting the lightcone output
@@ -150,15 +151,18 @@ def saveParticlePathData(diffRange='max', plot=True, posDiffOnly=False):
         diffVals = np.argsort(posDiff)[0:10]
         savePath = "lc_particle_paths/min_diff"
     if(diffRange == 'dupl'):
-        dups_intrp = h5.File(
+        #dups_intrp = h5.File(
                      '/home/jphollowed/code/lc_duplicates/output/dups_interp.hdf5','r')
-        dupIds = dups_intrp['id'][:]
+        #dupIds = dups_intrp['id'][:]
+        dupIds = np.load(weirdIds.npy)
         dupMask = np.in1d(iid2[iMask], dupIds)
+        
         
         iMask = iMask[dupMask]
         eMask = eMask[dupMask]
         posDiff = posDiff[dupMask]
-        diffVals = np.argsort(posDiff)[::-1][0:20]
+        #diffVals = np.argsort(posDiff)[::-1][0:20]
+        diffVals = np.argsort(posDiff)[::-1]
         savePath = "lc_particle_paths/dupl_diff"
 
 
@@ -290,10 +294,11 @@ def plotParticlePaths(diffRange = 'max'):
     '''
     config(cmap=plt.cm.cool)
 
-    path = '/home/joe/gdrive2/work/HEP/data/hacc/alphaQ/lc_particle_paths'
+    path = '/home/joe/gdrive2/work/HEP/data/hacc/alphaQ/lightcone/lc_particle_paths'
     data = '{}/{}_diff'.format(path, diffRange)
+    numFiles = len(glob.glob('{}/iid_*'.format(data)))
 
-    for i in range(10):
+    for i in range(numFiles):
 
         ix = np.load('{}/ix_{}.npy'.format(data, i))
         iy = np.load('{}/iy_{}.npy'.format(data, i))
@@ -369,3 +374,39 @@ def plotParticlePaths(diffRange = 'max'):
 
         plt.gcf().canvas.manager.window.move(540, 200)
         plt.show()
+
+
+
+
+def compareDuplicates():
+
+    path = '/home/joe/gdrive2/work/HEP/data/hacc/alphaQ/lightcone/lc_duplicates'
+    idupl = h5.File('{}/dups_interp.hdf5'.format(path), 'r')
+    edupl = h5.File('{}/dups_extrap.hdf5'.format(path), 'r')
+
+    f = plt.figure(0)
+    axe = f.add_subplot(121)
+    axi = f.add_subplot(122)
+
+    maski = np.in1d(idupl['id'], edupl['id'])
+    maske = np.in1d(edupl['id'], idupl['id'])
+
+    axe.plot(edupl['x'], edupl['y'], '.g', ms=1)
+    axe.plot(edupl['x'][~maske], edupl['y'][~maske], '+m', mew=1)
+    axe.set_xlabel('x (Mpc/h)')
+    axe.set_ylabel('y (Mpc/h)')
+    
+
+    axi.plot(idupl['x'], idupl['y'], '.b', ms=1)
+    axi.plot(idupl['x'][~maski], idupl['y'][~maski], '+r', mew=1)
+    axi.set_xlabel('x (Mpc/h)')
+    axi.set_ylabel('y (Mpc/h)')
+
+    distMask = np.linalg.norm(np.array([idupl['x'][:], idupl['y'][:]]).T, axis=1) < 255
+
+    axi.plot(idupl['x'][distMask], idupl['y'][distMask], 'xk', mew=1)
+
+    np.save('weirdIds.npy', idupl['id'][distMask])
+    
+    plt.show()
+
