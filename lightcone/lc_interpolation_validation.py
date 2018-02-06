@@ -151,19 +151,19 @@ def saveParticlePathData(diffRange='max', plot=True, posDiffOnly=False):
         diffVals = np.argsort(posDiff)[0:10]
         savePath = "lc_particle_paths/min_diff"
     if(diffRange == 'dupl'):
-        #dups_intrp = h5.File(
-                     '/home/jphollowed/code/lc_duplicates/output/dups_interp.hdf5','r')
-        #dupIds = dups_intrp['id'][:]
-        dupIds = np.load(weirdIds.npy)
-        dupMask = np.in1d(iid2[iMask], dupIds)
-        
-        
+        dups_intrp = h5.File(
+                 '/home/jphollowed/code/lc_duplicates/output/dups_interp.hdf5','r')
+        dupIds = dups_intrp['id'][:] 
         iMask = iMask[dupMask]
         eMask = eMask[dupMask]
         posDiff = posDiff[dupMask]
-        #diffVals = np.argsort(posDiff)[::-1][0:20]
-        diffVals = np.argsort(posDiff)[::-1]
-        savePath = "lc_particle_paths/dupl_diff"
+        diffVals = np.argsort(posDiff)[::-1][0:20]
+        savePath = "lc_particle_paths/dupl_diff" 
+    if(diffRange == 'weird'):
+        weirdIds = np.load('weirdIds.npy')
+        iMask = np.ones(len(iid2), dtype=bool)
+        diffVals = np.where(np.in1d(iid2[iMask], weirdIds))[0]
+        savePath = "lc_particle_paths/weird_ids"
 
 
     print("Reading timestep files")
@@ -195,17 +195,21 @@ def saveParticlePathData(diffRange='max', plot=True, posDiffOnly=False):
     for i in range(len(diffVals)):
 
         idx = diffVals[i]
-        print('Matching to snapshots for idx {} with diff of {}'.format(idx, posDiff[idx]))
+        if(diffRange != 'weird'):
+            print('Matching to snapshots for idx {} with diff of {}'.format(idx,posDiff[idx]))
+        else:
+            print('Matching to snapshots for idx {} with diff of NA'.format(idx,posDiff[idx]))
         print('Particle ID is {}'.format(iid2[iMask][idx]))
         ix = ix2[iMask][idx]
         iy = iy2[iMask][idx]
         iz = iz2[iMask][idx]
         ia = ia2[iMask][idx]
-        
-        ex = ex2[eMask][idx]
-        ey = ey2[eMask][idx]
-        ez = ez2[eMask][idx]
-        ea = ea2[eMask][idx]
+       
+        if(diffRange != 'weird'):
+            ex = ex2[eMask][idx]
+            ey = ey2[eMask][idx]
+            ez = ez2[eMask][idx]
+            ea = ea2[eMask][idx]
 
         s0_idx = np.where(sid0 == iid2[iMask][idx])
         s1_idx = np.where(sid1 == iid2[iMask][idx])
@@ -246,10 +250,11 @@ def saveParticlePathData(diffRange='max', plot=True, posDiffOnly=False):
         interpoly = np.array([syi2, iy])
         interpolz = np.array([szi2, iz])
         interpola = np.array([sai2, ia])
-        extrapx = np.array([sxi2, ex])
-        extrapy = np.array([syi2, ey])
-        extrapz = np.array([szi2, ez])
-        extrapa = np.array([sai2, ea])
+        if(diffRange != 'weird'):
+            extrapx = np.array([sxi2, ex])
+            extrapy = np.array([syi2, ey])
+            extrapz = np.array([szi2, ez])
+            extrapa = np.array([sai2, ea])
        
         if(plot == 0):
             np.save('{}/ix_{}.npy'.format(savePath, i), interpolx)
@@ -258,10 +263,11 @@ def saveParticlePathData(diffRange='max', plot=True, posDiffOnly=False):
             np.save('{}/ia_{}.npy'.format(savePath, i), interpola)
             np.save('{}/iid_{}.npy'.format(savePath, i), iid2[iMask][idx])
             
-            np.save('{}/ex_{}.npy'.format(savePath, i), extrapx)
-            np.save('{}/ey_{}.npy'.format(savePath, i), extrapy)
-            np.save('{}/ez_{}.npy'.format(savePath, i), extrapz)
-            np.save('{}/ea_{}.npy'.format(savePath, i), extrapa)
+            if(diffRange != 'weird'):
+                np.save('{}/ex_{}.npy'.format(savePath, i), extrapx)
+                np.save('{}/ey_{}.npy'.format(savePath, i), extrapy)
+                np.save('{}/ez_{}.npy'.format(savePath, i), extrapz)
+                np.save('{}/ea_{}.npy'.format(savePath, i), extrapa)
 
             np.save('{}/truex_{}.npy'.format(savePath, i), truex)
             np.save('{}/truey_{}.npy'.format(savePath, i), truey)
@@ -277,7 +283,7 @@ def saveParticlePathData(diffRange='max', plot=True, posDiffOnly=False):
             ax2 = f.add_subplot(212, projection='3d')
             ax2.plot(truex, truey, truez, '.-g')
             ax2.plot(interpolx, interpoly, interpolz, '.-m')
-            ax2.plot(extrapx, extrapy, extrapz, '.-r')
+            if(diffRange != 'weird'): ax2.plot(extrapx, extrapy, extrapz, '.-r')
             ax2.plot([truex[0]], [truey[0]], [truez[0]], '*b')
             ax2.set_xlabel(coord)
             ax2.set_ylabel(coord2)
@@ -304,10 +310,11 @@ def plotParticlePaths(diffRange = 'max'):
         iy = np.load('{}/iy_{}.npy'.format(data, i))
         iz = np.load('{}/iz_{}.npy'.format(data, i))
         ia = np.load('{}/ia_{}.npy'.format(data, i))
-        ex = np.load('{}/ex_{}.npy'.format(data, i))
-        ey = np.load('{}/ey_{}.npy'.format(data, i))
-        ez = np.load('{}/ez_{}.npy'.format(data, i))
-        ea = np.load('{}/ea_{}.npy'.format(data, i))
+        if(diffRange != 'weird'):
+            ex = np.load('{}/ex_{}.npy'.format(data, i))
+            ey = np.load('{}/ey_{}.npy'.format(data, i))
+            ez = np.load('{}/ez_{}.npy'.format(data, i))
+            ea = np.load('{}/ea_{}.npy'.format(data, i))
         truex = np.load('{}/truex_{}.npy'.format(data, i))
         truey = np.load('{}/truey_{}.npy'.format(data, i))
         truez = np.load('{}/truez_{}.npy'.format(data, i))
@@ -318,7 +325,7 @@ def plotParticlePaths(diffRange = 'max'):
         y = np.random.randn(10)
         z = np.random.randn(10)
         ax.plot(truex, truey, truez, '--k.')
-        ax.plot(ex, ey, ez, '-o', lw=2)
+        if(diffRange != 'weird'): ax.plot(ex, ey, ez, '-o', lw=2)
         ax.plot([truex[0]], [truey[0]], [truez[0]], '*', ms=10)
         ax.plot(ix, iy, iz, '-o', lw=2)
         ax.set_xlabel(r'$x\>\>\mathrm{(Mpc/h)}$', fontsize=12, labelpad=12)
@@ -340,7 +347,7 @@ def plotParticlePaths(diffRange = 'max'):
         
         ax_xa = plt.subplot2grid((3,3), (2,0), colspan=2)
         ax_xa.plot(truex, (1/truea)-1, '--k.')
-        ax_xa.plot(ex, (1/ea)-1, '-o', lw=2)
+        if(diffRange != 'weird'): ax_xa.plot(ex, (1/ea)-1, '-o', lw=2)
         ax_xa.plot(truex[0], (1/truea[0])-1, '*', ms=10)
         ax_xa.plot(ix, (1/ia)-1, '-o', lw=2)
         ax_xa.set_xlabel(r'$x\>\>\mathrm{(Mpc/h)}$', fontsize=14, labelpad=6)
@@ -355,7 +362,7 @@ def plotParticlePaths(diffRange = 'max'):
 
         ax_za = plt.subplot2grid((3,3), (0,2), rowspan=2)
         ax_za.plot((1/truea)-1, truez, '--k.', label='true path')
-        ax_za.plot((1/ea)-1, ez, '-o', lw=2, label = 'extrapolation')
+        if(diffRange != 'weird'):ax_za.plot((1/ea)-1, ez, '-o', lw=2, label = 'extrapolation')
         ax_za.plot((1/truea[0])-1, truez[0], '*', ms=10, label='starting position')
         ax_za.plot((1/ia)-1, iz, '-o', lw=2, label='interpolation')
         ax_za.set_ylabel(r'$z\>\>\mathrm{(Mpc/h)}$', fontsize=14, labelpad=6)
