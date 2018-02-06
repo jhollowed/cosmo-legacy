@@ -21,8 +21,7 @@ def config(cmap):
     plt.rcParams["axes.prop_cycle"] = c
     
 
-
-def saveParticlePathData(diffRange = 'max', plot=True, magDiffOnly=True):
+def saveParticlePathData(diffRange='max', plot=True, posDiffOnly=True, duplicatesOnly=False):
     '''
     This function loads particle from the lightcone output, and inspects the 
     difference in position resulting from the extrapolation and interpolation
@@ -108,7 +107,7 @@ def saveParticlePathData(diffRange = 'max', plot=True, magDiffOnly=True):
     xdiff = np.abs(ix2[iMask] - ex2[eMask])
     ydiff = np.abs(iy2[iMask] - ey2[eMask])
     zdiff = np.abs(iz2[iMask] - ez2[eMask])
-    magDiff = np.linalg.norm(np.array([xdiff, ydiff, zdiff]).T, axis=1)
+    posDiff = np.linalg.norm(np.array([xdiff, ydiff, zdiff]).T, axis=1)
     
     redshiftDiff = np.abs(((1/ia2)-1)[iMask] - ((1/ea2)-1)[eMask])
 
@@ -122,7 +121,7 @@ def saveParticlePathData(diffRange = 'max', plot=True, magDiffOnly=True):
     f = plt.figure(0)
     
     ax =  f.add_subplot(311)
-    ax.hist(magDiff, bins, color=colors[0])
+    ax.hist(posDiff, bins, color=colors[0])
     ax.set_yscale('log')
     ax.set_xlabel(r'$\left|\vec{r}_\mathrm{extrap} - \vec{r}_\mathrm{interp}\right|\>\>\mathrm{(Mpc/h)}$', fontsize=18)
     
@@ -137,17 +136,23 @@ def saveParticlePathData(diffRange = 'max', plot=True, magDiffOnly=True):
     ax3.set_xlabel(r'$\left|z_\mathrm{extrap} - z_\mathrm{interp}\right|$', fontsize=18)
     
     plt.show()
-    if(magDiff_only): return
+    if(posDiff_only): return
 
     if(diffRange == 'max'):
-        diffVals = np.argsort(magDiff)[::-1][0:10]
+        diffVals = np.argsort(posDiff)[::-1][0:10]
         savePath = "lc_particle_paths/max_diff"
     if(diffRange == 'med'):
-        diffVals = np.argsort(magDiff)[::-1][len(xdiff)/2:len(xdiff)/2 + 20][0:10]
+        diffVals = np.argsort(posDiff)[::-1][len(xdiff)/2:len(xdiff)/2 + 20][0:10]
         savePath = "lc_particle_paths/med_diff"
     if(diffRange == 'min'):
-        diffVals = np.argsort(magDiff)[0:10]
+        diffVals = np.argsort(posDiff)[0:10]
         savePath = "lc_particle_paths/min_diff"
+    if(duplicatesOnly):
+        dups_intrp = h5.File('/home/jphollowed/code/lc_duplicates/output/dups_intrp.hdf5')
+        dupIds = dups_intrp['id'][:]
+        diffVals = posDiff[np.where(iid == dupIds)]
+        pdb.set_trace()
+
 
     print("Reading timestep files")
     sid0 = gio.gio_read("{}/m000.mpicosmo.421".format(spath), 'id')
@@ -178,7 +183,7 @@ def saveParticlePathData(diffRange = 'max', plot=True, magDiffOnly=True):
     for i in range(len(diffVals)):
 
         idx = diffVals[i]
-        print('Matching to snapshots for idx {} with diff of {}'.format(idx, magDiff[idx]))
+        print('Matching to snapshots for idx {} with diff of {}'.format(idx, posDiff[idx]))
         print('Particle ID is {}'.format(iid2[iMask][idx]))
         ix = ix2[iMask][idx]
         iy = iy2[iMask][idx]
