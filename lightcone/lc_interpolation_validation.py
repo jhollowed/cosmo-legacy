@@ -11,6 +11,16 @@ import matplotlib.ticker as plticker
 '''
 This file contains functions for inspecting the lightcone output
 '''
+def config(cmap): 
+    
+    rcParams.update({'figure.autolayout': True})
+    params = {'text.usetex': False, 'mathtext.fontset': 'stixsans'}
+    rcParams.update(params)
+    colors = cmap(np.linspace(0.2, 0.8, 3))
+    c = cycler('color', colors)
+    plt.rcParams["axes.prop_cycle"] = c
+    
+
 
 def saveParticlePathData(diffRange = 'max', plot=True, magDiffOnly=True):
     '''
@@ -30,6 +40,8 @@ def saveParticlePathData(diffRange = 'max', plot=True, magDiffOnly=True):
     '''
     from dtk import gio
     from dtk import sort
+    
+    config(cmap=plt.cm.plasma)
 
     epath = "/home/jphollowed/data/hacc/alphaQ/downsampled_particle_extrp_lc"
     ipath = "/home/jphollowed/data/hacc/alphaQ/downsampled_particle_intrp_lc"
@@ -50,6 +62,8 @@ def saveParticlePathData(diffRange = 'max', plot=True, magDiffOnly=True):
     iz2 = gio.gio_read("{}/lc_intrp_output_d.442".format(ipath), coord3)
     ia2 = gio.gio_read("{}/lc_intrp_output_d.442".format(ipath), 'a')
     ivx2 = gio.gio_read("{}/lc_intrp_output_d.442".format(ipath), 'v{}'.format(coord))
+    ivy2 = gio.gio_read("{}/lc_intrp_output_d.442".format(ipath), 'v{}'.format(coord2))
+    ivz2 = gio.gio_read("{}/lc_intrp_output_d.442".format(ipath), 'v{}'.format(coord3))
     irot2 = gio.gio_read("{}/lc_intrp_output_d.442".format(ipath), 'rotation')
 
     print("Reading extrapolation files")
@@ -60,6 +74,8 @@ def saveParticlePathData(diffRange = 'max', plot=True, magDiffOnly=True):
     ez2 = gio.gio_read("{}/lc_output_d.442".format(epath), coord3)
     ea2 = gio.gio_read("{}/lc_output_d.442".format(epath), 'a')
     evx2 = gio.gio_read("{}/lc_output_d.442".format(epath), 'v{}'.format(coord))
+    evy2 = gio.gio_read("{}/lc_output_d.442".format(epath), 'v{}'.format(coord2))
+    evz2 = gio.gio_read("{}/lc_output_d.442".format(epath), 'v{}'.format(coord3))
     erot2 = gio.gio_read("{}/lc_output_d.442".format(epath), 'rotation')
 
     print(irot2)
@@ -94,10 +110,32 @@ def saveParticlePathData(diffRange = 'max', plot=True, magDiffOnly=True):
     zdiff = np.abs(iz2[iMask] - ez2[eMask])
     magDiff = np.linalg.norm(np.array([xdiff, ydiff, zdiff]).T, axis=1)
     
+    redshiftDiff = np.abs(((1/ia2)-1)[iMask] - ((1/ea2)-1)[eMask])
+
+    vxdiff = np.abs(ivx2[iMask] - evx2[eMask])
+    vydiff = np.abs(ivy2[iMask] - evy2[eMask])
+    vzdiff = np.abs(ivz2[iMask] - evz2[eMask])
+    mag_vDiff = np.linalg.norm(np.array([vxdiff, vydiff, vzdiff]).T, axis=1)
+   
+    colors = plt.rcParams['axes.prop_cycle'].by_key()['color']
+    bins = 300
     f = plt.figure(0)
-    ax =  f.add_subplot(111)
-    ax.hist(magDiff, 500)
+    
+    ax =  f.add_subplot(311)
+    ax.hist(magDiff, bins, color=colors[0])
     ax.set_yscale('log')
+    ax.set_xlabel(r'$\left|\vec{r}_\mathrm{extrap} - \vec{r}_\mathrm{interp}\right|\>\>\mathrm{(Mpc/h)}$', fontsize=18)
+    
+    ax2 =  f.add_subplot(312)
+    ax2.hist(mag_vDiff, bins, color=colors[1])
+    ax2.set_yscale('log')
+    ax2.set_xlabel(r'$\left|\vec{v}_\mathrm{extrap} - \vec{v}_\mathrm{interp}\right| \>\>\mathrm{(km/s)}$', fontsize=18)
+    
+    ax3 =  f.add_subplot(313)
+    ax3.hist(redshiftDiff, bins, color=colors[2])
+    ax3.set_yscale('log')
+    ax3.set_xlabel(r'$\left|z_\mathrm{extrap} - z_\mathrm{interp}\right|$', fontsize=18)
+    
     plt.show()
     if(magDiff_only): return
 
@@ -237,15 +275,8 @@ def plotParticlePaths(diffRange = 'max'):
     in the case that that function was run with plot=False. This is to enable local 
     plotting for better 3d display without having to be on datastar
     '''
+    config(cmap=plt.cm.cool)
 
-    rcParams.update({'figure.autolayout': True})
-    params = {'text.usetex': False, 'mathtext.fontset': 'stixsans'}
-    rcParams.update(params)
-    cmap=plt.cm.cool
-    colors = cmap(np.linspace(0.2, 0.8, 3))
-    c = cycler('color', colors)
-    plt.rcParams["axes.prop_cycle"] = c
-    
     path = '/home/joe/gdrive2/work/HEP/data/hacc/alphaQ/lc_particle_paths'
     data = '{}/{}_diff'.format(path, diffRange)
 
