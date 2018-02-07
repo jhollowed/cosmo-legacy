@@ -327,7 +327,8 @@ def plotParticlePaths(diffRange = 'max'):
         y = np.random.randn(10)
         z = np.random.randn(10)
         ax.plot(truex, truey, truez, '--k.')
-        if(diffRange != 'weird'): ax.plot(ex, ey, ez, '-o', lw=2)
+        if(diffRange != 'weird' and diffRange != 'duplUnique'): 
+            ax.plot(ex, ey, ez, '-o', lw=2)
         ax.plot([truex[0]], [truey[0]], [truez[0]], '*', ms=10)
         ax.plot(ix, iy, iz, '-o', lw=2)
         ax.set_xlabel(r'$x\>\>\mathrm{(Mpc/h)}$', fontsize=12, labelpad=12)
@@ -349,7 +350,8 @@ def plotParticlePaths(diffRange = 'max'):
         
         ax_xa = plt.subplot2grid((3,3), (2,0), colspan=2)
         ax_xa.plot(truex, (1/truea)-1, '--k.')
-        if(diffRange != 'weird'): ax_xa.plot(ex, (1/ea)-1, '-o', lw=2)
+        if(diffRange != 'weird' and diffRange != 'duplUnique'): 
+            ax_xa.plot(ex, (1/ea)-1, '-o', lw=2)
         ax_xa.plot(truex[0], (1/truea[0])-1, '*', ms=10)
         ax_xa.plot(ix, (1/ia)-1, '-o', lw=2)
         ax_xa.set_xlabel(r'$x\>\>\mathrm{(Mpc/h)}$', fontsize=14, labelpad=6)
@@ -364,7 +366,8 @@ def plotParticlePaths(diffRange = 'max'):
 
         ax_za = plt.subplot2grid((3,3), (0,2), rowspan=2)
         ax_za.plot((1/truea)-1, truez, '--k.', label='true path')
-        if(diffRange != 'weird'):ax_za.plot((1/ea)-1, ez, '-o', lw=2, label = 'extrapolation')
+        if(diffRange != 'weird' and diffRange != 'duplUnique'):
+            ax_za.plot((1/ea)-1, ez, '-o', lw=2, label = 'extrapolation')
         ax_za.plot((1/truea[0])-1, truez[0], '*', ms=10, label='starting position')
         ax_za.plot((1/ia)-1, iz, '-o', lw=2, label='interpolation')
         ax_za.set_ylabel(r'$z\>\>\mathrm{(Mpc/h)}$', fontsize=14, labelpad=6)
@@ -424,5 +427,39 @@ def compareDuplicates():
     np.save('duplSharedIds.npy', idupl['id'][duplInRange])
     np.save('duplUniqueIds.npy', idupl['id'][~duplInRange])
 
+    
     plt.show()
 
+def downsampleOutput():
+    
+    from dtk import gio
+    from dtk import sort 
+
+    ipath="/home/jphollowed/data/hacc/alphaQ/lightcone/downsampled_particle_intrp_lc/step442"
+   
+    coord = 'x'
+    coord2 = 'y'
+    coord3 = 'z'
+    s_coord = 'x'
+    s_coord2 = 'y'
+    s_coord3 = 'z'
+
+    print("Reading interpolation files")
+    iid = gio.gio_read("{}/lc_intrp_output_d.442".format(ipath), 'id')
+    ix = gio.gio_read("{}/lc_intrp_output_d.442".format(ipath), coord)
+    iy = gio.gio_read("{}/lc_intrp_output_d.442".format(ipath), coord2)
+    iz = gio.gio_read("{}/lc_intrp_output_d.442".format(ipath), coord3)
+    irot = gio.gio_read("{}/lc_intrp_output_d.442".format(ipath), 'rotation')
+    
+    idx = np.linspace(0, len(iid2)-1, len(iid2))
+    randIdx = np.random.choice(idx, size=10000, replace=False)
+
+    ds_iid = iid[randIdx]
+    ds_ix = ix[randIdx]
+    ds_iy = iy[randIdx]
+    ds_iz = iz[randIdx]
+    ds_irot = irot[randIdx]
+
+    np.savez('lc_intrp_output_tinySample.npz', id=dsiid, x=ds_ix, y=ds_iy, 
+                                               z=ds_iz,rot=ds_irot)
+    return;
