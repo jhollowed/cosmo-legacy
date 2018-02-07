@@ -159,11 +159,11 @@ def saveParticlePathData(diffRange='max', plot=True, posDiffOnly=False):
         posDiff = posDiff[dupMask]
         diffVals = np.argsort(posDiff)[::-1][0:20]
         savePath = "lc_particle_paths/dupl_diff" 
-    if(diffRange == 'weird'):
-        weirdIds = np.load('weirdIds.npy')
+    if(diffRange == 'weird' or diffRange == 'duplShared' or diffRange == 'duplUnique'):
+        badIds = np.load('{}Ids.npy'.format(diffRange))
         iMask = np.ones(len(iid2), dtype=bool)
-        diffVals = np.where(np.in1d(iid2[iMask], weirdIds))[0]
-        savePath = "lc_particle_paths/weird_ids"
+        diffVals = np.where(np.in1d(iid2[iMask], weirdIds))[0:20]
+        savePath = "lc_particle_paths/{}_ids".format(diffRange)
 
 
     print("Reading timestep files")
@@ -195,7 +195,7 @@ def saveParticlePathData(diffRange='max', plot=True, posDiffOnly=False):
     for i in range(len(diffVals)):
 
         idx = diffVals[i]
-        if(diffRange != 'weird'):
+        if(diffRange != 'weird' and diffRange != 'duplUnique'):
             print('Matching to snapshots for idx {} with diff of {}'.format(idx,posDiff[idx]))
         else:
             print('Matching to snapshots for idx {} with diff of NA'.format(idx,posDiff[idx]))
@@ -205,7 +205,7 @@ def saveParticlePathData(diffRange='max', plot=True, posDiffOnly=False):
         iz = iz2[iMask][idx]
         ia = ia2[iMask][idx]
        
-        if(diffRange != 'weird'):
+        if(diffRange != 'weird' and diffRange != 'duplUnique'):
             ex = ex2[eMask][idx]
             ey = ey2[eMask][idx]
             ez = ez2[eMask][idx]
@@ -250,7 +250,7 @@ def saveParticlePathData(diffRange='max', plot=True, posDiffOnly=False):
         interpoly = np.array([syi2, iy])
         interpolz = np.array([szi2, iz])
         interpola = np.array([sai2, ia])
-        if(diffRange != 'weird'):
+        if(diffRange != 'weird'and diffRange != 'duplUnique'):
             extrapx = np.array([sxi2, ex])
             extrapy = np.array([syi2, ey])
             extrapz = np.array([szi2, ez])
@@ -263,7 +263,7 @@ def saveParticlePathData(diffRange='max', plot=True, posDiffOnly=False):
             np.save('{}/ia_{}.npy'.format(savePath, i), interpola)
             np.save('{}/iid_{}.npy'.format(savePath, i), iid2[iMask][idx])
             
-            if(diffRange != 'weird'):
+            if(diffRange != 'weird' and diffRange != 'duplUnique'):
                 np.save('{}/ex_{}.npy'.format(savePath, i), extrapx)
                 np.save('{}/ey_{}.npy'.format(savePath, i), extrapy)
                 np.save('{}/ez_{}.npy'.format(savePath, i), extrapz)
@@ -302,6 +302,7 @@ def plotParticlePaths(diffRange = 'max'):
 
     path = '/home/joe/gdrive2/work/HEP/data/hacc/alphaQ/lightcone/lc_particle_paths'
     data = '{}/{}_diff'.format(path, diffRange)
+    if(diffRange == 'weird'): data = '{}/{}_ids'.format(path, diffRange)
     numFiles = len(glob.glob('{}/iid_*'.format(data)))
 
     for i in range(numFiles):
@@ -390,7 +391,10 @@ def compareDuplicates():
     path = '/home/joe/gdrive2/work/HEP/data/hacc/alphaQ/lightcone/lc_duplicates'
     idupl = h5.File('{}/dups_interp.hdf5'.format(path), 'r')
     edupl = h5.File('{}/dups_extrap.hdf5'.format(path), 'r')
-
+    
+    print('Duplicate fraction for old output: {}'.format(edupl['repeat_frac'][:][0]))
+    print('Duplicate fraction for new output: {}'.format(idupl['repeat_frac'][:][0]))
+    
     f = plt.figure(0)
     axe = f.add_subplot(121)
     axi = f.add_subplot(122)
@@ -410,10 +414,14 @@ def compareDuplicates():
     axi.set_ylabel('y (Mpc/h)')
 
     distMask = np.linalg.norm(np.array([idupl['x'][:], idupl['y'][:]]).T, axis=1) < 255
+    print(np.sum(distMask))
 
     axi.plot(idupl['x'][distMask], idupl['y'][distMask], 'xk', mew=1)
 
     np.save('weirdIds.npy', idupl['id'][distMask])
-    
+    duplInRange = np.logical_and(~distMask, maski)
+    np.save('duplSharedIds.npy', idupl['id'][duplInRange])
+    np.save('duplUniqueIds.npy', idupl['id'][~duplInRange])
+
     plt.show()
 
