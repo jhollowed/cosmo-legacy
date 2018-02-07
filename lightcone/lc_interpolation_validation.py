@@ -451,7 +451,7 @@ def downsampleOutput():
     iz = gio.gio_read("{}/lc_intrp_output_d.442".format(ipath), coord3)
     irot = gio.gio_read("{}/lc_intrp_output_d.442".format(ipath), 'rotation')
     
-    idx = np.linspace(0, len(iid2)-1, len(iid2))
+    idx = np.linspace(0, len(iid)-1, len(iid), dtype=int)
     randIdx = np.random.choice(idx, size=10000, replace=False)
 
     ds_iid = iid[randIdx]
@@ -460,6 +460,6 @@ def downsampleOutput():
     ds_iz = iz[randIdx]
     ds_irot = irot[randIdx]
 
-    np.savez('lc_intrp_output_tinySample.npz', id=dsiid, x=ds_ix, y=ds_iy, 
+    np.savez('lc_intrp_output_tinySample.npz', id=ds_iid, x=ds_ix, y=ds_iy, 
                                                z=ds_iz,rot=ds_irot)
     return;
