@@ -106,16 +106,16 @@ def saveParticlePathData(diffRange='max', plot=True, posDiffOnly=False):
     eMask = np.linspace(0, len(eid2)-1, len(eid2), dtype=int)[intersection_etoi][matchMap]
 
     print('diffing')
-    xdiff = np.abs(ix2[iMask] - ex2[eMask])
-    ydiff = np.abs(iy2[iMask] - ey2[eMask])
-    zdiff = np.abs(iz2[iMask] - ez2[eMask])
+    xdiff = ix2[iMask] - ex2[eMask]
+    ydiff = iy2[iMask] - ey2[eMask]
+    zdiff = iz2[iMask] - ez2[eMask]
     posDiff = np.linalg.norm(np.array([xdiff, ydiff, zdiff]).T, axis=1)
     
     redshiftDiff = np.abs(((1/ia2)-1)[iMask] - ((1/ea2)-1)[eMask])
 
-    vxdiff = np.abs(ivx2[iMask] - evx2[eMask])
-    vydiff = np.abs(ivy2[iMask] - evy2[eMask])
-    vzdiff = np.abs(ivz2[iMask] - evz2[eMask])
+    vxdiff = ivx2[iMask] - evx2[eMask]
+    vydiff = ivy2[iMask] - evy2[eMask]
+    vzdiff = ivz2[iMask] - evz2[eMask]
     mag_vDiff = np.linalg.norm(np.array([vxdiff, vydiff, vzdiff]).T, axis=1)
    
     colors = plt.rcParams['axes.prop_cycle'].by_key()['color']
@@ -162,7 +162,7 @@ def saveParticlePathData(diffRange='max', plot=True, posDiffOnly=False):
     if(diffRange == 'weird' or diffRange == 'duplShared' or diffRange == 'duplUnique'):
         badIds = np.load('{}Ids.npy'.format(diffRange))
         iMask = np.ones(len(iid2), dtype=bool)
-        diffVals = np.where(np.in1d(iid2[iMask], weirdIds))[0:20]
+        diffVals = np.where(np.in1d(iid2[iMask], badIds))[0][0:20]
         savePath = "lc_particle_paths/{}_ids".format(diffRange)
 
 
@@ -198,7 +198,7 @@ def saveParticlePathData(diffRange='max', plot=True, posDiffOnly=False):
         if(diffRange != 'weird' and diffRange != 'duplUnique'):
             print('Matching to snapshots for idx {} with diff of {}'.format(idx,posDiff[idx]))
         else:
-            print('Matching to snapshots for idx {} with diff of NA'.format(idx,posDiff[idx]))
+            print('Matching to snapshots for idx {} with diff of NA'.format(idx))
         print('Particle ID is {}'.format(iid2[iMask][idx]))
         ix = ix2[iMask][idx]
         iy = iy2[iMask][idx]
@@ -302,7 +302,8 @@ def plotParticlePaths(diffRange = 'max'):
 
     path = '/home/joe/gdrive2/work/HEP/data/hacc/alphaQ/lightcone/lc_particle_paths'
     data = '{}/{}_diff'.format(path, diffRange)
-    if(diffRange == 'weird'): data = '{}/{}_ids'.format(path, diffRange)
+    if(diffRange == 'weird' or diffRange == 'duplUnique' or diffRange == 'duplShared'): 
+        data = '{}/{}_ids'.format(path, diffRange)
     numFiles = len(glob.glob('{}/iid_*'.format(data)))
 
     for i in range(numFiles):
@@ -311,7 +312,7 @@ def plotParticlePaths(diffRange = 'max'):
         iy = np.load('{}/iy_{}.npy'.format(data, i))
         iz = np.load('{}/iz_{}.npy'.format(data, i))
         ia = np.load('{}/ia_{}.npy'.format(data, i))
-        if(diffRange != 'weird'):
+        if(diffRange != 'weird' and diffRange != 'duplUnique'):
             ex = np.load('{}/ex_{}.npy'.format(data, i))
             ey = np.load('{}/ey_{}.npy'.format(data, i))
             ez = np.load('{}/ez_{}.npy'.format(data, i))
