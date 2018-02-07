@@ -141,6 +141,7 @@ def saveParticlePathData(diffRange='max', plot=True, posDiffOnly=False):
     if(posDiffOnly): return
 
     print('matching to specified range ({})'.format(diffRange))
+    duplicateRanges = ['weird', 'duplShared', 'dupl_intrpUnique', 'dupl_extrpUnique']
     if(diffRange == 'max'):
         diffVals = np.argsort(posDiff)[::-1][0:10]
         savePath = "lc_particle_paths/max_diff"
@@ -159,7 +160,7 @@ def saveParticlePathData(diffRange='max', plot=True, posDiffOnly=False):
         posDiff = posDiff[dupMask]
         diffVals = np.argsort(posDiff)[::-1][0:20]
         savePath = "lc_particle_paths/dupl_diff" 
-    if(diffRange == 'weird' or diffRange == 'duplShared' or diffRange == 'duplUnique'):
+    if(diffRange in duplicateRanges):
         badIds = np.load('{}Ids.npy'.format(diffRange))
         iMask = np.ones(len(iid2), dtype=bool)
         diffVals = np.where(np.in1d(iid2[iMask], badIds))[0][0:20]
@@ -195,17 +196,20 @@ def saveParticlePathData(diffRange='max', plot=True, posDiffOnly=False):
     for i in range(len(diffVals)):
 
         idx = diffVals[i]
-        if(diffRange != 'weird' and diffRange != 'duplUnique'):
+        if(diffRange != 'weird' and 'Unique' not in diffRange):
             print('Matching to snapshots for idx {} with diff of {}'.format(idx,posDiff[idx]))
         else:
             print('Matching to snapshots for idx {} with diff of NA'.format(idx))
         print('Particle ID is {}'.format(iid2[iMask][idx]))
-        ix = ix2[iMask][idx]
-        iy = iy2[iMask][idx]
-        iz = iz2[iMask][idx]
-        ia = ia2[iMask][idx]
+        
+        
+        if(diffRange != 'weird' and diffRange != 'dupl_extrapUnique'):
+            ix = ix2[iMask][idx]
+            iy = iy2[iMask][idx]
+            iz = iz2[iMask][idx]
+            ia = ia2[iMask][idx]
        
-        if(diffRange != 'weird' and diffRange != 'duplUnique'):
+        if(diffRange != 'weird' and diffRange != 'dupl_intrpUnique'):
             ex = ex2[eMask][idx]
             ey = ey2[eMask][idx]
             ez = ez2[eMask][idx]
@@ -246,24 +250,29 @@ def saveParticlePathData(diffRange='max', plot=True, posDiffOnly=False):
         truey = np.array([syi0, syi1, syi2, syi3, syi4])
         truez = np.array([szi0, szi1, szi2, szi3, szi4])
         truea = np.array([sai0, sai1, sai2, sai3, sai4])
-        interpolx = np.array([sxi2, ix])
-        interpoly = np.array([syi2, iy])
-        interpolz = np.array([szi2, iz])
-        interpola = np.array([sai2, ia])
-        if(diffRange != 'weird'and diffRange != 'duplUnique'):
+        
+        if(diffRange != 'weird' and diffRange != 'dupl_extrpUnique'):
+            interpolx = np.array([sxi2, ix])
+            interpoly = np.array([syi2, iy])
+            interpolz = np.array([szi2, iz])
+            interpola = np.array([sai2, ia])
+
+        if(diffRange != 'weird' and diffRange != 'dupl_intrpUnique'):
             extrapx = np.array([sxi2, ex])
             extrapy = np.array([syi2, ey])
             extrapz = np.array([szi2, ez])
             extrapa = np.array([sai2, ea])
        
         if(plot == 0):
-            np.save('{}/ix_{}.npy'.format(savePath, i), interpolx)
-            np.save('{}/iy_{}.npy'.format(savePath, i), interpoly)
-            np.save('{}/iz_{}.npy'.format(savePath, i), interpolz)
-            np.save('{}/ia_{}.npy'.format(savePath, i), interpola)
-            np.save('{}/iid_{}.npy'.format(savePath, i), iid2[iMask][idx])
             
-            if(diffRange != 'weird' and diffRange != 'duplUnique'):
+            if(diffRange != 'weird' and diffRange != 'dupl_extrpUnique'):
+                np.save('{}/ix_{}.npy'.format(savePath, i), interpolx)
+                np.save('{}/iy_{}.npy'.format(savePath, i), interpoly)
+                np.save('{}/iz_{}.npy'.format(savePath, i), interpolz)
+                np.save('{}/ia_{}.npy'.format(savePath, i), interpola)
+                np.save('{}/iid_{}.npy'.format(savePath, i), iid2[iMask][idx])
+            
+            if(diffRange != 'weird' and diffRange != 'dupl_intrpUnique'):
                 np.save('{}/ex_{}.npy'.format(savePath, i), extrapx)
                 np.save('{}/ey_{}.npy'.format(savePath, i), extrapy)
                 np.save('{}/ez_{}.npy'.format(savePath, i), extrapz)
@@ -395,7 +404,8 @@ def compareDuplicates():
     path = '/home/joe/gdrive2/work/HEP/data/hacc/alphaQ/lightcone/lc_duplicates'
     idupl = h5.File('{}/dups_interp.hdf5'.format(path), 'r')
     edupl = h5.File('{}/dups_extrap.hdf5'.format(path), 'r')
-    
+    dslc = np.load('lc_intrp_output_tinySample.npz')
+
     print('Duplicate fraction for old output: {}'.format(edupl['repeat_frac'][:][0]))
     print('Duplicate fraction for new output: {}'.format(idupl['repeat_frac'][:][0]))
     
@@ -406,11 +416,13 @@ def compareDuplicates():
     maski = np.in1d(idupl['id'], edupl['id'])
     maske = np.in1d(edupl['id'], idupl['id'])
 
+    axi.plot(dslc['x'], dslc['y'], '.y', ms=1)
+    axe.plot(dslc['x'], dslc['y'], '.y', ms=1)
+    
     axe.plot(edupl['x'], edupl['y'], '.g', ms=1)
     axe.plot(edupl['x'][~maske], edupl['y'][~maske], '+m', mew=1)
     axe.set_xlabel('x (Mpc/h)')
     axe.set_ylabel('y (Mpc/h)')
-    
 
     axi.plot(idupl['x'], idupl['y'], '.b', ms=1)
     axi.plot(idupl['x'][~maski], idupl['y'][~maski], '+r', mew=1)
@@ -423,12 +435,15 @@ def compareDuplicates():
     axi.plot(idupl['x'][distMask], idupl['y'][distMask], 'xk', mew=1)
 
     np.save('weirdIds.npy', idupl['id'][distMask])
-    duplInRange = np.logical_and(~distMask, maski)
-    np.save('duplSharedIds.npy', idupl['id'][duplInRange])
-    np.save('duplUniqueIds.npy', idupl['id'][~duplInRange])
-
     
+    dupl_intrpUnique = np.logical_and(~distMask, maski)
+    
+    np.save('duplSharedIds.npy', idupl['id'][maski])
+    np.save('dupl_intrpUniqueIds.npy', idupl['id'][~dupl_intrpUnique])
+    np.save('dupl_extrpUniqueIds.npy', edupl['id'][~maske])
+ 
     plt.show()
+
 
 def downsampleOutput():
     
@@ -452,7 +467,7 @@ def downsampleOutput():
     irot = gio.gio_read("{}/lc_intrp_output_d.442".format(ipath), 'rotation')
     
     idx = np.linspace(0, len(iid)-1, len(iid), dtype=int)
-    randIdx = np.random.choice(idx, size=10000, replace=False)
+    randIdx = np.random.choice(idx, size=100000, replace=False)
 
     ds_iid = iid[randIdx]
     ds_ix = ix[randIdx]
