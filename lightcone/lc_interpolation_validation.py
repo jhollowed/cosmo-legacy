@@ -310,22 +310,26 @@ def plotParticlePaths(diffRange = 'max'):
     config(cmap=plt.cm.cool)
 
     path = '/home/joe/gdrive2/work/HEP/data/hacc/alphaQ/lightcone/lc_particle_paths'
+    duplicateRanges = ['weird', 'duplShared', 'dupl_intrpUnique', 'dupl_extrpUnique']
     data = '{}/{}_diff'.format(path, diffRange)
-    if(diffRange == 'weird' or diffRange == 'duplUnique' or diffRange == 'duplShared'): 
+    if(diffRange in duplicateRanges): 
         data = '{}/{}_ids'.format(path, diffRange)
-    numFiles = len(glob.glob('{}/iid_*'.format(data)))
+    numFiles = len(glob.glob('{}/truex_*'.format(data)))
 
     for i in range(numFiles):
 
-        ix = np.load('{}/ix_{}.npy'.format(data, i))
-        iy = np.load('{}/iy_{}.npy'.format(data, i))
-        iz = np.load('{}/iz_{}.npy'.format(data, i))
-        ia = np.load('{}/ia_{}.npy'.format(data, i))
-        if(diffRange != 'weird' and diffRange != 'duplUnique'):
+        if(diffRange != 'weird' and diffRange != 'dupl_extrpUnique'):
+            ix = np.load('{}/ix_{}.npy'.format(data, i))
+            iy = np.load('{}/iy_{}.npy'.format(data, i))
+            iz = np.load('{}/iz_{}.npy'.format(data, i))
+            ia = np.load('{}/ia_{}.npy'.format(data, i))
+        
+        if(diffRange != 'weird' and diffRange != 'dupl_intrpUnique'):
             ex = np.load('{}/ex_{}.npy'.format(data, i))
             ey = np.load('{}/ey_{}.npy'.format(data, i))
             ez = np.load('{}/ez_{}.npy'.format(data, i))
             ea = np.load('{}/ea_{}.npy'.format(data, i))
+        
         truex = np.load('{}/truex_{}.npy'.format(data, i))
         truey = np.load('{}/truey_{}.npy'.format(data, i))
         truez = np.load('{}/truez_{}.npy'.format(data, i))
@@ -335,11 +339,17 @@ def plotParticlePaths(diffRange = 'max'):
         x = np.random.randn(10)
         y = np.random.randn(10)
         z = np.random.randn(10)
+        
         ax.plot(truex, truey, truez, '--k.')
-        if(diffRange != 'weird' and diffRange != 'duplUnique'): 
+        
+        if(diffRange != 'weird' and diffRange != 'dupl_intrpUnique'):
             ax.plot(ex, ey, ez, '-o', lw=2)
+        
         ax.plot([truex[0]], [truey[0]], [truez[0]], '*', ms=10)
-        ax.plot(ix, iy, iz, '-o', lw=2)
+        
+        if(diffRange != 'weird' and diffRange != 'dupl_extrpUnique'):
+            ax.plot(ix, iy, iz, '-o', lw=2)
+        
         ax.set_xlabel(r'$x\>\>\mathrm{(Mpc/h)}$', fontsize=12, labelpad=12)
         ax.set_ylabel(r'$y\>\>\mathrm{(Mpc/h)}$', fontsize=12, labelpad=12)
         ax.set_zlabel(r'$z\>\>\mathrm{(Mpc/h)}$', fontsize=12, labelpad=12)
@@ -359,10 +369,15 @@ def plotParticlePaths(diffRange = 'max'):
         
         ax_xa = plt.subplot2grid((3,3), (2,0), colspan=2)
         ax_xa.plot(truex, (1/truea)-1, '--k.')
-        if(diffRange != 'weird' and diffRange != 'duplUnique'): 
+        
+        if(diffRange != 'weird' and diffRange != 'dupl_intrpUnique'):
             ax_xa.plot(ex, (1/ea)-1, '-o', lw=2)
+        
         ax_xa.plot(truex[0], (1/truea[0])-1, '*', ms=10)
-        ax_xa.plot(ix, (1/ia)-1, '-o', lw=2)
+        
+        if(diffRange != 'weird' and diffRange != 'dupl_extrpUnique'):
+            ax_xa.plot(ix, (1/ia)-1, '-o', lw=2)
+        
         ax_xa.set_xlabel(r'$x\>\>\mathrm{(Mpc/h)}$', fontsize=14, labelpad=6)
         ax_xa.set_ylabel(r'$\mathrm{redshift}$', fontsize=14, labelpad=6)
         ax_xa.set_yticks((1/truea)-1)
@@ -375,10 +390,15 @@ def plotParticlePaths(diffRange = 'max'):
 
         ax_za = plt.subplot2grid((3,3), (0,2), rowspan=2)
         ax_za.plot((1/truea)-1, truez, '--k.', label='true path')
-        if(diffRange != 'weird' and diffRange != 'duplUnique'):
+        
+        if(diffRange != 'weird' and diffRange != 'dupl_intrpUnique'):
             ax_za.plot((1/ea)-1, ez, '-o', lw=2, label = 'extrapolation')
+        
         ax_za.plot((1/truea[0])-1, truez[0], '*', ms=10, label='starting position')
-        ax_za.plot((1/ia)-1, iz, '-o', lw=2, label='interpolation')
+        
+        if(diffRange != 'weird' and diffRange != 'dupl_extrpUnique'):
+            ax_za.plot((1/ia)-1, iz, '-o', lw=2, label='interpolation')
+        
         ax_za.set_ylabel(r'$z\>\>\mathrm{(Mpc/h)}$', fontsize=14, labelpad=6)
         ax_za.set_xlabel(r'$\mathrm{redshift}$', fontsize=14, labelpad=6)
         ax_za.set_xticks(1/(truea)-1)
