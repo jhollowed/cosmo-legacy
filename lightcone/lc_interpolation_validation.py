@@ -318,11 +318,12 @@ def plotParticlePaths(diffRange = 'max'):
 
     for i in range(numFiles):
 
-        if(diffRange != 'weird' and diffRange != 'dupl_extrpUnique'):
+        if(diffRange != 'dupl_extrpUnique'):
             ix = np.load('{}/ix_{}.npy'.format(data, i))
             iy = np.load('{}/iy_{}.npy'.format(data, i))
             iz = np.load('{}/iz_{}.npy'.format(data, i))
             ia = np.load('{}/ia_{}.npy'.format(data, i))
+            iid = np.load('{}/iid_{}.npy'.format(data, i))
         
         if(diffRange != 'weird' and diffRange != 'dupl_intrpUnique'):
             ex = np.load('{}/ex_{}.npy'.format(data, i))
@@ -347,8 +348,9 @@ def plotParticlePaths(diffRange = 'max'):
         
         ax.plot([truex[0]], [truey[0]], [truez[0]], '*', ms=10)
         
-        if(diffRange != 'weird' and diffRange != 'dupl_extrpUnique'):
+        if(diffRange != 'dupl_extrpUnique'):
             ax.plot(ix, iy, iz, '-o', lw=2)
+            plt.title(r'$\mathrm{{ ID }}\>\>{}$'.format(iid), y=1.08, fontsize=18)
         
         ax.set_xlabel(r'$x\>\>\mathrm{(Mpc/h)}$', fontsize=12, labelpad=12)
         ax.set_ylabel(r'$y\>\>\mathrm{(Mpc/h)}$', fontsize=12, labelpad=12)
@@ -375,7 +377,7 @@ def plotParticlePaths(diffRange = 'max'):
         
         ax_xa.plot(truex[0], (1/truea[0])-1, '*', ms=10)
         
-        if(diffRange != 'weird' and diffRange != 'dupl_extrpUnique'):
+        if(diffRange != 'dupl_extrpUnique'):
             ax_xa.plot(ix, (1/ia)-1, '-o', lw=2)
         
         ax_xa.set_xlabel(r'$x\>\>\mathrm{(Mpc/h)}$', fontsize=14, labelpad=6)
@@ -396,7 +398,7 @@ def plotParticlePaths(diffRange = 'max'):
         
         ax_za.plot((1/truea[0])-1, truez[0], '*', ms=10, label='starting position')
         
-        if(diffRange != 'weird' and diffRange != 'dupl_extrpUnique'):
+        if(diffRange != 'dupl_extrpUnique'):
             ax_za.plot((1/ia)-1, iz, '-o', lw=2, label='interpolation')
         
         ax_za.set_ylabel(r'$z\>\>\mathrm{(Mpc/h)}$', fontsize=14, labelpad=6)
