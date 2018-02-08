@@ -455,13 +455,13 @@ def compareDuplicates():
     print(np.sum(distMask))
 
     axi.plot(idupl['x'][distMask], idupl['y'][distMask], 'xk', mew=1)
-
+    
     np.save('weirdIds.npy', idupl['id'][distMask])
     
     dupl_intrpUnique = np.logical_and(~distMask, maski)
     
     np.save('duplSharedIds.npy', idupl['id'][maski])
-    np.save('dupl_intrpUniqueIds.npy', idupl['id'][~dupl_intrpUnique])
+    np.save('dupl_intrpUniqueIds.npy', idupl['id'][dupl_intrpUnique])
     np.save('dupl_extrpUniqueIds.npy', edupl['id'][~maske])
  
     plt.show()
