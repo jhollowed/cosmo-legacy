@@ -428,8 +428,8 @@ def compareDuplicates():
     edupl = h5.File('{}/dups_extrap.hdf5'.format(path), 'r')
     dslc = np.load('lc_intrp_output_tinySample.npz')
 
-    print('Duplicate fraction for old output: {}'.format(edupl['repeat_frac'][:][0]))
-    print('Duplicate fraction for new output: {}'.format(idupl['repeat_frac'][:][0]))
+    print('Duplicate fraction for old output: {}'.format(edupl['repeat_frac'][:]))
+    print('Duplicate fraction for new output: {}'.format(idupl['repeat_frac'][:]))
     
     f = plt.figure(0)
     axe = f.add_subplot(121)
@@ -500,3 +500,57 @@ def downsampleOutput():
     np.savez('lc_intrp_output_tinySample.npz', id=ds_iid, x=ds_ix, y=ds_iy, 
                                                z=ds_iz,rot=ds_irot)
     return;
+
+def findDuplicates(lc_type = 'i'):
+
+    from dtk import sort
+    from dtk import gio
+
+    print('reading data')
+    if(lc_type == 'i'):
+        path1="/home/jphollowed/data/hacc/alphaQ/lightcone/downsampled_particle_intrp_lc/step442"
+        path2="/home/jphollowed/data/hacc/alphaQ/lightcone/downsampled_particle_intrp_lc/step432"
+        file1 = "{}/lc_intrp_output_d.442".format(path1)
+        file2 = "{}/lc_intrp_output_d.432".format(path2)
+        outfile = h5.File('dups_interp.hdf5', 'w')
+    if(lc_type == 'e'):
+        path1="/home/jphollowed/data/hacc/alphaQ/lightcone/downsampled_particle_extrp_lc/step442"
+        path2="/home/jphollowed/data/hacc/alphaQ/lightcone/downsampled_particle_extrp_lc/step432"
+        file1 = "{}/lc_output_d.442".format(path1)
+        file2 = "{}/lc_output_d.432".format(path2)
+        outfile = h5.File('dups_extrap.hdf5', 'w')
+
+
+    ids1 = gio.gio_read(file1, 'id')
+    ids2 = gio.gio_read(file1, 'id')
+    
+    print('matching')
+    matches = sort.search_sorted(ids1, ids2)
+
+    matchesMask2 = matches != -1
+    matchesMask1 = matches[matchesMask2]
+
+    print('found {} duplicates'.format(np.sum(matchesMask2)))
+
+    dup_ids1 = ids1[matchesMask1]
+    x1 = gio.gio_read(file1, 'x')
+    y1 = gio.gio_read(file1, 'y')
+    z1 = gio.gio_read(file1, 'z')
+    
+    dup_ids2 = ids2[matchesMask2]
+    x2 = gio.gio_read(file2, 'x')
+    y2 = gio.gio_read(file2, 'y')
+    z2 = gio.gio_read(file2, 'z')
+
+    repeat_frac = float(len(dup_ids2)) / len(ids2) 
+    print('repeat fraction is {}'.format(repeat_frac))
+
+    print('writing out')
+    outfile.create_dataset('repeat_frac', data=repeat_frac)
+    outfile.create_dataset('id', data = np.hstack([dup_ids2, dup_ids1]))
+    outfile.create_dataset('x', data = np.hstack([x2, x1]))
+    outfile.create_dataset('y', data = np.hstack([y2, y1]))
+    outfile.create_dataset('z', data = np.hstack([z2, z1]))
+    
+
+    
