@@ -441,6 +441,7 @@ def compareDuplicates():
     #axi.plot(dslc['x'], dslc['y'], '.y', ms=1)
     #axe.plot(dslc['x'], dslc['y'], '.y', ms=1)
     
+    pdb.set_trace()
     axe.plot(edupl['x'], edupl['y'], '.g', ms=1)
     axe.plot(edupl['x'][~maske], edupl['y'][~maske], '+m', mew=1)
     axe.set_xlabel('x (Mpc/h)')
@@ -533,14 +534,14 @@ def findDuplicates(lc_type = 'i'):
     print('found {} duplicates'.format(np.sum(matchesMask2)))
 
     dup_ids1 = ids1[matchesMask1]
-    x1 = gio.gio_read(file1, 'x')
-    y1 = gio.gio_read(file1, 'y')
-    z1 = gio.gio_read(file1, 'z')
+    x1 = gio.gio_read(file1, 'x')[matchesMask1]
+    y1 = gio.gio_read(file1, 'y')[matchesMask1]
+    z1 = gio.gio_read(file1, 'z')[matchesMAsk1]
     
     dup_ids2 = ids2[matchesMask2]
-    x2 = gio.gio_read(file2, 'x')
-    y2 = gio.gio_read(file2, 'y')
-    z2 = gio.gio_read(file2, 'z')
+    x2 = gio.gio_read(file2, 'x')[matchesMask2]
+    y2 = gio.gio_read(file2, 'y')[matchesMask2]
+    z2 = gio.gio_read(file2, 'z')[matchesMask2]
 
     repeat_frac = float(len(dup_ids2)) / len(ids2) 
     print('repeat fraction is {}'.format(repeat_frac))
