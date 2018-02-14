@@ -523,7 +523,7 @@ def findDuplicates(lc_type = 'i'):
 
 
     ids1 = gio.gio_read(file1, 'id')
-    ids2 = gio.gio_read(file1, 'id')
+    ids2 = gio.gio_read(file2, 'id')
     
     print('matching')
     matches = sort.search_sorted(ids1, ids2)
@@ -536,7 +536,7 @@ def findDuplicates(lc_type = 'i'):
     dup_ids1 = ids1[matchesMask1]
     x1 = gio.gio_read(file1, 'x')[matchesMask1]
     y1 = gio.gio_read(file1, 'y')[matchesMask1]
-    z1 = gio.gio_read(file1, 'z')[matchesMAsk1]
+    z1 = gio.gio_read(file1, 'z')[matchesMask1]
     
     dup_ids2 = ids2[matchesMask2]
     x2 = gio.gio_read(file2, 'x')[matchesMask2]
