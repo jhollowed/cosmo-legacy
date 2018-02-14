@@ -438,8 +438,8 @@ def compareDuplicates():
     maski = np.in1d(idupl['id'], edupl['id'])
     maske = np.in1d(edupl['id'], idupl['id'])
 
-    axi.plot(dslc['x'], dslc['y'], '.y', ms=1)
-    axe.plot(dslc['x'], dslc['y'], '.y', ms=1)
+    #axi.plot(dslc['x'], dslc['y'], '.y', ms=1)
+    #axe.plot(dslc['x'], dslc['y'], '.y', ms=1)
     
     axe.plot(edupl['x'], edupl['y'], '.g', ms=1)
     axe.plot(edupl['x'][~maske], edupl['y'][~maske], '+m', mew=1)
@@ -458,7 +458,7 @@ def compareDuplicates():
     
     np.save('weirdIds.npy', idupl['id'][distMask])
     
-    dupl_intrpUnique = np.logical_and(~distMask, maski)
+    dupl_intrpUnique = np.logical_and(~distMask, ~maski)
     
     np.save('duplSharedIds.npy', idupl['id'][maski])
     np.save('dupl_intrpUniqueIds.npy', idupl['id'][dupl_intrpUnique])
