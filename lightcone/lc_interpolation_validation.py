@@ -428,8 +428,8 @@ def compareDuplicates():
     edupl = h5.File('{}/dups_extrap.hdf5'.format(path), 'r')
     dslc = np.load('lc_intrp_output_tinySample.npz')
 
-    print('Duplicate fraction for old output: {}'.format(edupl['repeat_frac'][:]))
-    print('Duplicate fraction for new output: {}'.format(idupl['repeat_frac'][:]))
+    print('Duplicate fraction for old output: {}'.format(edupl['repeat_frac'][:][0]))
+    print('Duplicate fraction for new output: {}'.format(idupl['repeat_frac'][:][0]))
     
     f = plt.figure(0)
     axe = f.add_subplot(121)
@@ -546,7 +546,7 @@ def findDuplicates(lc_type = 'i'):
     print('repeat fraction is {}'.format(repeat_frac))
 
     print('writing out')
-    outfile.create_dataset('repeat_frac', data=repeat_frac)
+    outfile.create_dataset('repeat_frac', data=np.array([repeat_frac]))
     outfile.create_dataset('id', data = np.hstack([dup_ids2, dup_ids1]))
     outfile.create_dataset('x', data = np.hstack([x2, x1]))
     outfile.create_dataset('y', data = np.hstack([y2, y1]))
