@@ -23,7 +23,7 @@ def config(cmap):
     plt.rcParams["axes.prop_cycle"] = c
     
 
-def saveParticlePathData(diffRange='max', plot=True, posDiffOnly=False):
+def saveParticlePathData(diffRange='max', plot=True, posDiffOnly=False, dt_type='linear'):
     '''
     This function loads particle from the lightcone output, and inspects the 
     difference in position resulting from the extrapolation and interpolation
@@ -44,8 +44,8 @@ def saveParticlePathData(diffRange='max', plot=True, posDiffOnly=False):
     
     config(cmap=plt.cm.plasma)
 
-    epath="/home/jphollowed/data/hacc/alphaQ/lightcone/downsampled_particle_extrp_lc/step442"
-    ipath="/home/jphollowed/data/hacc/alphaQ/lightcone/downsampled_particle_intrp_lc/step442"
+    epath="/home/jphollowed/data/hacc/alphaQ/lightcone/downsampled_particle_extrp_lc/step442_{}".format(dt_type)
+    ipath="/home/jphollowed/data/hacc/alphaQ/lightcone/downsampled_particle_intrp_lc/step442_{}".format(dt_type)
     spath="/home/jphollowed/data/hacc/alphaQ/particles/downsampled_particles"
    
     coord = 'x'
@@ -421,11 +421,11 @@ def plotParticlePaths(diffRange = 'max'):
 
 
 
-def compareDuplicates():
+def compareDuplicates(dt_type = 'linear'):
 
     path = '/home/joe/gdrive2/work/HEP/data/hacc/alphaQ/lightcone/lc_duplicates'
-    idupl = h5.File('{}/dups_interp.hdf5'.format(path), 'r')
-    edupl = h5.File('{}/dups_extrap.hdf5'.format(path), 'r')
+    idupl = h5.File('{}/dups_interp_{}.hdf5'.format(path, dt_type), 'r')
+    edupl = h5.File('{}/dups_extrap_{}.hdf5'.format(path, dt_type), 'r')
     dslc = np.load('lc_intrp_output_tinySample.npz')
 
     print('Duplicate fraction for old output: {}'.format(edupl['repeat_frac'][:][0]))
@@ -502,24 +502,28 @@ def downsampleOutput():
                                                z=ds_iz,rot=ds_irot)
     return;
 
-def findDuplicates(lc_type = 'i'):
+def findDuplicates(lc_type = 'i', dt_type='nonlin'):
 
     from dtk import sort
     from dtk import gio
 
     print('reading data')
     if(lc_type == 'i'):
-        path1="/home/jphollowed/data/hacc/alphaQ/lightcone/downsampled_particle_intrp_lc/step442"
-        path2="/home/jphollowed/data/hacc/alphaQ/lightcone/downsampled_particle_intrp_lc/step432"
+        path1="/home/jphollowed/data/hacc/alphaQ/lightcone/"\
+              "downsampled_particle_intrp_lc/step442_{}".format(dt_type)
+        path2="/home/jphollowed/data/hacc/alphaQ/lightcone/"\
+              "downsampled_particle_intrp_lc/step432_{}".format(dt_type)
         file1 = "{}/lc_intrp_output_d.442".format(path1)
         file2 = "{}/lc_intrp_output_d.432".format(path2)
-        outfile = h5.File('dups_interp.hdf5', 'w')
+        outfile = h5.File('dups_interp_{}.hdf5'.format(dt_type), 'w')
     if(lc_type == 'e'):
-        path1="/home/jphollowed/data/hacc/alphaQ/lightcone/downsampled_particle_extrp_lc/step442"
-        path2="/home/jphollowed/data/hacc/alphaQ/lightcone/downsampled_particle_extrp_lc/step432"
+        path1="/home/jphollowed/data/hacc/alphaQ/lightcone/"\
+              "downsampled_particle_extrp_lc/step442_{}".format(dt_type)
+        path2="/home/jphollowed/data/hacc/alphaQ/lightcone/"\
+              "downsampled_particle_extrp_lc/step432_{}".format(dt_type)
         file1 = "{}/lc_output_d.442".format(path1)
         file2 = "{}/lc_output_d.432".format(path2)
-        outfile = h5.File('dups_extrap.hdf5', 'w')
+        outfile = h5.File('dups_extrap_{}.hdf5'.format(dt_type), 'w')
 
 
     ids1 = gio.gio_read(file1, 'id')
