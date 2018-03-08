@@ -438,6 +438,8 @@ def compareDuplicates(dt_type = 'linear'):
     axe.set_title('Extrapolation\nDuplicate fraction: {:.2f}'.format(edupl['repeat_frac'][:][0]))
     axi.set_title('Interpolation\nDuplicate fraction: {:.2E}'.format(idupl['repeat_frac'][:][0]))
 
+    pdb.set_trace()
+
     maski = np.in1d(idupl['id'], edupl['id'])
     maske = np.in1d(edupl['id'], idupl['id'])
     maske_nokeep = np.random.choice(np.where(~maske)[0], int(len(np.where(~maske)[0])*0.9), replace=False)
@@ -569,4 +571,23 @@ def findDuplicates(lc_type = 'i', dt_type='nonlin'):
     outfile.create_dataset('z', data = np.hstack([z2, z1]))
     
 
+def plotPk():
+
+    pkPath = '/home/joe/gdrive2/work/HEP/data/hacc/alphaQ/lightcone/lc_pk'
+    extrp = np.fromfile('{}/cl_ext.bin'.format(pkPath), '>f')
+    intrp = np.fromfile('{}/cl_lin.bin'.format(pkPath), '>f')
+    thry = np.fromfile('{}/theory.bin'.format(pkPath), '>f')
+    l_intrp = np.linspace(0, 2500, len(intrp))
+    l_extrp = np.linspace(0, 2500, len(extrp))
+    l_thry = np.linspace(0, 2500, len(thry))
+
+    config(cmap=plt.cm.cool)
     
+    f = plt.figure()
+    ax = f.add_subplot(111)
+    
+    ax.plot(l_intrp, intrp, '.')
+    ax.plot(l_extrp, extrp, '.')
+    #ax.plot(l_thry, thry)
+    #ax.set_yscale('log')
+    plt.show()
