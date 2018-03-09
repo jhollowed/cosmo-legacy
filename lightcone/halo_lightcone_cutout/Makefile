@@ -3,8 +3,8 @@ CPPFLAGS := -O3
 SRCDIR := ./src
 OBJDIR := ./obj
 OBJECTS := $(OBJDIR)/main.o
-TRUNK_LOC := /home/hollowed/repos/hacc/trunk/cooley
-INCLUDES := -I $(SRCDIR) -I /home/hollowed/repos/hacc/trunk/genericio
+TRUNK_LOC := /home/hollowed/repos/lc_interpolation/mira
+INCLUDES := -I $(SRCDIR) -I /home/hollowed/repos/lc_interpolation/genericio
 LIBS := $(TRUNK_LOC)/mpi/lib/libGenericIOMPI.a
 
 #linking

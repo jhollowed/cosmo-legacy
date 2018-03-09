@@ -18,13 +18,9 @@
 
 // Generic IO
 #include "GenericIO.h"
-//#include "GenericIOPosixReader.h"
 
 // Cosmotools
 #define REAL double
-/************* LENSING HEADERS ***************/
-//#include "mycosmology.h"
-//#include "lensing_funcs.h"
 
 #define PI 3.14159265
 #define ARCSEC 3600.0
@@ -46,23 +42,17 @@ struct Buffers {
   vector<float> phi;
 };
 
-
-
-// LC fields
-//x     y       z       vx      vy      vz      phi     id      a       mask    mass    step
-
 int getdir (string dir, vector<string> &files) {
   DIR *dp;
   struct dirent *dirp;
   if((dp  = opendir(dir.c_str())) == NULL) {
-    cout << "Error(" << errno << ") opening " << dir << endl;
+    cout << "Error(" << errno << ") opening data files" << dir << endl;
     return errno;
   }
-
   while ((dirp = readdir(dp)) != NULL) {
-    if (string(dirp->d_name).find("lc_output")!=string::npos) {
-      files.push_back(string(dirp->d_name));
-    }
+    files.push_back(string(dirp->d_name));
+    //if (string(dirp->d_name).find("lc_output")!=string::npos) {
+    //#}
   }
   closedir(dp);
   return 0;
@@ -78,14 +68,15 @@ void processLC(string dir_name, string out_dir, vector<string> step_strings) {
 
   cout << "Reading directory:" << dir_name << endl;
   vector<string> files;
-  getdir(dir_name,files);
+  getdir(dir_name, files);
+  for (std::vector<char>::const_iterator i = files.begin(); i != files.end(); ++i)
+       std::cout << *i << ' '; 
 
   size_t max_size = 0;
   for (int i=0; i<step_strings.size();++i){
       ostringstream file_name;
       std::cout<<step_strings[i]<<std::endl;
-      //      file_name << dir_name << "/lc_output." << step_strings[i];
-      file_name << dir_name << "/lc" << step_strings[i]<<"/glc";
+      file_name << dir_name << "/lc" << step_strings[i] << "/";
 
       cout << "Opening file:" << file_name.str() << endl;
       // GenericIOPosixReader *reader = new GenericIOPosixReader();
@@ -218,11 +209,11 @@ void processLC(string dir_name, string out_dir, vector<string> step_strings) {
 
 int main( int argc, char** argv ) {
 
-  // This code generates a cutout from a large lightcone run by finding all
+  // This code generates a cutout from a larger lightcone run by finding all
   // particles/objects residing within a volume defined by theta and phi bounds 
   // in spherical coordaintes, centered on the "observer" (at the origin, by default)
   //
-  // Three mandatory input arguments are required:
+  // Three input arguments are required:
   // - path to the input lightcone
   // - output path
   // - steps to use 
@@ -233,7 +224,7 @@ int main( int argc, char** argv ) {
   MPI_Init(&argc, &argv);
 
   char cart[3] = {'x', 'y', 'z'};
-  string input_lc_dir,out_dir;
+  string input_lc_dir, out_dir;
   input_lc_dir = string(argv[1]);
   out_dir = string(argv[2]);
   vector<string> step_strings;
@@ -263,7 +254,7 @@ int main( int argc, char** argv ) {
   // set defaults
   float theta_cut[2] = {85.0*ARCSEC, 90.0*ARCSEC};
   float phi_cut[2]   = {0.0,         5.0 *ARCSEC};
-  double haloPos[3];
+  float haloPos[3];
   float boxLength;
 
   // check that supplied arguments are valid
@@ -288,27 +279,32 @@ int main( int argc, char** argv ) {
                                     "that -h and -b arguments are passed");
   }
 
-  // search argument vector for options, update default parameters if found 
+  // search argument vector for options, update default parameters if found
+  // Note to future self: strcmp() returns 0 if the input strings are equal. See docs
+  // for more info
   for(int i=lastStep_idx; i<argc; ++i){
 
     if(strcmp(argv[i],"-t")==0 || strcmp(argv[i],"--theta")==0){
-	theta_cut[0] = std::strtof(argv[++i], NULL) * ARCSEC;
-	theta_cut[1] = std::strtof(argv[++i], NULL) * ARCSEC;
+      float theta_center = std::strtof(argv[++i], NULL) * ARCSEC;
+      float dtheta = std::strtof(argv[++i], NULL) * ARCSEC;
+	  theta_cut[0] = theta_center - dtheta;
+	  theta_cut[1] = theta_center + dtheta;
     }
     else if(strcmp(argv[i],"-p")==0 || strcmp(argv[i],"--phi")==0){
-	phi_cut[0] = std::strtof(argv[++i], NULL) * ARCSEC;
-	phi_cut[1] = std::strtof(argv[++i], NULL) * ARCSEC;
+	  float phi_center = std::strtof(argv[++i], NULL) * ARCSEC;
+	  float dphi  = std::strtof(argv[++i], NULL) * ARCSEC;
+      phi_cut[0] = phi_center - dphi;
+      phi_cut[1] = phi_center + dphi;
     }
     else if(strcmp(argv[i],"-h")==0 || strcmp(argv[i],"--halo")==0){
-	customHalo = 1;
-	haloPos[0] = std::strtof(argv[++i], NULL);
-	haloPos[1] = std::strtof(argv[++i], NULL);
-	haloPos[2] = std::strtof(argv[++i], NULL);	
+	  haloPos[0] = std::strtof(argv[++i], NULL);
+	  haloPos[1] = std::strtof(argv[++i], NULL);
+	  haloPos[2] = std::strtof(argv[++i], NULL);	
     }
     else if (strcmp(argv[i],"-b")==0 || strcmp(argv[i],"--boxLength")==0){
-	customBox = 1;
-	boxLength = std::strtof(argv[++i], NULL);
+	  boxLength = std::strtof(argv[++i], NULL);
     }
+
   }
 
   if(customHalo){
