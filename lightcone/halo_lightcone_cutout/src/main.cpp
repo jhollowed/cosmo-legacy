@@ -29,6 +29,8 @@
 using namespace std;
 using namespace gio;
 
+//////////////////////////////////////////////////////
+
 struct Buffers {
     vector<float> x;
     vector<float> y;
@@ -42,6 +44,12 @@ struct Buffers {
     vector<float> theta;
     vector<float> phi;
 };
+
+//////////////////////////////////////////////////////
+//
+//	 	   Helper Functions
+//
+//////////////////////////////////////////////////////
 
 int getdir (string dir, vector<string> &files) {
     DIR *dp;
@@ -59,68 +67,110 @@ int getdir (string dir, vector<string> &files) {
     return 0;
 }
 
+
 float redshift(float a) {
     return 1.0f/a-1.0f;
 }
 
-vector<float> cross(const vector<float> & v1, 
-                    const vector<float> & v2){
-    // This function returns the cross product of the vectors v1 and v2
+
+float zToStep(float z, int totSteps=499, float maxZ=200.0){
+    // Function to convert a redshift to a step number, rounding 
+	// toward a = 0.
+    // Note-- the initial conditions are not a step! totSteps 
+    // should be the maximum snapshot number
+
+    float amin = 1/(maxZ + 1);
+    float amax = 1.0;
+    float adiff = (amax-amin)/(totSteps-1);
     
-    auto n = v1.size();
-    auto n2 = v2.size();
-    assert(("vectors v1 and v2 must have the same length", n == n2));
-
-    vector<float> vv(3);
-    vv[0] = v1[1]*v2[2] - v1[2]*v2[1];
-    vv[1] = -(v1[0]*v2[2] - v1[2]*v2[0]);
-    vv[2] = v1[0]*v2[1] - v1[1]*v2[0];
-    return vv;
-
+    float a = 1/(1+z);
+    cout << adiff << endl;
+    int step = floor((a-amin) / adiff);
+    return step;
 }
 
-void rotate(const vector<float> & a, 
-            const vector<float> & b, 
-            const float B, 
-            const vector<float> & v_vec, 
-            vector<float> & v_rot){ 
-    // This function implements the Rodrigues rotation formula. a and
-    // b are two vectors defining the plane of rotation, and thus allow
-    // calculating the axis of rotation k. B is the angle of rotation, and
-    // v_vec is a cartesian position vector to be rotated an angle B about k.
-    // The rotated vector is stored in the vector v_rot passed by the user.
+//////////////////////////////////////////////////////
+//
+//	       Coord Rotation functions
+//
+//////////////////////////////////////////////////////
 
-    // MOVE CALCULATION OF K TO NEW FUNCTION
+void cross(const vector<float> & v1, 
+           const vector<float> & v2,
+		   vector<float> & v1xv2){
+    // This function returns the cross product of the three dimensional
+    // vectors v1 and v2, and writes the result at the location referenced 
+    // by arg v1xv2.
+    
+    int n1 = v1.size();
+    int n2 = v2.size();
+    assert(("vectors v1 and v2 must have the same length", n1 == n2));
+
+    v1xv2[0] = v1[1]*v2[2] - v1[2]*v2[1];
+    v1xv2[1] = -(v1[0]*v2[2] - v1[2]*v2[0]);
+    v1xv2[2] = v1[0]*v2[1] - v1[1]*v2[0];
+}
+
+
+void normCross(const vector<float> & a,
+	       const vector<float> & b,
+	       vector<float> & k){
+    // This function returns the normalized cross product of the three-dimensional
+    // vectors a and b. The result is written at the location referenced by arg k
+    // The notation is chosen to match that of the Rodrigues rotation formula for 
+    // the rotation vector k, rather than matching the notation of cross() above. 
+    // Feel free to contact me with urgency if you find this issue troublesome.
 
     int na = a.size();
     int nb = b.size();
-    int nv = v_vec.size();
-    assert(("vectors a, b, and v must have the same length", na==nb && na==nv));
-    
-    // find k
-    vector<float> axb = cross(a, b);
+    assert(("vectors a and b must have the same length", na==nb));
+
+    vector<float> axb(3); 
+    cross(a, b, axb);
     float mag_axb = sqrt(std::inner_product(axb.begin(), axb.end(), axb.begin(), 0.0));
-    vector<float> k_vec(3);
-    for(int i=0; i<na; ++i){ k_vec[i] = axb[i] / mag_axb; }
+    for(int i=0; i<na; ++i){ k[i] = axb[i] / mag_axb; }
+}
+
+
+void rotate(const vector<float> & k_vec,
+	        const float B, 
+            const vector<float> & v_vec, 
+            vector<float> & v_rot){ 
+    // This function implements the Rodrigues rotation formula. k is the axis
+    // of rotation, whch can be returned from normCross(), B is the angle of 
+    // rotation, and v_vec is a cartesian position vector to be rotated an 
+    // angle B about k. The rotated vector is written at the location referenced
+    // by arg v_rot. See the docstrings under main() for more info.
+
+    int nk = k_vec.size();
+    int nv = v_vec.size();
+    assert(("vectors k and v must have the same length", nk==nv));
+    
     
     // find (k ⨯ v) and (k·v)
-    vector<float> kxv_vec = cross(k_vec, v_vec);
+    vector<float> kxv_vec(3);
+    cross(k_vec, v_vec, kxv_vec);
     float kdv = std::inner_product(k_vec.begin(), k_vec.end(), v_vec.begin(), 0.0);
     
-    // do rotation
-    float v, k, k_x_v;
-    for(int i=0; i<na; ++i){
+    // do rotation per-dimension
+    float v;
+	float k, k_x_v;
+    for(int i=0; i<nk; ++i){
         v = v_vec[i];
         k = k_vec[i];
         k_x_v = kxv_vec[i];
 
         v_rot[i] = v*cos(B) + (k_x_v)*sin(B) + k*kdv*(1-cos(B));
-    }
-      
+    } 
 }
 
+//////////////////////////////////////////////////////
+//
+//	           Cutout function
+//
+//////////////////////////////////////////////////////
 
-void processLC(string dir_name, string out_dir, vector<string> step_strings) {
+void processLC(string dir_name, string out_dir, vector<string> step_strings, ) {
 
     Buffers b;
 
@@ -263,6 +313,11 @@ void processLC(string dir_name, string out_dir, vector<string> step_strings) {
     }
 }
 
+//////////////////////////////////////////////////////
+//
+//	          driver function
+//
+//////////////////////////////////////////////////////
 
 int main( int argc, char** argv ) {
 
@@ -356,8 +411,11 @@ int main( int argc, char** argv ) {
     cout << input_lc_dir << endl;
      
     // build step_strings vector out of all command line arguments after the input
-    // and output file paths, until end of argv, or another input option is found (next 
-    // element of argv cannot be interpreted as an int). 
+    // and output file paths, until end of argv, or another input option is found 
+    // (next element of argv cannot be interpreted as an int).
+	float maxZ = argv[3];
+	int minStep = zToStep(maxZ);	
+
     char* p;
     bool isInt;
     int lastStep_idx;
@@ -391,9 +449,9 @@ int main( int argc, char** argv ) {
     bool customBox = int((find(args.begin(), args.end(), "-b") != args.end()) ||
                      (find(args.begin(), args.end(), "--boxLength") != args.end()));
     
-    // there are two general use cases of this cutout code, as described in the doc string 
-    // below the declaration of this main function. Here, exceptons are thrown to prevent 
-    // confused input arguments which mix those two use cases.
+    // there are two general use cases of this cutout code, as described in the 
+    // docstring below the declaration of this main function. Here, exceptons are 
+    // thrown to prevent confused input arguments which mix those two use cases.
     if(customHalo^customBox){ 
         throw invalid_argument("-h and -b options must accompany eachother");
     }
@@ -409,8 +467,7 @@ int main( int argc, char** argv ) {
     }
 
     // search argument vector for options, update default parameters if found
-    // Note to future self: strcmp() returns 0 if the input strings are equal. See docs
-    // for more info
+    // Note to future self: strcmp() returns 0 if the input strings are equal. 
     for(int i=lastStep_idx; i<argc; ++i){
 
         if(strcmp(argv[i],"-t")==0 || strcmp(argv[i],"--theta")==0){
