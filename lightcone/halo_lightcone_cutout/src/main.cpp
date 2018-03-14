@@ -32,8 +32,8 @@ using namespace gio;
 //////////////////////////////////////////////////////
 
 struct Buffers {
-	
-	// From LC output
+    
+    // From LC output
     vector<float> x;
     vector<float> y;
     vector<float> z;
@@ -43,43 +43,43 @@ struct Buffers {
     vector<float> a;
     vector<int> step;
     vector<int64_t> id;
-	vector<int> rotation;
-	vector<int32_t> replication;
-	// New data columns
+    vector<int> rotation;
+    vector<int32_t> replication;
+    // New data columns
     vector<float> theta;
     vector<float> phi;
 };
 
 //////////////////////////////////////////////////////
 //
-//	 	   Helper Functions
+//         Helper Functions
 //
 //////////////////////////////////////////////////////
 
 float redshift(float a) {
-	// Converts scale factor to redshift.
-	//
-	// Params:
-	// :param a: the scale factor
-	// :return: the redshift corresponding to input a
-	
+    // Converts scale factor to redshift.
+    //
+    // Params:
+    // :param a: the scale factor
+    // :return: the redshift corresponding to input a
+    
     return (1.0f/a)-1.0f;
 }
 
 
 float zToStep(float z, int totSteps=499, float maxZ=200.0){
     // Function to convert a redshift to a step number, rounding 
-	// toward a = 0.
+    // toward a = 0.
     //
     // Params:
     // :param z: the input redshift
     // :totSteps: the total number of steps of the simulation of 
-    // 			  interest. Note-- the initial conditions are not 
-    // 			  a step! totSteps should be the maximum snapshot 
-    // 			  number.
+    //            interest. Note-- the initial conditions are not 
+    //            a step! totSteps should be the maximum snapshot 
+    //            number.
     // :maxZ: the initial redshift of the simulation
     // :return: the simulation step corresponding to the input redshift, 
-    // 		    rounded toward a = 0
+    //          rounded toward a = 0
 
     float amin = 1/(maxZ + 1);
     float amax = 1.0;
@@ -93,13 +93,13 @@ float zToStep(float z, int totSteps=499, float maxZ=200.0){
 
 //////////////////////////////////////////////////////
 //
-//	       Coord Rotation functions
+//         Coord Rotation functions
 //
 //////////////////////////////////////////////////////
 
 void cross(const vector<float> &v1, 
            const vector<float> &v2,
-	   	   vector<float> &v1xv2){
+           vector<float> &v1xv2){
     // This function calculates the cross product of two three 
     // dimensional vectors
     //
@@ -107,7 +107,7 @@ void cross(const vector<float> &v1,
     // :param v1: some three-dimensional vector
     // :param v2: some other three-dimensional vector
     // :param v1xv2: vector to hold the resultant cross-product of 
-    // 				 vectors v1 and v2
+    //               vectors v1 and v2
     // :return: none
     
     int n1 = v1.size();
@@ -121,8 +121,8 @@ void cross(const vector<float> &v1,
 
 
 void normCross(const vector<float> &a,
-	       const vector<float> &b,
-	       vector<float> &k){
+           const vector<float> &b,
+           vector<float> &k){
     // This function returns the normalized cross product of two three-dimensional
     // vectors. The notation, here, is chosen to match that of the Rodrigues rotation 
     // formula for the rotation vector k, rather than matching the notation of cross() 
@@ -146,7 +146,7 @@ void normCross(const vector<float> &a,
 
 
 void rotate(const vector<float> &k_vec,
-	    	const float B, 
+            const float B, 
             const vector<float> &v_vec, 
             vector<float> &v_rot){ 
     // This function implements the Rodrigues rotation formula. See the docstrings
@@ -170,7 +170,7 @@ void rotate(const vector<float> &k_vec,
     
     // do rotation per-dimension
     float v;
-	float k, k_x_v;
+    float k, k_x_v;
     for(int i=0; i<nk; ++i){
         v = v_vec[i];
         k = k_vec[i];
@@ -182,34 +182,34 @@ void rotate(const vector<float> &k_vec,
 
 //////////////////////////////////////////////////////
 //
-//	           Reading functions
+//             Reading functions
 //
 //////////////////////////////////////////////////////
 
 int getLCSubdirs(string dir, vector<string> &subdirs) {
-	// This function writes all of the subdirectory names present in a lightcone
-	// output directory to the string vector subdirs. The assumptions are that 
-	// each subdirectory name somewhere contains the character couple "lc", and
-	// that no non-directory items lie under dir/. 
-	//
-	// Params:
-	// :param dir: path to a lightcone output directory
-	// :param subdirs: a vector to contain the subdirectory names under dir
-	// :return: none
-	
-	// open dir
+    // This function writes all of the subdirectory names present in a lightcone
+    // output directory to the string vector subdirs. The assumptions are that 
+    // each subdirectory name somewhere contains the character couple "lc", and
+    // that no non-directory items lie under dir/. 
+    //
+    // Params:
+    // :param dir: path to a lightcone output directory
+    // :param subdirs: a vector to contain the subdirectory names under dir
+    // :return: none
+    
+    // open dir
     DIR *dp;
     struct dirent *dirp;
     if((dp  = opendir(dir.c_str())) == NULL) {
-    	cout << "Error(" << errno << ") opening lightcone data files" << dir << endl;
-    	return errno;
+        cout << "Error(" << errno << ") opening lightcone data files" << dir << endl;
+        return errno;
     }
 
-	// find all items within dir/
+    // find all items within dir/
     while ((dirp = readdir(dp)) != NULL) {
-    	if (string(dirp->d_name).find("lc")!=string::npos){ 
-    	    subdirs.push_back(string(dirp->d_name));
-		}	
+        if (string(dirp->d_name).find("lc")!=string::npos){ 
+            subdirs.push_back(string(dirp->d_name));
+        }   
     }
     closedir(dp);
     return 0;
@@ -217,39 +217,39 @@ int getLCSubdirs(string dir, vector<string> &subdirs) {
 
 
 string getLCFile(string dir) {
-	// This functions returns the header file present in a lightcone output 
-	// step subdirectory (header files are those that are unhashed (#n)). 
-	// This function enforces that only one file header is found, implying
-	// that the output of only one single lightcone step is contained in the
-	// directory dir/. In short, a step-wise directory structure is assumed, 
-	// as described in the documentation comments under the function header 
-	// for getLCSteps(). 
-	// Assumptions are that the character couple "lc" appear somewhere in the 
-	// file name, and that there are no subdirectories or otherwise unhashed
-	// file names present in directory dir/. 
-	//
-	// Params:
-	// :param dir: the path to the directory containing the output gio files
-	// :return: the header file found in directory dir/ as a string
+    // This functions returns the header file present in a lightcone output 
+    // step subdirectory (header files are those that are unhashed (#n)). 
+    // This function enforces that only one file header is found, implying
+    // that the output of only one single lightcone step is contained in the
+    // directory dir/. In short, a step-wise directory structure is assumed, 
+    // as described in the documentation comments under the function header 
+    // for getLCSteps(). 
+    // Assumptions are that the character couple "lc" appear somewhere in the 
+    // file name, and that there are no subdirectories or otherwise unhashed
+    // file names present in directory dir/. 
+    //
+    // Params:
+    // :param dir: the path to the directory containing the output gio files
+    // :return: the header file found in directory dir/ as a string
 
-	// open dir/
+    // open dir/
     DIR *dp;
     struct dirent *dirp;
     if((dp  = opendir(dir.c_str())) == NULL) {
-    	cout << "Error(" << errno << ") opening lightcone data files" << dir << endl;
-    	return errno;
+        cout << "Error(" << errno << ") opening lightcone data files" << dir << endl;
+        return errno;
     }
 
-	// find all header files in dir/
-	vector<string> files;
+    // find all header files in dir/
+    vector<string> files;
     while ((dirp = readdir(dp)) != NULL) {
-    	if (string(dirp->d_name).find("lc") != string::npos & 
-			string(dirp->d_name.find("#") == string::npos)){ 
-    	    files.push_back(string(dirp->d_name));
-		}	
+        if (string(dirp->d_name).find("lc") != string::npos & 
+            string(dirp->d_name.find("#") == string::npos)){ 
+            files.push_back(string(dirp->d_name));
+        }   
     }
-	assert(("Too many header files in this directory. LC Output files should be 
-			 separated by step-respective subdirectories", files.size() == 1)
+    assert(("Too many header files in this directory. LC Output files should be 
+             separated by step-respective subdirectories", files.size() == 1)
     closedir(dp);
     return files[0];
 }
@@ -261,37 +261,37 @@ int getLCSteps(int minStep, string dir, vector<string> &step_strings){
     // expected directory structure is that given in Figure 8 of Creating 
     // Lightcones in HACC; there should be a top directory (string dir) under 
     // which is a subdirectory for each step that ran through the lightcone code. 
-	// The name of these subdirectories is expected to take the form:
-	//
-	// {N non-digit characters, somewhere containing "lc"}{N digits composing the step number}
-	// 
-	// For example, lc487, and lcGals487 are valid. lightcone487_output, is not.
+    // The name of these subdirectories is expected to take the form:
+    //
+    // {N non-digit characters, somewhere containing "lc"}{N digits composing the step number}
+    // 
+    // For example, lc487, and lcGals487 are valid. lightcone487_output, is not.
     // The assumptions stated in the documentation comments under the 
     // getLCSubdirs() function header are of course made here as well.
     // 
     // Params:
     // :param minStep: the minimum step of interest (corresponding to the maximum
-    // 				   redshift desired to appear in the cutout)
+    //                 redshift desired to appear in the cutout)
     // :param dir: the path to a lightcone output directory. It is assumed that 
-    // 			   the output data for each lightcone step are organized into 
-    // 			   subdirectories. The expected directory structure is described 
-    // 			   in the documentation comments under the function header for
-    // 			   getLCSubdirs()
+    //             the output data for each lightcone step are organized into 
+    //             subdirectories. The expected directory structure is described 
+    //             in the documentation comments under the function header for
+    //             getLCSubdirs()
     // :param step_strings: a vector to contain steps found in the lightcone
-    // 						output, as strings. The steps given are all of those 
-    // 						that are >= minStep. However, if there is no step = 
-    // 						minStep in the lc output, then accept the largest step 
-    // 						that satisfies step < minStep. This ensures that users 
-    // 						will preferntially recieve a slightly deeper cutout 
-    // 						than desired, rather than slightly shallower, if the 
-    // 						choice must be made. (e.g. if minStep=300, and the only 
-    // 						nearby steps present in the output are 299 and 301, 
-    // 						299 will be the minimum step written to step_strings)
+    //                      output, as strings. The steps given are all of those 
+    //                      that are >= minStep. However, if there is no step = 
+    //                      minStep in the lc output, then accept the largest step 
+    //                      that satisfies step < minStep. This ensures that users 
+    //                      will preferntially recieve a slightly deeper cutout 
+    //                      than desired, rather than slightly shallower, if the 
+    //                      choice must be made. (e.g. if minStep=300, and the only 
+    //                      nearby steps present in the output are 299 and 301, 
+    //                      299 will be the minimum step written to step_strings)
     // :return: none
 
     // find all lc step subdirs
     vector<string> subdirs;
-	getLCSubdirs(dir, subdirs);
+    getLCSubdirs(dir, subdirs);
 
     // extract step numbers from each subdirs
     vector<int> stepsAvail;
@@ -317,60 +317,60 @@ int getLCSteps(int minStep, string dir, vector<string> &step_strings){
 
 //////////////////////////////////////////////////////
 //
-//	           Cutout function
+//             Cutout function
 //
 //////////////////////////////////////////////////////
 
 void processLC(string dir_name, string out_dir, vector<string> step_strings, 
-			   vector<float> theta_bounds, vector<float> phi_bounds){
+               vector<float> theta_bounds, vector<float> phi_bounds){
 
     Buffers b;
 
-	// find all lc sub directories for each step in step_strings
+    // find all lc sub directories for each step in step_strings
     cout << "Reading directory: " << dir_name << endl;
     vector<string> subdirs;
     getLCSubdirs(dir_name, subdirs);
-	cout << "Found subdirs:" << endl;
+    cout << "Found subdirs:" << endl;
     for (vector<string>::const_iterator i = subdirs.begin(); i != files.end(); ++i)
          cout << *i << ' ';
-	cout << endl << endl;
+    cout << endl << endl;
 
-	// find the prefix (chars before the step number) in the subdirectory names.
-	// It is assumed that all subdirs have the same prefix.
-	string subdirPrefix;
-	for(string::size_type j = 0; j < subdirs[0].size(); ++j){
-		if( isdigit(subdirs[0][j]) == false){
-			subdirPrefix = subdirs[0].substr(0, j);
-			break;
-		}
-	}
+    // find the prefix (chars before the step number) in the subdirectory names.
+    // It is assumed that all subdirs have the same prefix.
+    string subdirPrefix;
+    for(string::size_type j = 0; j < subdirs[0].size(); ++j){
+        if( isdigit(subdirs[0][j]) == false){
+            subdirPrefix = subdirs[0].substr(0, j);
+            break;
+        }
+    }
 
-	// perform cutout on data from each lc output step
+    // perform cutout on data from each lc output step
     size_t max_size = 0;
-	int step;
+    int step;
     for (int i=0; i<step_strings.size();++i){
         
-		// find header file
+        // find header file
         cout<< "Working on step " << step_strings[i] << endl;
-		step =atoi(step_strings[i].c_str());
-		ostringstream file_name;
+        step =atoi(step_strings[i].c_str());
+        ostringstream file_name;
         file_name << dir_name << subdirPrefix << step_strings[i] << "/";
-		file_name << getLCFile(dir_name << subdirPrefix << step_strings[i]);
+        file_name << getLCFile(dir_name << subdirPrefix << step_strings[i]);
 
         cout << "Opening file: " << file_name.str() << endl;
         GenericIO reader(MPI_COMM_SELF,file_name.str());
         reader.openAndReadHeader(GenericIO::MismatchRedistribute);
         
-		// set size of buffers to be the size required by the largest data column 
-		int nRanks = reader.readNRanks();
-		size_t current_size;
+        // set size of buffers to be the size required by the largest data column 
+        int nRanks = reader.readNRanks();
+        size_t current_size;
         for (int j=0; j<nRanks; ++j) {
-        	current_size = reader.readNumElems(j);
-        	max_size = current_size > max_size ? current_size : max_size;
+            current_size = reader.readNumElems(j);
+            max_size = current_size > max_size ? current_size : max_size;
         }
         max_size +=10;
         cout<< "max size: " << max_size << endl; 
-		b.x.resize(max_size);
+        b.x.resize(max_size);
         b.y.resize(max_size);
         b.z.resize(max_size);
         b.vx.resize(max_size);
@@ -378,9 +378,9 @@ void processLC(string dir_name, string out_dir, vector<string> step_strings,
         b.vz.resize(max_size);
         b.a.resize(max_size);
         b.id.resize(max_size);
-		b.step.resize(max_size);
-		b.rotation.resize(max_size);
-		b.replication.resize(max_size);
+        b.step.resize(max_size);
+        b.rotation.resize(max_size);
+        b.replication.resize(max_size);
         b.theta.resize(max_size);
         b.phi.resize(max_size);
         cout<<"done resizing"<<endl;
@@ -424,7 +424,7 @@ void processLC(string dir_name, string out_dir, vector<string> step_strings,
         vz_file_name << out_dir << "/rotation."<< step <<".bin";
         vz_file_name << out_dir << "/replication."<< step <<".bin";
         
-		cout<<"starting to open files"<<endl;
+        cout<<"starting to open files"<<endl;
         id_file.open(id_file_name.str().c_str(), ios::out | ios::binary);
         theta_file.open(theta_file_name.str().c_str(), ios::out | ios::binary);
         phi_file.open(phi_file_name.str().c_str(), ios::out | ios::binary);
@@ -439,7 +439,7 @@ void processLC(string dir_name, string out_dir, vector<string> step_strings,
         replication_file.open(replication_file_name.str().c_str(), ios::out | ios::binary);
         cout<<"done opening files"<<endl;
         
-		reader.addVariable("x", &b.x[0]); 
+        reader.addVariable("x", &b.x[0]); 
         reader.addVariable("y", &b.y[0]); 
         reader.addVariable("z", &b.z[0]); 
         reader.addVariable("vx", &b.vx[0]); 
@@ -452,34 +452,34 @@ void processLC(string dir_name, string out_dir, vector<string> step_strings,
         reader.addVariable("replication", &b.replication[0]); 
 
         for (int j=0; j<nRanks; ++j) {
-        	size_t current_size = reader.readNumElems(j);
-        	cout << "Reading:" << current_size << endl;
-        	reader.readData(j);
+            size_t current_size = reader.readNumElems(j);
+            cout << "Reading:" << current_size << endl;
+            reader.readData(j);
     
-    		cout << "Converting positions..." << j+1 << "/" << nRanks << endl;
-        	for (int k=0; k<current_size; ++k) {
+            cout << "Converting positions..." << j+1 << "/" << nRanks << endl;
+            for (int k=0; k<current_size; ++k) {
 
-            	if (b.x[k] > 0.0 && b.y[k] > 0.0 && b.z[k] > 0.0) {
-            		float r = (float)sqrt(b.x[k]*b.x[k]+b.y[k]*b.y[k]+b.z[k]*b.z[k]);
-            		b.theta[k] = acos(b.z[k]/r) * 180.0 / PI * ARCSEC;
-            		b.phi[k]     = atan(b.y[k]/b.x[k]) * 180.0 / PI * ARCSEC;
-            		if (b.theta[k] > theta_cut[0] && b.theta[k] < theta_cut[1] && 
-                		b.phi[k] > phi_cut[0] && b.phi[k] < phi_cut[1] ) {
-        				id_file.write( (char*)&b.id[k], sizeof(int64_t));
-        				theta_file.write( (char*)&b.theta[k], sizeof(float));
-						phi_file.write( (char*)&b.phi[k], sizeof(float));
-						x_file.write((char*)&b.x[k],sizeof(float));
-						y_file.write((char*)&b.y[k],sizeof(float));
-						z_file.write((char*)&b.z[k],sizeof(float));
-						vx_file.write((char*)&b.vx[k],sizeof(float));
-						vy_file.write((char*)&b.vy[k],sizeof(float));
-						vz_file.write((char*)&b.vz[k],sizeof(float));
-						a_file.write( (char*)&b.a[k], sizeof(float));
-						rotation_file.write( (char*)&b.rotation[k], sizeof(int));
-						replication_file.write( (char*)&b.replication[k], sizeof(int32_t));
-            		}
-            	}
-        	}
+                if (b.x[k] > 0.0 && b.y[k] > 0.0 && b.z[k] > 0.0) {
+                    float r = (float)sqrt(b.x[k]*b.x[k]+b.y[k]*b.y[k]+b.z[k]*b.z[k]);
+                    b.theta[k] = acos(b.z[k]/r) * 180.0 / PI * ARCSEC;
+                    b.phi[k]     = atan(b.y[k]/b.x[k]) * 180.0 / PI * ARCSEC;
+                    if (b.theta[k] > theta_cut[0] && b.theta[k] < theta_cut[1] && 
+                        b.phi[k] > phi_cut[0] && b.phi[k] < phi_cut[1] ) {
+                        id_file.write( (char*)&b.id[k], sizeof(int64_t));
+                        theta_file.write( (char*)&b.theta[k], sizeof(float));
+                        phi_file.write( (char*)&b.phi[k], sizeof(float));
+                        x_file.write((char*)&b.x[k],sizeof(float));
+                        y_file.write((char*)&b.y[k],sizeof(float));
+                        z_file.write((char*)&b.z[k],sizeof(float));
+                        vx_file.write((char*)&b.vx[k],sizeof(float));
+                        vy_file.write((char*)&b.vy[k],sizeof(float));
+                        vz_file.write((char*)&b.vz[k],sizeof(float));
+                        a_file.write( (char*)&b.a[k], sizeof(float));
+                        rotation_file.write( (char*)&b.rotation[k], sizeof(int));
+                        replication_file.write( (char*)&b.replication[k], sizeof(int32_t));
+                    }
+                }
+            }
         }
         
         reader.close();
@@ -500,7 +500,7 @@ void processLC(string dir_name, string out_dir, vector<string> step_strings,
 
 //////////////////////////////////////////////////////
 //
-//	          driver function
+//            driver function
 //
 //////////////////////////////////////////////////////
 
@@ -597,13 +597,13 @@ int main( int argc, char** argv ) {
      
     // build step_strings vector by locating the step present in the lightcone
     // data directory that is nearest the redshift requested by the user
-	float maxZ = argv[3];
-	int minStep = zToStep(maxZ);	
-	vector<string> step_strings;
+    float maxZ = argv[3];
+    int minStep = zToStep(maxZ);    
+    vector<string> step_strings;
     getLCSteps(minStep, input_lc_dir, step_strings)
     cout << "steps to include: ";
 
-	// might note use all of these but whatever
+    // might note use all of these but whatever
     vector<float> theta_cut(2);
     vector<float > phi_cut(2);
     vector<float> haloPos(3);
@@ -674,7 +674,7 @@ int main( int argc, char** argv ) {
         cout << "phi bounds: ";
         cout << phi_cut[0]/ARCSEC << " -> " << phi_cut[1]/ARCSEC <<" deg";
     }
-    cout << endl << endl;	
+    cout << endl << endl;   
         
     // call overloaded processing function
     if(customHalo){
