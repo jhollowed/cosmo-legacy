@@ -1,3 +1,6 @@
+#ifndef PROCESSLC_H_INCLUDED
+#define PROCESSLC_H_INCLUDED
+
 #include <cstdlib>
 #include <iostream>
 #include <iomanip>
@@ -17,6 +20,8 @@
 #include <errno.h>
 #include <vector>
 
+#include "util.h"
+
 #define PI 3.14159265
 #define ARCSEC 3600.0
 
@@ -34,3 +39,5 @@ void processLC(string dir_name, string out_dir, vector<string> step_strings,
 
 void processLC(string dir_name, string out_dir, vector<string> step_strings, 
                vector<float> halo_pos, float boxLength);
+
+#endif

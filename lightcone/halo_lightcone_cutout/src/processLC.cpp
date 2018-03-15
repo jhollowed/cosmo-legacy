@@ -1,3 +1,8 @@
+#include "processLC.h"
+
+using namespace std;
+using namespace gio;
+
 //////////////////////////////////////////////////////
 
 struct Buffers {
@@ -29,7 +34,7 @@ struct Buffers {
 //////////////////////////////////////////////////////
 
 void processLC(string dir_name, string out_dir, vector<string> step_strings, 
-               vector<float> theta_bounds, vector<float> phi_bounds){
+               vector<float> theta_cut, vector<float> phi_cut){
 
     Buffers b;
 
@@ -38,7 +43,7 @@ void processLC(string dir_name, string out_dir, vector<string> step_strings,
     vector<string> subdirs;
     getLCSubdirs(dir_name, subdirs);
     cout << "Found subdirs:" << endl;
-    for (vector<string>::const_iterator i = subdirs.begin(); i != files.end(); ++i)
+    for (vector<string>::const_iterator i = subdirs.begin(); i != subdirs.end(); ++i)
          cout << *i << ' ';
     cout << endl << endl;
 
@@ -60,12 +65,13 @@ void processLC(string dir_name, string out_dir, vector<string> step_strings,
         // find header file
         cout<< "Working on step " << step_strings[i] << endl;
         step =atoi(step_strings[i].c_str());
-        ostringstream file_name;
-        file_name << dir_name << subdirPrefix << step_strings[i] << "/";
-        file_name << getLCFile(dir_name << subdirPrefix << step_strings[i]);
+        string file_name;
+        ostringstream file_name_stream;
+        file_name_stream << dir_name << subdirPrefix << step_strings[i];
+        file_name_stream << "/" << getLCFile(file_name_stream.str(), file_name);
 
-        cout << "Opening file: " << file_name.str() << endl;
-        GenericIO reader(MPI_COMM_SELF,file_name.str());
+        cout << "Opening file: " << file_name_stream.str() << endl;
+        GenericIO reader(MPI_COMM_SELF, file_name_stream.str());
         reader.openAndReadHeader(GenericIO::MismatchRedistribute);
         
         // set size of buffers to be the size required by the largest data column 
@@ -135,7 +141,7 @@ void processLC(string dir_name, string out_dir, vector<string> step_strings,
         id_file.open(id_file_name.str().c_str(), ios::out | ios::binary);
         theta_file.open(theta_file_name.str().c_str(), ios::out | ios::binary);
         phi_file.open(phi_file_name.str().c_str(), ios::out | ios::binary);
-        redshift_file.open(redshift_file_name.str().c_str(), ios::out | ios::binary);
+        a_file.open(a_file_name.str().c_str(), ios::out | ios::binary);
         x_file.open(x_file_name.str().c_str(), ios::out | ios::binary);
         y_file.open(y_file_name.str().c_str(), ios::out | ios::binary);
         z_file.open(z_file_name.str().c_str(), ios::out | ios::binary);
@@ -146,17 +152,17 @@ void processLC(string dir_name, string out_dir, vector<string> step_strings,
         replication_file.open(replication_file_name.str().c_str(), ios::out | ios::binary);
         cout<<"done opening files"<<endl;
         
-        reader.addVariable("x", &b.x[0]); 
-        reader.addVariable("y", &b.y[0]); 
-        reader.addVariable("z", &b.z[0]); 
-        reader.addVariable("vx", &b.vx[0]); 
-        reader.addVariable("vy", &b.vy[0]); 
-        reader.addVariable("vz", &b.vz[0]); 
-        reader.addVariable("a", &b.a[0]); 
-        reader.addVariable("step", &b.step[0]); 
-        reader.addVariable("id", &b.id[0]); 
-        reader.addVariable("rotation", &b.rotation[0]); 
-        reader.addVariable("replication", &b.replication[0]); 
+        reader.addVariable("x", &b.x); 
+        reader.addVariable("y", &b.y); 
+        reader.addVariable("z", &b.z); 
+        reader.addVariable("vx", &b.vx); 
+        reader.addVariable("vy", &b.vy); 
+        reader.addVariable("vz", &b.vz); 
+        reader.addVariable("a", &b.a); 
+        reader.addVariable("step", &b.step); 
+        reader.addVariable("id", &b.id); 
+        reader.addVariable("rotation", &b.rotation); 
+        reader.addVariable("replication", &b.replication); 
 
         for (int j=0; j<nRanks; ++j) {
             size_t current_size = reader.readNumElems(j);
@@ -223,7 +229,7 @@ void processLC(string dir_name, string out_dir, vector<string> step_strings,
     vector<string> subdirs;
     getLCSubdirs(dir_name, subdirs);
     cout << "Found subdirs:" << endl;
-    for (vector<string>::const_iterator i = subdirs.begin(); i != files.end(); ++i)
+    for (vector<string>::const_iterator i = subdirs.begin(); i != subdirs.end(); ++i)
          cout << *i << ' ';
     cout << endl << endl;
 
@@ -245,12 +251,13 @@ void processLC(string dir_name, string out_dir, vector<string> step_strings,
         // find header file
         cout<< "Working on step " << step_strings[i] << endl;
         step =atoi(step_strings[i].c_str());
-        ostringstream file_name;
-        file_name << dir_name << subdirPrefix << step_strings[i] << "/";
-        file_name << getLCFile(dir_name << subdirPrefix << step_strings[i]);
+        string file_name;
+        ostringstream file_name_stream;
+        file_name_stream << dir_name << subdirPrefix << step_strings[i];
+        file_name_stream << "/" << getLCFile(file_name_stream.str(), file_name);
 
-        cout << "Opening file: " << file_name.str() << endl;
-        GenericIO reader(MPI_COMM_SELF,file_name.str());
+        cout << "Opening file: " << file_name_stream.str() << endl;
+        GenericIO reader(MPI_COMM_SELF, file_name_stream.str());
         reader.openAndReadHeader(GenericIO::MismatchRedistribute);
         
         // set size of buffers to be the size required by the largest data column 
@@ -320,7 +327,7 @@ void processLC(string dir_name, string out_dir, vector<string> step_strings,
         id_file.open(id_file_name.str().c_str(), ios::out | ios::binary);
         theta_file.open(theta_file_name.str().c_str(), ios::out | ios::binary);
         phi_file.open(phi_file_name.str().c_str(), ios::out | ios::binary);
-        redshift_file.open(redshift_file_name.str().c_str(), ios::out | ios::binary);
+        a_file.open(a_file_name.str().c_str(), ios::out | ios::binary);
         x_file.open(x_file_name.str().c_str(), ios::out | ios::binary);
         y_file.open(y_file_name.str().c_str(), ios::out | ios::binary);
         z_file.open(z_file_name.str().c_str(), ios::out | ios::binary);
@@ -331,18 +338,21 @@ void processLC(string dir_name, string out_dir, vector<string> step_strings,
         replication_file.open(replication_file_name.str().c_str(), ios::out | ios::binary);
         cout<<"done opening files"<<endl;
         
-        reader.addVariable("x", &b.x[0]); 
-        reader.addVariable("y", &b.y[0]); 
-        reader.addVariable("z", &b.z[0]); 
-        reader.addVariable("vx", &b.vx[0]); 
-        reader.addVariable("vy", &b.vy[0]); 
-        reader.addVariable("vz", &b.vz[0]); 
-        reader.addVariable("a", &b.a[0]); 
-        reader.addVariable("step", &b.step[0]); 
-        reader.addVariable("id", &b.id[0]); 
-        reader.addVariable("rotation", &b.rotation[0]); 
-        reader.addVariable("replication", &b.replication[0]); 
+        reader.addVariable("x", &b.x); 
+        reader.addVariable("y", &b.y); 
+        reader.addVariable("z", &b.z); 
+        reader.addVariable("vx", &b.vx); 
+        reader.addVariable("vy", &b.vy); 
+        reader.addVariable("vz", &b.vz); 
+        reader.addVariable("a", &b.a); 
+        reader.addVariable("step", &b.step); 
+        reader.addVariable("id", &b.id); 
+        reader.addVariable("rotation", &b.rotation); 
+        reader.addVariable("replication", &b.replication); 
 
+        vector<float> theta_cut(2);
+        vector<float> phi_cut(2);
+        
         for (int j=0; j<nRanks; ++j) {
             size_t current_size = reader.readNumElems(j);
             cout << "Reading:" << current_size << endl;

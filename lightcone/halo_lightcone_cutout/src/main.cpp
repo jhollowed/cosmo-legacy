@@ -18,10 +18,14 @@
 #include <vector>
 
 // source files
-#include <processLC.h>
-#include <util.h>
+#include "util.h"
+#include "processLC.h"
  
+// Generic IO
+//#include "GenericIO.h"
+
 using namespace std;
+//using namespace gio;
 
 
 //////////////////////////////////////////////////////
@@ -117,21 +121,20 @@ int main( int argc, char** argv ) {
     string input_lc_dir, out_dir;
     input_lc_dir = string(argv[1]);
     out_dir = string(argv[2]);
-    vector<string> step_strings;
     cout << "\nusing lightcone at ";
     cout << input_lc_dir << endl;
      
     // build step_strings vector by locating the step present in the lightcone
     // data directory that is nearest the redshift requested by the user
-    float maxZ = argv[3];
+    float maxZ = atof(argv[3]);
     int minStep = zToStep(maxZ);    
     vector<string> step_strings;
-    getLCSteps(minStep, input_lc_dir, step_strings)
+    getLCSteps(minStep, input_lc_dir, step_strings);
     cout << "steps to include: ";
 
     // might note use all of these but whatever
     vector<float> theta_cut(2);
-    vector<float > phi_cut(2);
+    vector<float> phi_cut(2);
     vector<float> haloPos(3);
     float boxLength;
 
@@ -160,7 +163,7 @@ int main( int argc, char** argv ) {
                                     "that -h and -b arguments are passed");
     }
     if(!customThetaBounds && !customPhiBounds && !customHalo && !customBox){
-        throw invalid_argument("Valid options are -h, -b, -t, and -p")
+        throw invalid_argument("Valid options are -h, -b, -t, and -p");
     }
 
     // search argument vector for options, update default parameters if found

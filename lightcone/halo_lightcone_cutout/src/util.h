@@ -1,3 +1,6 @@
+#ifndef UTIL_H_INCLUDED
+#define UTIL_H_INCLUDED
+
 #include <cstdlib>
 #include <iostream>
 #include <iomanip>
@@ -17,7 +20,11 @@
 #include <errno.h>
 #include <vector>
 
+// Generic IO
+//#include "GenericIO.h"
+
 using namespace std;
+//using namespace gio;
 
 
 //////////////////////////////////////////////////////
@@ -57,6 +64,8 @@ void rotate(const vector<float> &k_vec,
 
 int getLCSubdirs(string dir, vector<string> &subdirs);
 
-string getLCFile(string dir);
+int getLCFile(string dir, string &file);
 
 int getLCSteps(int minStep, string dir, vector<string> &step_strings);
+
+#endif

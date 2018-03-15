@@ -1,3 +1,8 @@
+#include "util.h"
+
+using namespace std;
+//using namespace gio;
+
 //////////////////////////////////////////////////////
 //
 //         Helper Functions
@@ -15,7 +20,7 @@ float redshift(float a) {
 }
 
 
-float zToStep(float z, int totSteps=499, float maxZ=200.0){
+float zToStep(float z, int totSteps, float maxZ){
     // Function to convert a redshift to a step number, rounding 
     // toward a = 0.
     //
@@ -164,7 +169,7 @@ int getLCSubdirs(string dir, vector<string> &subdirs) {
 }
 
 
-string getLCFile(string dir) {
+int getLCFile(string dir, string &file) {
     // This functions returns the header file present in a lightcone output 
     // step subdirectory (header files are those that are unhashed (#n)). 
     // This function enforces that only one file header is found, implying
@@ -178,6 +183,7 @@ string getLCFile(string dir) {
     //
     // Params:
     // :param dir: the path to the directory containing the output gio files
+    // :param file: string object at which to store the found header file
     // :return: the header file found in directory dir/ as a string
 
     // open dir/
@@ -192,14 +198,24 @@ string getLCFile(string dir) {
     vector<string> files;
     while ((dirp = readdir(dp)) != NULL) {
         if (string(dirp->d_name).find("lc") != string::npos & 
-            string(dirp->d_name.find("#") == string::npos)){ 
+            string(dirp->d_name).find("#") == string::npos){ 
             files.push_back(string(dirp->d_name));
         }   
     }
-    assert(("Too many header files in this directory. LC Output files should be 
-             separated by step-respective subdirectories", files.size() == 1)
+    
+    // enforce exactly one header file found
+    ostringstream noneFoundErr;
+    ostringstream tooManyErr;
+    noneFoundErr << "No valid header files found in dir" << dir;
+    tooManyErr << "Too many header files in directory " << dir << 
+                  ". LC Output files should be separated by step-respective subdirectories";
+    assert((noneFoundErr.str().c_str(), files.size() != 0));
+    assert((tooManyErr.str().c_str(), files.size() == 1));
+
+    // done 
     closedir(dp);
-    return files[0];
+    file = files[0];
+    return 0;
 }
 
 
@@ -246,7 +262,7 @@ int getLCSteps(int minStep, string dir, vector<string> &step_strings){
     for(int i=0; i<subdirs.size(); ++i){
         for(string::size_type j = 0; j < subdirs[i].size(); ++j){
             if( isdigit(subdirs[i][j]) ){
-                stepsAvail.push_back( stoi(subdirs[i].substr(j)) );
+                stepsAvail.push_back( atoi(subdirs[i].substr(j).c_str()) );
             }
         }   
     }
@@ -255,7 +271,12 @@ int getLCSteps(int minStep, string dir, vector<string> &step_strings){
     // function header)
     sort(stepsAvail.begin(), stepsAvail.end());
     for(int k=0; k<stepsAvail.size(); ++k){
-        step_strings.push_back( to_string(stepsAvail[ stepsAvail.size() - (k+1) ]) );
+        
+        ostringstream stepStringStream;
+        stepStringStream << stepsAvail[ stepsAvail.size() - (k+1) ];
+        const string& stepString = stepStringStream.str(); 
+        step_strings.push_back( stepString );
+        
         if( stepsAvail[ stepsAvail.size() - (k+1) ] <= minStep){
             break;
         }
