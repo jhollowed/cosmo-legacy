@@ -39,7 +39,6 @@ float zToStep(float z, int totSteps, float maxZ){
     float adiff = (amax-amin)/(totSteps-1);
     
     float a = 1/(1+z);
-    cout << adiff << endl;
     int step = floor((a-amin) / adiff);
     return step;
 }
@@ -49,6 +48,10 @@ float zToStep(float z, int totSteps, float maxZ){
 //         Coord Rotation functions
 //
 //////////////////////////////////////////////////////
+
+void sizeMismatch(){ 
+    throw runtime_error("input vectors must have the same length");
+}
 
 void cross(const vector<float> &v1, 
            const vector<float> &v2,
@@ -65,7 +68,7 @@ void cross(const vector<float> &v1,
     
     int n1 = v1.size();
     int n2 = v2.size();
-    assert(("vectors v1 and v2 must have the same length", n1 == n2));
+    if(n1 != n2){ sizeMismatch(); }
 
     v1xv2[0] = v1[1]*v2[2] - v1[2]*v2[1];
     v1xv2[1] = -(v1[0]*v2[2] - v1[2]*v2[0]);
@@ -89,7 +92,7 @@ void normCross(const vector<float> &a,
 
     int na = a.size();
     int nb = b.size();
-    assert(("vectors a and b must have the same length", na==nb));
+    if(na != nb){ sizeMismatch(); }
 
     vector<float> axb(3); 
     cross(a, b, axb);
@@ -114,7 +117,7 @@ void rotate(const vector<float> &k_vec,
 
     int nk = k_vec.size();
     int nv = v_vec.size();
-    assert(("vectors k and v must have the same length", nk==nv));
+    if(nk != nv){ sizeMismatch(); }
     
     // find (k ⨯ v) and (k·v)
     vector<float> kxv_vec(3);
@@ -202,17 +205,21 @@ int getLCFile(string dir, string &file) {
             files.push_back(string(dirp->d_name));
         }   
     }
-    
-    // enforce exactly one header file found
-    ostringstream noneFoundErr;
-    ostringstream tooManyErr;
-    noneFoundErr << "No valid header files found in dir" << dir;
-    tooManyErr << "Too many header files in directory " << dir << 
-                  ". LC Output files should be separated by step-respective subdirectories";
-    assert((noneFoundErr.str().c_str(), files.size() != 0));
-    assert((tooManyErr.str().c_str(), files.size() == 1));
 
-    // done 
+    // enforce exactly one header file found
+    if(files.size() == 0){
+        ostringstream noneFoundErr;
+        noneFoundErr << "No valid header files found in dir" << dir;
+        throw runtime_error(noneFoundErr.str()); 
+    }
+    if(files.size() > 1){     
+        ostringstream tooManyErr;
+        tooManyErr << "Too many header files in directory " << dir << 
+                      ". LC Output files should be separated by step-respective subdirectories";
+        throw runtime_error(tooManyErr.str()); 
+    }
+
+    // done
     closedir(dp);
     file = files[0];
     return 0;

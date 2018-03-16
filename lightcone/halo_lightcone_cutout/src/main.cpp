@@ -117,11 +117,26 @@ int main( int argc, char** argv ) {
     
     MPI_Init(&argc, &argv);
 
+    cout << "\n\n---------- Starting ----------" << endl;
     char cart[3] = {'x', 'y', 'z'};
+    
     string input_lc_dir, out_dir;
     input_lc_dir = string(argv[1]);
     out_dir = string(argv[2]);
-    cout << "\nusing lightcone at ";
+    
+    // check format of in/out dirs
+    if(input_lc_dir[input_lc_dir.size()-1] != '/'){
+        ostringstream modified_in_dir;
+        modified_in_dir << input_lc_dir << "/";
+        input_lc_dir = modified_in_dir.str();
+    }
+    if(out_dir[out_dir.size()-1] != '/'){
+        ostringstream modified_out_dir;
+        modified_out_dir << out_dir << "/";
+        out_dir = modified_out_dir.str();
+    }
+    
+    cout << "using lightcone at ";
     cout << input_lc_dir << endl;
      
     // build step_strings vector by locating the step present in the lightcone
@@ -130,7 +145,9 @@ int main( int argc, char** argv ) {
     int minStep = zToStep(maxZ);    
     vector<string> step_strings;
     getLCSteps(minStep, input_lc_dir, step_strings);
-    cout << "steps to include: ";
+    cout << "steps to include to z=" << maxZ << ": ";
+    for(int i=0; i<step_strings.size(); ++i){ cout << step_strings[i] << " ";}
+    cout << endl;
 
     // might note use all of these but whatever
     vector<float> theta_cut(2);

@@ -51,7 +51,7 @@ void processLC(string dir_name, string out_dir, vector<string> step_strings,
     // It is assumed that all subdirs have the same prefix.
     string subdirPrefix;
     for(string::size_type j = 0; j < subdirs[0].size(); ++j){
-        if( isdigit(subdirs[0][j]) == false){
+        if( isdigit(subdirs[0][j]) == true){
             subdirPrefix = subdirs[0].substr(0, j);
             break;
         }
@@ -62,19 +62,25 @@ void processLC(string dir_name, string out_dir, vector<string> step_strings,
     int step;
     for (int i=0; i<step_strings.size();++i){
         
-        // find header file
-        cout<< "Working on step " << step_strings[i] << endl;
+        // continue if this is the step at z=0 (lightcone volume zero)
         step =atoi(step_strings[i].c_str());
+        if(step == 499){ continue;}
+        
+        // find header file
+        cout<< "---------- Working on step " << step_strings[i] << "----------" << endl;
         string file_name;
         ostringstream file_name_stream;
         file_name_stream << dir_name << subdirPrefix << step_strings[i];
-        file_name_stream << "/" << getLCFile(file_name_stream.str(), file_name);
-
+        
+        getLCFile(file_name_stream.str(), file_name);
+        file_name_stream << "/" << file_name; 
+       
+        // create gio reader and open file header 
         cout << "Opening file: " << file_name_stream.str() << endl;
         GenericIO reader(MPI_COMM_SELF, file_name_stream.str());
         reader.openAndReadHeader(GenericIO::MismatchRedistribute);
         
-        // set size of buffers to be the size required by the largest data column 
+        // set size of buffers to be the size required by the largest data rank
         int nRanks = reader.readNRanks();
         size_t current_size;
         for (int j=0; j<nRanks; ++j) {
@@ -98,6 +104,13 @@ void processLC(string dir_name, string out_dir, vector<string> step_strings,
         b.phi.resize(max_size);
         cout<<"done resizing"<<endl;
         
+        // create cutout subdirectory for this step
+        ostringstream step_subdir;
+        step_subdir << out_dir << subdirPrefix << "Cutout" << step_strings[i] << "/";
+        mkdir(step_subdir.str().c_str(), S_IRWXU | S_IRGRP | S_IXGRP | S_IXOTH);
+        cout << "Created subdir: " << step_subdir.str() << endl;
+
+        // create binary files for cutout output
         ofstream id_file;
         ofstream theta_file;
         ofstream phi_file;
@@ -124,18 +137,18 @@ void processLC(string dir_name, string out_dir, vector<string> step_strings,
         ostringstream rotation_file_name;
         ostringstream replication_file_name;
 
-        id_file_name << out_dir << "/id." << step << ".bin";
-        theta_file_name << out_dir << "/theta." << step << ".bin";
-        phi_file_name << out_dir << "/phi." << step << ".bin";
-        a_file_name << out_dir << "/a." << step << ".bin";
-        x_file_name << out_dir << "/x."<< step <<".bin";
-        y_file_name << out_dir << "/y."<< step <<".bin";
-        z_file_name << out_dir << "/z."<< step <<".bin";
-        vx_file_name << out_dir << "/vx."<< step <<".bin";
-        vy_file_name << out_dir << "/vy."<< step <<".bin";
-        vz_file_name << out_dir << "/vz."<< step <<".bin";
-        vz_file_name << out_dir << "/rotation."<< step <<".bin";
-        vz_file_name << out_dir << "/replication."<< step <<".bin";
+        id_file_name << step_subdir << "/id." << step << ".bin";
+        theta_file_name << step_subdir << "/theta." << step << ".bin";
+        phi_file_name << step_subdir << "/phi." << step << ".bin";
+        a_file_name << step_subdir << "/a." << step << ".bin";
+        x_file_name << step_subdir << "/x."<< step <<".bin";
+        y_file_name << step_subdir << "/y."<< step <<".bin";
+        z_file_name << step_subdir << "/z."<< step <<".bin";
+        vx_file_name << step_subdir << "/vx."<< step <<".bin";
+        vy_file_name << step_subdir << "/vy."<< step <<".bin";
+        vz_file_name << step_subdir << "/vz."<< step <<".bin";
+        vz_file_name << step_subdir << "/rotation."<< step <<".bin";
+        vz_file_name << step_subdir << "/replication."<< step <<".bin";
         
         cout<<"starting to open files"<<endl;
         id_file.open(id_file_name.str().c_str(), ios::out | ios::binary);
@@ -151,33 +164,41 @@ void processLC(string dir_name, string out_dir, vector<string> step_strings,
         rotation_file.open(rotation_file_name.str().c_str(), ios::out | ios::binary);
         replication_file.open(replication_file_name.str().c_str(), ios::out | ios::binary);
         cout<<"done opening files"<<endl;
-        
-        reader.addVariable("x", &b.x); 
-        reader.addVariable("y", &b.y); 
-        reader.addVariable("z", &b.z); 
-        reader.addVariable("vx", &b.vx); 
-        reader.addVariable("vy", &b.vy); 
-        reader.addVariable("vz", &b.vz); 
-        reader.addVariable("a", &b.a); 
-        reader.addVariable("step", &b.step); 
-        reader.addVariable("id", &b.id); 
-        reader.addVariable("rotation", &b.rotation); 
-        reader.addVariable("replication", &b.replication); 
+      
+        // start reading 
+        reader.addVariable("x", &b.x[0]); 
+        reader.addVariable("y", &b.y[0]); 
+        reader.addVariable("z", &b.z[0]); 
+        reader.addVariable("vx", &b.vx[0]); 
+        reader.addVariable("vy", &b.vy[0]); 
+        reader.addVariable("vz", &b.vz[0]); 
+        reader.addVariable("a", &b.a[0]); 
+        reader.addVariable("step", &b.step[0]); 
+        reader.addVariable("id", &b.id[0]); 
+        reader.addVariable("rotation", &b.rotation[0]); 
+        reader.addVariable("replication", &b.replication[0]); 
 
         for (int j=0; j<nRanks; ++j) {
+            
             size_t current_size = reader.readNumElems(j);
-            cout << "Reading:" << current_size << endl;
+            cout << "Reading: " << current_size << endl;
             reader.readData(j);
     
             cout << "Converting positions..." << j+1 << "/" << nRanks << endl;
             for (int k=0; k<current_size; ++k) {
-
+                
+                // limit cutout to the first octant
                 if (b.x[k] > 0.0 && b.y[k] > 0.0 && b.z[k] > 0.0) {
-                    float r = (float)sqrt(b.x[k]*b.x[k]+b.y[k]*b.y[k]+b.z[k]*b.z[k]);
+                    
+                    // spherical coordinate transformation
+                    float r = (float)sqrt(b.x[k]*b.x[k] + b.y[k]*b.y[k] + b.z[k]*b.z[k]);
                     b.theta[k] = acos(b.z[k]/r) * 180.0 / PI * ARCSEC;
-                    b.phi[k]     = atan(b.y[k]/b.x[k]) * 180.0 / PI * ARCSEC;
+                    b.phi[k] = atan(b.y[k]/b.x[k]) * 180.0 / PI * ARCSEC;
+                    
+                    // do cut and write
                     if (b.theta[k] > theta_cut[0] && b.theta[k] < theta_cut[1] && 
                         b.phi[k] > phi_cut[0] && b.phi[k] < phi_cut[1] ) {
+                        
                         id_file.write( (char*)&b.id[k], sizeof(int64_t));
                         theta_file.write( (char*)&b.theta[k], sizeof(float));
                         phi_file.write( (char*)&b.phi[k], sizeof(float));
@@ -237,7 +258,7 @@ void processLC(string dir_name, string out_dir, vector<string> step_strings,
     // It is assumed that all subdirs have the same prefix.
     string subdirPrefix;
     for(string::size_type j = 0; j < subdirs[0].size(); ++j){
-        if( isdigit(subdirs[0][j]) == false){
+        if( isdigit(subdirs[0][j]) == true){
             subdirPrefix = subdirs[0].substr(0, j);
             break;
         }
@@ -248,19 +269,25 @@ void processLC(string dir_name, string out_dir, vector<string> step_strings,
     int step;
     for (int i=0; i<step_strings.size();++i){
         
-        // find header file
-        cout<< "Working on step " << step_strings[i] << endl;
+        // continue if this is the step at z=0 (lightcone volume zero)
         step =atoi(step_strings[i].c_str());
+        if(step == 499){ continue;}
+        
+        // find header file
+        cout<< "---------- Working on step " << step_strings[i] << "----------" << endl;
         string file_name;
         ostringstream file_name_stream;
         file_name_stream << dir_name << subdirPrefix << step_strings[i];
-        file_name_stream << "/" << getLCFile(file_name_stream.str(), file_name);
-
+        
+        getLCFile(file_name_stream.str(), file_name);
+        file_name_stream << "/" << file_name; 
+       
+        // create gio reader and open file header 
         cout << "Opening file: " << file_name_stream.str() << endl;
         GenericIO reader(MPI_COMM_SELF, file_name_stream.str());
         reader.openAndReadHeader(GenericIO::MismatchRedistribute);
         
-        // set size of buffers to be the size required by the largest data column 
+        // set size of buffers to be the size required by the largest data rank
         int nRanks = reader.readNRanks();
         size_t current_size;
         for (int j=0; j<nRanks; ++j) {
@@ -284,6 +311,13 @@ void processLC(string dir_name, string out_dir, vector<string> step_strings,
         b.phi.resize(max_size);
         cout<<"done resizing"<<endl;
         
+        // create cutout subdirectory for this step
+        ostringstream step_subdir;
+        step_subdir << out_dir << subdirPrefix << "Cutout" << step_strings[i] << "/";
+        mkdir(step_subdir.str().c_str(), S_IRWXU | S_IRGRP | S_IXGRP | S_IXOTH);
+        cout << "Created subdir: " << step_subdir.str() << endl;
+
+        // create binary files for cutout output
         ofstream id_file;
         ofstream theta_file;
         ofstream phi_file;
@@ -310,18 +344,18 @@ void processLC(string dir_name, string out_dir, vector<string> step_strings,
         ostringstream rotation_file_name;
         ostringstream replication_file_name;
 
-        id_file_name << out_dir << "/id." << step << ".bin";
-        theta_file_name << out_dir << "/theta." << step << ".bin";
-        phi_file_name << out_dir << "/phi." << step << ".bin";
-        a_file_name << out_dir << "/a." << step << ".bin";
-        x_file_name << out_dir << "/x."<< step <<".bin";
-        y_file_name << out_dir << "/y."<< step <<".bin";
-        z_file_name << out_dir << "/z."<< step <<".bin";
-        vx_file_name << out_dir << "/vx."<< step <<".bin";
-        vy_file_name << out_dir << "/vy."<< step <<".bin";
-        vz_file_name << out_dir << "/vz."<< step <<".bin";
-        vz_file_name << out_dir << "/rotation."<< step <<".bin";
-        vz_file_name << out_dir << "/replication."<< step <<".bin";
+        id_file_name << step_subdir << "/id." << step << ".bin";
+        theta_file_name << step_subdir << "/theta." << step << ".bin";
+        phi_file_name << step_subdir << "/phi." << step << ".bin";
+        a_file_name << step_subdir << "/a." << step << ".bin";
+        x_file_name << step_subdir << "/x."<< step <<".bin";
+        y_file_name << step_subdir << "/y."<< step <<".bin";
+        z_file_name << step_subdir << "/z."<< step <<".bin";
+        vx_file_name << step_subdir << "/vx."<< step <<".bin";
+        vy_file_name << step_subdir << "/vy."<< step <<".bin";
+        vz_file_name << step_subdir << "/vz."<< step <<".bin";
+        vz_file_name << step_subdir << "/rotation."<< step <<".bin";
+        vz_file_name << step_subdir << "/replication."<< step <<".bin";
         
         cout<<"starting to open files"<<endl;
         id_file.open(id_file_name.str().c_str(), ios::out | ios::binary);
@@ -337,36 +371,41 @@ void processLC(string dir_name, string out_dir, vector<string> step_strings,
         rotation_file.open(rotation_file_name.str().c_str(), ios::out | ios::binary);
         replication_file.open(replication_file_name.str().c_str(), ios::out | ios::binary);
         cout<<"done opening files"<<endl;
-        
-        reader.addVariable("x", &b.x); 
-        reader.addVariable("y", &b.y); 
-        reader.addVariable("z", &b.z); 
-        reader.addVariable("vx", &b.vx); 
-        reader.addVariable("vy", &b.vy); 
-        reader.addVariable("vz", &b.vz); 
-        reader.addVariable("a", &b.a); 
-        reader.addVariable("step", &b.step); 
-        reader.addVariable("id", &b.id); 
-        reader.addVariable("rotation", &b.rotation); 
-        reader.addVariable("replication", &b.replication); 
+      
+        // start reading 
+        reader.addVariable("x", &b.x[0]); 
+        reader.addVariable("y", &b.y[0]); 
+        reader.addVariable("z", &b.z[0]); 
+        reader.addVariable("vx", &b.vx[0]); 
+        reader.addVariable("vy", &b.vy[0]); 
+        reader.addVariable("vz", &b.vz[0]); 
+        reader.addVariable("a", &b.a[0]); 
+        reader.addVariable("step", &b.step[0]); 
+        reader.addVariable("id", &b.id[0]); 
+        reader.addVariable("rotation", &b.rotation[0]); 
+        reader.addVariable("replication", &b.replication[0]); 
 
-        vector<float> theta_cut(2);
-        vector<float> phi_cut(2);
-        
         for (int j=0; j<nRanks; ++j) {
+            
             size_t current_size = reader.readNumElems(j);
-            cout << "Reading:" << current_size << endl;
+            cout << "Reading: " << current_size << endl;
             reader.readData(j);
     
             cout << "Converting positions..." << j+1 << "/" << nRanks << endl;
             for (int k=0; k<current_size; ++k) {
-
+                
+                // limit cutout to the first octant
                 if (b.x[k] > 0.0 && b.y[k] > 0.0 && b.z[k] > 0.0) {
-                    float r = (float)sqrt(b.x[k]*b.x[k]+b.y[k]*b.y[k]+b.z[k]*b.z[k]);
+                    
+                    // spherical coordinate transformation
+                    float r = (float)sqrt(b.x[k]*b.x[k] + b.y[k]*b.y[k] + b.z[k]*b.z[k]);
                     b.theta[k] = acos(b.z[k]/r) * 180.0 / PI * ARCSEC;
-                    b.phi[k]     = atan(b.y[k]/b.x[k]) * 180.0 / PI * ARCSEC;
+                    b.phi[k] = atan(b.y[k]/b.x[k]) * 180.0 / PI * ARCSEC;
+                    
+                    // do cut and write
                     if (b.theta[k] > theta_cut[0] && b.theta[k] < theta_cut[1] && 
                         b.phi[k] > phi_cut[0] && b.phi[k] < phi_cut[1] ) {
+                        
                         id_file.write( (char*)&b.id[k], sizeof(int64_t));
                         theta_file.write( (char*)&b.theta[k], sizeof(float));
                         phi_file.write( (char*)&b.phi[k], sizeof(float));
