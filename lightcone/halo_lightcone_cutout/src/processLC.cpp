@@ -396,7 +396,7 @@ void processLC(string dir_name, string out_dir, vector<string> step_strings,
         
         // create cutout subdirectory for this step
         ostringstream step_subdir;
-        step_subdir << out_dir << subdirPrefix << "Cutout" << step_strings[i] << "/";
+        step_subdir << out_dir << subdirPrefix << "Cutout" << step_strings[i];
         mkdir(step_subdir.str().c_str(), S_IRWXU | S_IRGRP | S_IXGRP | S_IXOTH);
         cout << "Created subdir: " << step_subdir.str() << endl;
 
@@ -433,18 +433,18 @@ void processLC(string dir_name, string out_dir, vector<string> step_strings,
         ostringstream rotation_file_name;
         ostringstream replication_file_name;
 
-        id_file_name << step_subdir << "/id." << step << ".bin";
-        theta_file_name << step_subdir << "/theta." << step << ".bin";
-        phi_file_name << step_subdir << "/phi." << step << ".bin";
-        a_file_name << step_subdir << "/a." << step << ".bin";
-        x_file_name << step_subdir << "/x."<< step <<".bin";
-        y_file_name << step_subdir << "/y."<< step <<".bin";
-        z_file_name << step_subdir << "/z."<< step <<".bin";
-        vx_file_name << step_subdir << "/vx."<< step <<".bin";
-        vy_file_name << step_subdir << "/vy."<< step <<".bin";
-        vz_file_name << step_subdir << "/vz."<< step <<".bin";
-        rotation_file_name << step_subdir << "/rotation."<< step <<".bin";
-        replication_file_name << step_subdir << "/replication."<< step <<".bin";
+        id_file_name << step_subdir.str() << "/id." << step << ".bin";
+        theta_file_name << step_subdir.str() << "/theta." << step << ".bin";
+        phi_file_name << step_subdir.str() << "/phi." << step << ".bin";
+        a_file_name << step_subdir.str() << "/a." << step << ".bin";
+        x_file_name << step_subdir.str() << "/x."<< step <<".bin";
+        y_file_name << step_subdir.str() << "/y."<< step <<".bin";
+        z_file_name << step_subdir.str() << "/z."<< step <<".bin";
+        vx_file_name << step_subdir.str() << "/vx."<< step <<".bin";
+        vy_file_name << step_subdir.str() << "/vy."<< step <<".bin";
+        vz_file_name << step_subdir.str() << "/vz."<< step <<".bin";
+        rotation_file_name << step_subdir.str() << "/rotation."<< step <<".bin";
+        replication_file_name << step_subdir.str() << "/replication."<< step <<".bin";
         
         cout<<"starting to open files"<<endl;
         id_file.open(id_file_name.str().c_str(), ios::out | ios::binary);
