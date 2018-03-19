@@ -207,7 +207,7 @@ void processLC(string dir_name, string out_dir, vector<string> step_strings,
             
             size_t current_size = reader.readNumElems(j);
             if(j%20==0){ cout << "Reading: " << current_size << endl; }
-            reader.readData(j);
+            reader.readData(j, false);
     
             if(j%20==0){ cout << "Converting positions..." << j+1 << "/" << nRanks << endl; }
             for (int k=0; k<current_size; ++k) {
@@ -443,8 +443,8 @@ void processLC(string dir_name, string out_dir, vector<string> step_strings,
         vx_file_name << step_subdir << "/vx."<< step <<".bin";
         vy_file_name << step_subdir << "/vy."<< step <<".bin";
         vz_file_name << step_subdir << "/vz."<< step <<".bin";
-        vz_file_name << step_subdir << "/rotation."<< step <<".bin";
-        vz_file_name << step_subdir << "/replication."<< step <<".bin";
+        rotation_file_name << step_subdir << "/rotation."<< step <<".bin";
+        replication_file_name << step_subdir << "/replication."<< step <<".bin";
         
         cout<<"starting to open files"<<endl;
         id_file.open(id_file_name.str().c_str(), ios::out | ios::binary);
@@ -484,10 +484,10 @@ void processLC(string dir_name, string out_dir, vector<string> step_strings,
         for (int j=0; j<nRanks; ++j) {
             
             size_t current_size = reader.readNumElems(j);
-            cout << "Reading: " << current_size << endl;
-            reader.readData(j);
+            if(j%20==0){ cout << "Reading: " << current_size << endl; }
+            reader.readData(j, false);
     
-            cout << "Converting positions..." << j+1 << "/" << nRanks << endl;
+            if(j%20==0){ cout << "Converting positions..." << j+1 << "/" << nRanks << endl; }
             for (int n=0; n<current_size; ++n) {
                 
                 // limit cutout to positive-x axis (since that is where we rotated the halo to)
@@ -507,7 +507,7 @@ void processLC(string dir_name, string out_dir, vector<string> step_strings,
                     float r = (float)sqrt(v_rot[0]*v_rot[0] + v_rot[1]*v_rot[1] + v_rot[2]*v_rot[2]);
                     float v_theta = acos(v_rot[2]/r) * 180.0 / PI * ARCSEC;
                     float v_phi = atan(v_rot[1]/v_rot[0]) * 180.0 / PI * ARCSEC;
-                    
+                            
                     // do cut and write
                     if (v_theta > theta_cut[0] && v_theta < theta_cut[1] && 
                         v_phi > phi_cut[0] && v_phi < phi_cut[1] ) {
