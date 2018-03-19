@@ -144,12 +144,13 @@ int main( int argc, char** argv ) {
     float maxZ = atof(argv[3]);
     int minStep = zToStep(maxZ);    
     vector<string> step_strings;
+    cout << "MINSTEP: " << minStep << endl;
     getLCSteps(minStep, input_lc_dir, step_strings);
     cout << "steps to include to z=" << maxZ << ": ";
     for(int i=0; i<step_strings.size(); ++i){ cout << step_strings[i] << " ";}
     cout << endl;
 
-    // might note use all of these but whatever
+    // might not use all of these but whatever
     vector<float> theta_cut(2);
     vector<float> phi_cut(2);
     vector<float> haloPos(3);

@@ -283,13 +283,14 @@ int getLCSteps(int minStep, string dir, vector<string> &step_strings){
     // find all lc step subdirs
     vector<string> subdirs;
     getLCSubdirs(dir, subdirs);
-
+    
     // extract step numbers from each subdirs
     vector<int> stepsAvail;
     for(int i=0; i<subdirs.size(); ++i){
         for(string::size_type j = 0; j < subdirs[i].size(); ++j){
             if( isdigit(subdirs[i][j]) ){
                 stepsAvail.push_back( atoi(subdirs[i].substr(j).c_str()) );
+                break;
             }
         }   
     }
@@ -297,6 +298,7 @@ int getLCSteps(int minStep, string dir, vector<string> &step_strings){
     // identify the lowest step to push to step_strings (see remarks at 
     // function header)
     sort(stepsAvail.begin(), stepsAvail.end());
+     
     for(int k=0; k<stepsAvail.size(); ++k){
         
         ostringstream stepStringStream;

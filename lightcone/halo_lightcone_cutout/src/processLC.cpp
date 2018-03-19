@@ -69,7 +69,7 @@ void processLC(string dir_name, string out_dir, vector<string> step_strings,
     //
     ///////////////////////////////////////////////////////////////
     
-
+    
     // perform cutout on data from each lc output step
     size_t max_size = 0;
     int step;
@@ -206,10 +206,10 @@ void processLC(string dir_name, string out_dir, vector<string> step_strings,
         for (int j=0; j<nRanks; ++j) {
             
             size_t current_size = reader.readNumElems(j);
-            cout << "Reading: " << current_size << endl;
+            if(j%20==0){ cout << "Reading: " << current_size << endl; }
             reader.readData(j);
     
-            cout << "Converting positions..." << j+1 << "/" << nRanks << endl;
+            if(j%20==0){ cout << "Converting positions..." << j+1 << "/" << nRanks << endl; }
             for (int k=0; k<current_size; ++k) {
                 
                 // limit cutout to the first octant
