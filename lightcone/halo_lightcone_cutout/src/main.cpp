@@ -111,7 +111,7 @@ int main( int argc, char** argv ) {
     //
     ////////////////////////////////////////
     //
-    // Note that the firt use case describe does not perform the coordinate 
+    // Note that the first use case describe does not perform the coordinate 
     // rotation which is described in the second. So, cutouts returned will
     // not necessarily be square, or symmetrical.
     
@@ -220,7 +220,6 @@ int main( int argc, char** argv ) {
         cout << "phi bounds: ";
         cout << phi_cut[0]/ARCSEC << " -> " << phi_cut[1]/ARCSEC <<" deg";
     }
-    cout << endl << endl;   
         
     // call overloaded processing function
     if(customHalo){

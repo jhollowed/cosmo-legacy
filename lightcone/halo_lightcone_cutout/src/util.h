@@ -45,6 +45,9 @@ float zToStep(float z, int totSteps=499, float maxZ=200.0);
 
 void sizeMismatch();
 
+float vecPairAngle(const vector<float> &v1,
+                   const vector<float> &v2);
+
 void cross(const vector<float> &v1, 
            const vector<float> &v2,
            vector<float> &v1xv2);

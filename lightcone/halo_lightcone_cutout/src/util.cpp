@@ -53,26 +53,44 @@ void sizeMismatch(){
     throw runtime_error("input vectors must have the same length");
 }
 
+float vecPairAngle(const vector<float> &v1,
+                   const vector<float> &v2){
+    // Return the angle between two vectors, in radians
+    //
+    // Params:
+    // :param v1: some three-dimensional vector
+    // :param v2: some other three-dimensional vector
+    // :return: the angle between v1 and v2, in radians
+   
+    // find (v1·v2), |v1|, and |v2|
+    float v1dv2 = std::inner_product(v1.begin(), v1.end(), v2.begin(), 0.0);
+    float mag_v1 = sqrt(std::inner_product(v1.begin(), v1.end(), v1.begin(), 0.0));
+    float mag_v2 = sqrt(std::inner_product(v2.begin(), v2.end(), v2.begin(), 0.0));
+
+    float theta = acos( v1dv2 / (mag_v1 * mag_v2) );
+    return theta; 
+} 
+
 void cross(const vector<float> &v1, 
            const vector<float> &v2,
            vector<float> &v1xv2){
     // This function calculates the cross product of two three 
     // dimensional vectors
     //
-    // Parmas:
+    // Params:
     // :param v1: some three-dimensional vector
     // :param v2: some other three-dimensional vector
-    // :param v1xv2: vector to hold the resultant cross-product of 
-    //               vectors v1 and v2
+    // :param v1xv2: vector to hold the resultant 
+    //               cross-product of vectors v1 and v2
     // :return: none
     
     int n1 = v1.size();
     int n2 = v2.size();
     if(n1 != n2){ sizeMismatch(); }
 
-    v1xv2[0] = v1[1]*v2[2] - v1[2]*v2[1];
-    v1xv2[1] = -(v1[0]*v2[2] - v1[2]*v2[0]);
-    v1xv2[2] = v1[0]*v2[1] - v1[1]*v2[0];
+    v1xv2.push_back( v1[1]*v2[2] - v1[2]*v2[1] );
+    v1xv2.push_back( -(v1[0]*v2[2] - v1[2]*v2[0]) );
+    v1xv2.push_back( v1[0]*v2[1] - v1[1]*v2[0] );
 }
 
 
@@ -87,17 +105,19 @@ void normCross(const vector<float> &a,
     // Parms:
     // :param a: some three-dimensional vector
     // :param b: some other three-dimensional vector
-    // :param k: vector to hold the resultant normalized cross-product of vectors a and b
+    // :param k: vector of size 3 to hold the resultant normalized cross-product of 
+    //           vectors a and b
     // :return: none
 
     int na = a.size();
     int nb = b.size();
     if(na != nb){ sizeMismatch(); }
 
-    vector<float> axb(3); 
+    vector<float> axb;
     cross(a, b, axb);
     float mag_axb = sqrt(std::inner_product(axb.begin(), axb.end(), axb.begin(), 0.0));
-    for(int i=0; i<na; ++i){ k[i] = axb[i] / mag_axb; }
+
+    for(int i=0; i<na; ++i){ k.push_back( axb[i] / mag_axb ); }
 }
 
 
@@ -132,7 +152,7 @@ void rotate(const vector<float> &k_vec,
         k = k_vec[i];
         k_x_v = kxv_vec[i];
 
-        v_rot[i] = v*cos(B) + (k_x_v)*sin(B) + k*kdv*(1-cos(B));
+        v_rot.push_back( v*cos(B) + (k_x_v)*sin(B) + k*kdv*(1-cos(B)) );
     } 
 }
 

@@ -36,16 +36,22 @@ struct Buffers {
 void processLC(string dir_name, string out_dir, vector<string> step_strings, 
                vector<float> theta_cut, vector<float> phi_cut){
 
+    ///////////////////////////////////////////////////////////////
+    //
+    //                          Setup
+    //
+    ///////////////////////////////////////////////////////////////
+    
     Buffers b;
 
     // find all lc sub directories for each step in step_strings
+    cout << endl << endl;
     cout << "Reading directory: " << dir_name << endl;
     vector<string> subdirs;
     getLCSubdirs(dir_name, subdirs);
     cout << "Found subdirs:" << endl;
     for (vector<string>::const_iterator i = subdirs.begin(); i != subdirs.end(); ++i)
          cout << *i << ' ';
-    cout << endl << endl;
 
     // find the prefix (chars before the step number) in the subdirectory names.
     // It is assumed that all subdirs have the same prefix.
@@ -56,6 +62,13 @@ void processLC(string dir_name, string out_dir, vector<string> step_strings,
             break;
         }
     }
+    
+    ///////////////////////////////////////////////////////////////
+    //
+    //                 Loop over step subdirs
+    //
+    ///////////////////////////////////////////////////////////////
+    
 
     // perform cutout on data from each lc output step
     size_t max_size = 0;
@@ -67,7 +80,7 @@ void processLC(string dir_name, string out_dir, vector<string> step_strings,
         if(step == 499){ continue;}
         
         // find header file
-        cout<< "---------- Working on step " << step_strings[i] << "----------" << endl;
+        cout<< "\n\n---------- Working on step " << step_strings[i] << "----------" << endl;
         string file_name;
         ostringstream file_name_stream;
         file_name_stream << dir_name << subdirPrefix << step_strings[i];
@@ -110,6 +123,12 @@ void processLC(string dir_name, string out_dir, vector<string> step_strings,
         mkdir(step_subdir.str().c_str(), S_IRWXU | S_IRGRP | S_IXGRP | S_IXOTH);
         cout << "Created subdir: " << step_subdir.str() << endl;
 
+        ///////////////////////////////////////////////////////////////
+        //
+        //           Create output files + start reading
+        //
+        ///////////////////////////////////////////////////////////////
+        
         // create binary files for cutout output
         ofstream id_file;
         ofstream theta_file;
@@ -177,6 +196,12 @@ void processLC(string dir_name, string out_dir, vector<string> step_strings,
         reader.addVariable("id", &b.id[0]); 
         reader.addVariable("rotation", &b.rotation[0]); 
         reader.addVariable("replication", &b.replication[0]); 
+
+        ///////////////////////////////////////////////////////////////
+        //
+        //                 Do cutting and write
+        //
+        ///////////////////////////////////////////////////////////////
 
         for (int j=0; j<nRanks; ++j) {
             
@@ -243,16 +268,22 @@ void processLC(string dir_name, string out_dir, vector<string> step_strings,
 void processLC(string dir_name, string out_dir, vector<string> step_strings, 
                vector<float> halo_pos, float boxLength){
 
+    ///////////////////////////////////////////////////////////////
+    //
+    //                          Setup
+    //
+    ///////////////////////////////////////////////////////////////
+    
     Buffers b;
 
     // find all lc sub directories for each step in step_strings
+    cout << endl << endl;
     cout << "Reading directory: " << dir_name << endl;
     vector<string> subdirs;
     getLCSubdirs(dir_name, subdirs);
     cout << "Found subdirs:" << endl;
     for (vector<string>::const_iterator i = subdirs.begin(); i != subdirs.end(); ++i)
          cout << *i << ' ';
-    cout << endl << endl;
 
     // find the prefix (chars before the step number) in the subdirectory names.
     // It is assumed that all subdirs have the same prefix.
@@ -263,7 +294,59 @@ void processLC(string dir_name, string out_dir, vector<string> step_strings,
             break;
         }
     }
+    
+    ///////////////////////////////////////////////////////////////
+    //
+    //                  Start coordinate rotation
+    //
+    ///////////////////////////////////////////////////////////////
 
+    cout<< "\n\n---------- Setting up for coordinate rotation ----------" << endl;
+    // do coordinate rotation to center halo at (r, 90, 0) in spherical coords
+    float halo_r = (float)sqrt(halo_pos[0]*halo_pos[0] + 
+                               halo_pos[1]*halo_pos[1] + 
+                               halo_pos[2]*halo_pos[2]);
+    float tmp[] = {halo_r, 0, 0};
+    vector<float> rotated_pos(tmp, tmp+3);
+    cout << "Finding axis of rotation to move (" << 
+            halo_pos[0]<< ", " << halo_pos[1]<< ", " << halo_pos[2]<< ") to (" <<
+            rotated_pos[0] << ", " << rotated_pos[1] << ", " << rotated_pos[2]<<")" << endl;
+
+    // get angle and axis of rotation -- this only needs to be calculated once for all
+    // steps, and it will be used to rotate all other position vectors in the 
+    // loops below
+    vector<float> k;
+    normCross(halo_pos, rotated_pos, k);
+    float B = vecPairAngle(halo_pos, rotated_pos);
+    cout << "Rotation is " << B*(180/PI) << "° about axis k = (" << 
+            k[0]<< ", " << k[1]<< ", " << k[2]<< ")" << endl;
+
+    // calculate theta_cut and phi_cut, in arcsec, given the specified boxLength
+    float halfBoxLength = boxLength / 2.0;
+    float dtheta = atan(halfBoxLength / halo_r);
+    float dphi = dtheta;
+     
+    // calculate theta-phi bounds of cutout under coordinate rotation
+    vector<float> theta_cut(2);
+    theta_cut[0] = (PI/2 - dtheta) * 180.0/PI * ARCSEC;
+    theta_cut[1] = (PI/2 + dtheta) * 180.0/PI * ARCSEC;
+    vector<float> phi_cut(2);
+    phi_cut[0] = (0 - dphi) * 180.0/PI * ARCSEC;
+    phi_cut[1] = (0 + dphi) * 180.0/PI * ARCSEC;
+    cout << "theta bounds set to: ";
+    cout << theta_cut[0]/ARCSEC << "° -> " << theta_cut[1]/ARCSEC <<"°"<< endl;
+    cout << "phi bounds set to: ";
+    cout << phi_cut[0]/ARCSEC << "° -> " << phi_cut[1]/ARCSEC <<"°" << endl;
+    cout << "theta-phi bounds result in box width of " << 
+            tan(dtheta) * halo_r * 2 << " Mpc at distance to halo of " << halo_r << endl 
+            << "        " << "= " << dtheta*2*180.0/PI << "°x" << dphi*2*180.0/PI << "° field of view";
+    
+    ///////////////////////////////////////////////////////////////
+    //
+    //                 Loop over step subdirs
+    //
+    ///////////////////////////////////////////////////////////////
+    
     // perform cutout on data from each lc output step
     size_t max_size = 0;
     int step;
@@ -274,7 +357,7 @@ void processLC(string dir_name, string out_dir, vector<string> step_strings,
         if(step == 499){ continue;}
         
         // find header file
-        cout<< "---------- Working on step " << step_strings[i] << "----------" << endl;
+        cout<< "\n\n---------- Working on step " << step_strings[i] << "----------" << endl;
         string file_name;
         ostringstream file_name_stream;
         file_name_stream << dir_name << subdirPrefix << step_strings[i];
@@ -317,6 +400,12 @@ void processLC(string dir_name, string out_dir, vector<string> step_strings,
         mkdir(step_subdir.str().c_str(), S_IRWXU | S_IRGRP | S_IXGRP | S_IXOTH);
         cout << "Created subdir: " << step_subdir.str() << endl;
 
+        ///////////////////////////////////////////////////////////////
+        //
+        //           Create output files + start reading
+        //
+        ///////////////////////////////////////////////////////////////
+        
         // create binary files for cutout output
         ofstream id_file;
         ofstream theta_file;
@@ -371,7 +460,7 @@ void processLC(string dir_name, string out_dir, vector<string> step_strings,
         rotation_file.open(rotation_file_name.str().c_str(), ios::out | ios::binary);
         replication_file.open(replication_file_name.str().c_str(), ios::out | ios::binary);
         cout<<"done opening files"<<endl;
-      
+     
         // start reading 
         reader.addVariable("x", &b.x[0]); 
         reader.addVariable("y", &b.y[0]); 
@@ -385,6 +474,13 @@ void processLC(string dir_name, string out_dir, vector<string> step_strings,
         reader.addVariable("rotation", &b.rotation[0]); 
         reader.addVariable("replication", &b.replication[0]); 
 
+        ///////////////////////////////////////////////////////////////
+        //
+        //                 Do cutting and write
+        //
+        ///////////////////////////////////////////////////////////////
+        
+        
         for (int j=0; j<nRanks; ++j) {
             
             size_t current_size = reader.readNumElems(j);
@@ -392,32 +488,46 @@ void processLC(string dir_name, string out_dir, vector<string> step_strings,
             reader.readData(j);
     
             cout << "Converting positions..." << j+1 << "/" << nRanks << endl;
-            for (int k=0; k<current_size; ++k) {
+            for (int n=0; n<current_size; ++n) {
                 
-                // limit cutout to the first octant
-                if (b.x[k] > 0.0 && b.y[k] > 0.0 && b.z[k] > 0.0) {
+                // limit cutout to positive-x axis (since that is where we rotated the halo to)
+                if (b.x[n] > 0.0){
                     
-                    // spherical coordinate transformation
-                    float r = (float)sqrt(b.x[k]*b.x[k] + b.y[k]*b.y[k] + b.z[k]*b.z[k]);
-                    b.theta[k] = acos(b.z[k]/r) * 180.0 / PI * ARCSEC;
-                    b.phi[k] = atan(b.y[k]/b.x[k]) * 180.0 / PI * ARCSEC;
+                    // do coordinate rotation center halo at (r, 90, 0)
+                    // B and n are the angle and axis of rotation, respectively,
+                    // near the beginning of this function
+                    float tmp[] = {b.x[n], b.y[n], b.z[n]};
+                    vector<float> v(tmp, tmp+3);
+                    vector<float> v_rot;
+                    rotate(k, B, v, v_rot);
+
+                    // spherical coordinate transformation. Don't write these theta
+                    // and phi values to the respective buffers, since we want to save
+                    // the true theta and phi to file, not these rotated versions
+                    float r = (float)sqrt(v_rot[0]*v_rot[0] + v_rot[1]*v_rot[1] + v_rot[2]*v_rot[2]);
+                    float v_theta = acos(v_rot[2]/r) * 180.0 / PI * ARCSEC;
+                    float v_phi = atan(v_rot[1]/v_rot[0]) * 180.0 / PI * ARCSEC;
                     
                     // do cut and write
-                    if (b.theta[k] > theta_cut[0] && b.theta[k] < theta_cut[1] && 
-                        b.phi[k] > phi_cut[0] && b.phi[k] < phi_cut[1] ) {
+                    if (v_theta > theta_cut[0] && v_theta < theta_cut[1] && 
+                        v_phi > phi_cut[0] && v_phi < phi_cut[1] ) {
                         
-                        id_file.write( (char*)&b.id[k], sizeof(int64_t));
-                        theta_file.write( (char*)&b.theta[k], sizeof(float));
-                        phi_file.write( (char*)&b.phi[k], sizeof(float));
-                        x_file.write((char*)&b.x[k],sizeof(float));
-                        y_file.write((char*)&b.y[k],sizeof(float));
-                        z_file.write((char*)&b.z[k],sizeof(float));
-                        vx_file.write((char*)&b.vx[k],sizeof(float));
-                        vy_file.write((char*)&b.vy[k],sizeof(float));
-                        vz_file.write((char*)&b.vz[k],sizeof(float));
-                        a_file.write( (char*)&b.a[k], sizeof(float));
-                        rotation_file.write( (char*)&b.rotation[k], sizeof(int));
-                        replication_file.write( (char*)&b.replication[k], sizeof(int32_t));
+                        // spherical coordiante transform of original (pre-rotate) position  
+                        b.theta[n] = acos(b.z[n]/r) * 180.0 / PI * ARCSEC;
+                        b.phi[n] = atan(b.y[n]/b.x[n]) * 180.0 / PI * ARCSEC;
+                        
+                        id_file.write( (char*)&b.id[n], sizeof(int64_t));
+                        theta_file.write( (char*)&b.theta[n], sizeof(float));
+                        phi_file.write( (char*)&b.phi[n], sizeof(float));
+                        x_file.write((char*)&b.x[n],sizeof(float));
+                        y_file.write((char*)&b.y[n],sizeof(float));
+                        z_file.write((char*)&b.z[n],sizeof(float));
+                        vx_file.write((char*)&b.vx[n],sizeof(float));
+                        vy_file.write((char*)&b.vy[n],sizeof(float));
+                        vz_file.write((char*)&b.vz[n],sizeof(float));
+                        a_file.write( (char*)&b.a[n], sizeof(float));
+                        rotation_file.write( (char*)&b.rotation[n], sizeof(int));
+                        replication_file.write( (char*)&b.replication[n], sizeof(int32_t));
                     }
                 }
             }
