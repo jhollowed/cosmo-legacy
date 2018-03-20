@@ -124,7 +124,8 @@ void normCross(const vector<float> &a,
 void rotate(const vector<float> &k_vec,
             const float B, 
             const vector<float> &v_vec, 
-            vector<float> &v_rot){ 
+            vector<float> &v_rot, 
+            bool yesPrint){ 
     // This function implements the Rodrigues rotation formula. See the docstrings
     // under the main() function header for more info.
     //
@@ -151,6 +152,12 @@ void rotate(const vector<float> &k_vec,
         v = v_vec[i];
         k = k_vec[i];
         k_x_v = kxv_vec[i];
+       
+        if(yesPrint){ 
+            cout << "t1, "<<i<<": " << v*cos(B) << endl;
+            cout << "t2, "<<i<<": " << (k_x_v)*sin(B) << endl;
+            cout << "t3, "<<i<<": " << k*kdv*(1-cos(B)) << endl;
+        }
 
         v_rot.push_back( v*cos(B) + (k_x_v)*sin(B) + k*kdv*(1-cos(B)) );
     } 

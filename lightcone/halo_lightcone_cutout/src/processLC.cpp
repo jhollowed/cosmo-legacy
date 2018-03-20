@@ -399,7 +399,7 @@ void processLC(string dir_name, string out_dir, vector<string> step_strings,
         step_subdir << out_dir << subdirPrefix << "Cutout" << step_strings[i];
         mkdir(step_subdir.str().c_str(), S_IRWXU | S_IRGRP | S_IXGRP | S_IXOTH);
         cout << "Created subdir: " << step_subdir.str() << endl;
-
+        
         ///////////////////////////////////////////////////////////////
         //
         //           Create output files + start reading
@@ -512,6 +512,12 @@ void processLC(string dir_name, string out_dir, vector<string> step_strings,
                     if (v_theta > theta_cut[0] && v_theta < theta_cut[1] && 
                         v_phi > phi_cut[0] && v_phi < phi_cut[1] ) {
                         
+                        if(step > 453){ 
+                            rotate(k, B, v, v_rot, true);
+                            cout << "VROT: " << v_rot[0] << ", " << v_rot[1] << ", " << v_rot[2] << endl; 
+                            cout << "V: " << v[0] << ", " << v[1] << ", " << v[2] << endl; 
+                        }
+
                         // spherical coordiante transform of original (pre-rotate) position  
                         b.theta[n] = acos(b.z[n]/r) * 180.0 / PI * ARCSEC;
                         b.phi[n] = atan(b.y[n]/b.x[n]) * 180.0 / PI * ARCSEC;
