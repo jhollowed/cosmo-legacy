@@ -59,7 +59,7 @@ void normCross(const vector<float> &a,
 void rotate(const vector<float> &k_vec,
             const float B, 
             const vector<float> &v_vec, 
-            vector<float> &v_rot, bool yesPrint=false); 
+            vector<float> &v_rot); 
 
 //////////////////////////////////////////////////////
 //
