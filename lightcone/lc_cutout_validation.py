@@ -13,7 +13,7 @@ def makePlot():
     subdirs = glob.glob("{}/*".format(outDir))
     steps = [int(s.split('Cutout')[-1]) for s in subdirs]
     steps = sorted(steps)
-    downsFrac = 0.05
+    downsFrac = 0.01
     dt = np.dtype('<f')
     x = np.array([])
     y = np.array([])
@@ -23,6 +23,7 @@ def makePlot():
     phi = np.array([])
     thetaRot = np.array([])
     phiRot = np.array([])
+    conv = (np.pi / 180)
 
     f = plt.figure(0)
     ax1 = plt.subplot2grid((3,2), (0,0), colspan=2, rowspan=2, projection='3d')
@@ -53,9 +54,9 @@ def makePlot():
         phiRot = np.hstack([phiRot, downsample(np.fromfile(pRotf, dtype=dt), downsFrac)/3600])
 
     r = np.sqrt(x**2 + y**2 + z**2)
-    xRot = r*np.sin(thetaRot)*np.cos(phiRot)
-    yRot = r*np.sin(thetaRot)*np.sin(phiRot)
-    zRot = r*np.cos(thetaRot)
+    xRot = r*np.sin(thetaRot*conv)*np.cos(phiRot*conv)
+    yRot = r*np.sin(thetaRot*conv)*np.sin(phiRot*conv)
+    zRot = r*np.cos(thetaRot*conv)
     
     thetaSpan = np.max(theta) - np.min(theta) 
     phiSpan = np.max(phi) - np.min(phi)
