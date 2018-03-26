@@ -135,6 +135,12 @@ int main( int argc, char** argv ) {
         modified_out_dir << out_dir << "/";
         out_dir = modified_out_dir.str();
     }
+    struct stat info;
+    if( stat( out_dir.c_str(), &info ) != 0 ){
+	ostringstream badOut;
+	badOut << "Cannot access specified output directory " << out_dir;
+        throw runtime_error( badOut.str() );
+    }
     
     cout << "using lightcone at ";
     cout << input_lc_dir << endl;
