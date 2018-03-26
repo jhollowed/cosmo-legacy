@@ -419,9 +419,6 @@ void processLC(string dir_name, string out_dir, vector<string> step_strings,
         ofstream vz_file;
         ofstream rotation_file;
         ofstream replication_file;
-        ofstream xRot_file;
-        ofstream yRot_file;
-        ofstream zRot_file;
         ofstream thetaRot_file;
         ofstream phiRot_file;
 
@@ -437,9 +434,6 @@ void processLC(string dir_name, string out_dir, vector<string> step_strings,
         ostringstream vz_file_name;
         ostringstream rotation_file_name;
         ostringstream replication_file_name;
-        ostringstream xRot_file_name;
-        ostringstream yRot_file_name;
-        ostringstream zRot_file_name;
         ostringstream thetaRot_file_name;
         ostringstream phiRot_file_name;
 
@@ -455,9 +449,6 @@ void processLC(string dir_name, string out_dir, vector<string> step_strings,
         vz_file_name << step_subdir.str() << "/vz."<< step <<".bin";
         rotation_file_name << step_subdir.str() << "/rotation."<< step <<".bin";
         replication_file_name << step_subdir.str() << "/replication."<< step <<".bin";
-        xRot_file_name << step_subdir.str() << "/xRot."<< step << ".bin";
-        yRot_file_name << step_subdir.str() << "/yRot."<< step << ".bin";
-        zRot_file_name << step_subdir.str() << "/zRot."<< step << ".bin";
         thetaRot_file_name << step_subdir.str() << "/thetaRot." << step << ".bin";
         phiRot_file_name << step_subdir.str() << "/phiRot." << step << ".bin";
         
@@ -474,9 +465,6 @@ void processLC(string dir_name, string out_dir, vector<string> step_strings,
         vz_file.open(vz_file_name.str().c_str(), ios::out | ios::binary);
         rotation_file.open(rotation_file_name.str().c_str(), ios::out | ios::binary);
         replication_file.open(replication_file_name.str().c_str(), ios::out | ios::binary);
-        xRot_file.open(xRot_file_name.str().c_str(), ios::out | ios::binary);
-        yRot_file.open(yRot_file_name.str().c_str(), ios::out | ios::binary);
-        zRot_file.open(zRot_file_name.str().c_str(), ios::out | ios::binary);
         thetaRot_file.open(thetaRot_file_name.str().c_str(), ios::out | ios::binary);
         phiRot_file.open(phiRot_file_name.str().c_str(), ios::out | ios::binary);
         cout<<"done opening files"<<endl;
@@ -537,8 +525,6 @@ void processLC(string dir_name, string out_dir, vector<string> step_strings,
                         b.phi[n] = atan(b.y[n]/b.x[n]) * 180.0 / PI * ARCSEC;
                         
                         id_file.write( (char*)&b.id[n], sizeof(int64_t));
-                        theta_file.write( (char*)&b.theta[n], sizeof(float));
-                        phi_file.write( (char*)&b.phi[n], sizeof(float));
                         x_file.write((char*)&b.x[n],sizeof(float));
                         y_file.write((char*)&b.y[n],sizeof(float));
                         z_file.write((char*)&b.z[n],sizeof(float));
@@ -548,9 +534,8 @@ void processLC(string dir_name, string out_dir, vector<string> step_strings,
                         a_file.write( (char*)&b.a[n], sizeof(float));
                         rotation_file.write( (char*)&b.rotation[n], sizeof(int));
                         replication_file.write( (char*)&b.replication[n], sizeof(int32_t));
-                        xRot_file.write((char*)&v_rot[0],sizeof(float));
-                        yRot_file.write((char*)&v_rot[1],sizeof(float));
-                        zRot_file.write((char*)&v_rot[2],sizeof(float));
+                        theta_file.write( (char*)&b.theta[n], sizeof(float));
+                        phi_file.write( (char*)&b.phi[n], sizeof(float));
                         thetaRot_file.write( (char*)&v_theta, sizeof(float));
                         phiRot_file.write( (char*)&v_phi, sizeof(float));
                     }
@@ -571,9 +556,6 @@ void processLC(string dir_name, string out_dir, vector<string> step_strings,
         a_file.close();
         rotation_file.close();
         replication_file.close();
-        xRot_file.close();
-        yRot_file.close();
-        zRot_file.close();
         thetaRot_file.close();
         phiRot_file.close();
     }
