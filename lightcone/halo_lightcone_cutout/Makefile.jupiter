@@ -1,11 +1,10 @@
-# On jupiter, first run module load mvapich2-2.2b-gcc-5.3.0-o4of6w7
 CPP := mpicxx
 CPPFLAGS := -O3
 SRCDIR := ./src
 OBJDIR := ./obj
 OBJECTS := $(OBJDIR)/util.o $(OBJDIR)/processLC.o $(OBJDIR)/main.o 
 TRUNK_LOC := /homes/jphollowed/code/lc_interpolation/jupiter
-INCLUDES := -I $(SRCDIR) -I /homes/jphollowed/code/lc_interpolation/genericio
+INCLUDES := -I $(SRCDIR) -I /homes/jphollowed/code/lc_interpolation/jupiter
 LIBS := $(TRUNK_LOC)/mpi/lib/libGenericIOMPI.a
 
 #linking
