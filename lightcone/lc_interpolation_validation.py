@@ -11,8 +11,15 @@ import h5py as h5
 import glob
 
 '''
-This file contains functions for inspecting the lightcone output
+This file contains functions for inspecting and visualizing lightcone output
 '''
+
+#######################################
+#
+#             Utility functions
+#
+#######################################
+
 def config(cmap): 
     
     rcParams.update({'figure.autolayout': True})
@@ -22,6 +29,57 @@ def config(cmap):
     c = cycler('color', colors)
     plt.rcParams["axes.prop_cycle"] = c
     
+
+def plotCube(x, y, z, xw, yw, zw, ax, color, alpha=1):
+
+    xx, yy = np.meshgrid([x, x+xw], [y, y+yw])
+    ax.plot_surface(xx, yy, np.ones(np.shape(xx))*z, color=color, alpha=alpha, shade=False)
+    ax.plot_surface(xx, yy, np.ones(np.shape(xx))*(z+zw), color=color, alpha=alpha, shade=False)
+
+    yy, zz = np.meshgrid([y, y+yw], [z, z+zw])
+    ax.plot_surface(np.ones(np.shape(yy))*x, yy, zz, color=color, alpha=alpha, shade=False)
+    ax.plot_surface(np.ones(np.shape(yy))*(x+xw), yy, zz, color=color, alpha=alpha, shade=False)
+
+    zz, xx = np.meshgrid([z, z+zw], [x, x+xw])
+    ax.plot_surface(xx, np.ones(np.shape(xx))*y, zz, color=color, alpha=alpha, shade=False)
+    ax.plot_surface(xx, np.ones(np.shape(xx))*(y+yw), zz, color=color, alpha=alpha, shade=False)
+
+def downsampleOutput():
+    
+    from dtk import gio
+    from dtk import sort 
+
+    ipath="/home/jphollowed/data/hacc/alphaQ/lightcone/downsampled_particle_intrp_lc/step442"
+   
+    coord = 'x'
+    coord2 = 'y'
+    coord3 = 'z'
+    s_coord = 'x'
+    s_coord2 = 'y'
+    s_coord3 = 'z'
+
+    print("Reading interpolation files")
+    iid = gio.gio_read("{}/lc_intrp_output_d.442".format(ipath), 'id')
+    ix = gio.gio_read("{}/lc_intrp_output_d.442".format(ipath), coord)
+    iy = gio.gio_read("{}/lc_intrp_output_d.442".format(ipath), coord2)
+    iz = gio.gio_read("{}/lc_intrp_output_d.442".format(ipath), coord3)
+    irot = gio.gio_read("{}/lc_intrp_output_d.442".format(ipath), 'rotation')
+    
+    idx = np.linspace(0, len(iid)-1, len(iid), dtype=int)
+    randIdx = np.random.choice(idx, size=100000, replace=False)
+
+    ds_iid = iid[randIdx]
+    ds_ix = ix[randIdx]
+    ds_iy = iy[randIdx]
+    ds_iz = iz[randIdx]
+    ds_irot = irot[randIdx]
+
+    np.savez('lc_intrp_output_tinySample.npz', id=ds_iid, x=ds_ix, y=ds_iy, 
+                                               z=ds_iz,rot=ds_irot)
+    return;
+
+#############################################################################################
+#############################################################################################
 
 def saveParticlePathData(diffRange='max', plot=True, posDiffOnly=False, dt_type='linear'):
     '''
@@ -166,7 +224,6 @@ def saveParticlePathData(diffRange='max', plot=True, posDiffOnly=False, dt_type=
         diffVals = np.where(np.in1d(iid2[iMask], badIds))[0][0:20]
         savePath = "lc_particle_paths/{}_ids".format(diffRange)
 
-
     print("Reading timestep files")
     sid0 = gio.gio_read("{}/m000.mpicosmo.421".format(spath), 'id')
     sx0 = gio.gio_read("{}/m000.mpicosmo.421".format(spath), s_coord)
@@ -201,8 +258,7 @@ def saveParticlePathData(diffRange='max', plot=True, posDiffOnly=False, dt_type=
         else:
             print('Matching to snapshots for idx {} with diff of NA'.format(idx))
         print('Particle ID is {}'.format(iid2[iMask][idx]))
-        
-        
+                
         if(diffRange != 'weird' and diffRange != 'dupl_extrapUnique'):
             ix = ix2[iMask][idx]
             iy = iy2[iMask][idx]
@@ -299,6 +355,8 @@ def saveParticlePathData(diffRange='max', plot=True, posDiffOnly=False, dt_type=
             ax2.set_zlabel(coord3)
             plt.show()
 
+#############################################################################################
+#############################################################################################
 
 def plotParticlePaths(diffRange = 'max'):
     '''
@@ -389,7 +447,6 @@ def plotParticlePaths(diffRange = 'max'):
         ax_xa.invert_yaxis()
         ax_xa.grid()
 
-
         ax_za = plt.subplot2grid((3,3), (0,2), rowspan=2)
         ax_za.plot((1/truea)-1, truez, '--k.', label='true path')
         
@@ -411,15 +468,72 @@ def plotParticlePaths(diffRange = 'max'):
         ax_za.grid()
         ax_za.legend(bbox_to_anchor=(1.12, -0.35))
 
-
         plt.gcf().set_size_inches(8, 6)
         plt.gcf().tight_layout()
 
         plt.gcf().canvas.manager.window.move(540, 200)
         plt.show()
 
+#############################################################################################
+#############################################################################################
+
+def findDuplicates(lc_type = 'i', dt_type='nonlin'):
+
+    from dtk import sort
+    from dtk import gio
+
+    print('reading data')
+    if(lc_type == 'i'):
+        path1="/home/jphollowed/data/hacc/alphaQ/lightcone/"\
+              "downsampled_particle_intrp_lc/step442_{}".format(dt_type)
+        path2="/home/jphollowed/data/hacc/alphaQ/lightcone/"\
+              "downsampled_particle_intrp_lc/step432_{}".format(dt_type)
+        file1 = "{}/lc_intrp_output_d.442".format(path1)
+        file2 = "{}/lc_intrp_output_d.432".format(path2)
+        outfile = h5.File('dups_interp_{}.hdf5'.format(dt_type), 'w')
+    if(lc_type == 'e'):
+        path1="/home/jphollowed/data/hacc/alphaQ/lightcone/"\
+              "downsampled_particle_extrp_lc/step442_{}".format(dt_type)
+        path2="/home/jphollowed/data/hacc/alphaQ/lightcone/"\
+              "downsampled_particle_extrp_lc/step432_{}".format(dt_type)
+        file1 = "{}/lc_output_d.442".format(path1)
+        file2 = "{}/lc_output_d.432".format(path2)
+        outfile = h5.File('dups_extrap_{}.hdf5'.format(dt_type), 'w')
 
 
+    ids1 = gio.gio_read(file1, 'id')
+    ids2 = gio.gio_read(file2, 'id')
+    
+    print('matching')
+    matches = sort.search_sorted(ids1, ids2)
+
+    matchesMask2 = matches != -1
+    matchesMask1 = matches[matchesMask2]
+
+    print('found {} duplicates'.format(np.sum(matchesMask2)))
+
+    dup_ids1 = ids1[matchesMask1]
+    x1 = gio.gio_read(file1, 'x')[matchesMask1]
+    y1 = gio.gio_read(file1, 'y')[matchesMask1]
+    z1 = gio.gio_read(file1, 'z')[matchesMask1]
+    
+    dup_ids2 = ids2[matchesMask2]
+    x2 = gio.gio_read(file2, 'x')[matchesMask2]
+    y2 = gio.gio_read(file2, 'y')[matchesMask2]
+    z2 = gio.gio_read(file2, 'z')[matchesMask2]
+
+    repeat_frac = float(len(dup_ids2)) / len(ids2) 
+    print('repeat fraction is {}'.format(repeat_frac))
+
+    print('writing out')
+    outfile.create_dataset('repeat_frac', data=np.array([repeat_frac]))
+    outfile.create_dataset('id', data = np.hstack([dup_ids2, dup_ids1]))
+    outfile.create_dataset('x', data = np.hstack([x2, x1]))
+    outfile.create_dataset('y', data = np.hstack([y2, y1]))
+    outfile.create_dataset('z', data = np.hstack([z2, z1]))
+
+#############################################################################################
+#############################################################################################
 
 def compareDuplicates(dt_type = 'linear'):
 
@@ -480,98 +594,47 @@ def compareDuplicates(dt_type = 'linear'):
  
     plt.show()
 
+#############################################################################################
+#############################################################################################
 
-def downsampleOutput():
-    
-    from dtk import gio
-    from dtk import sort 
+def compareReps():
 
-    ipath="/home/jphollowed/data/hacc/alphaQ/lightcone/downsampled_particle_intrp_lc/step442"
-   
-    coord = 'x'
-    coord2 = 'y'
-    coord3 = 'z'
-    s_coord = 'x'
-    s_coord2 = 'y'
-    s_coord3 = 'z'
+    colors = plt.cm.viridis(np.linspace(0, 1, 6))
 
-    print("Reading interpolation files")
-    iid = gio.gio_read("{}/lc_intrp_output_d.442".format(ipath), 'id')
-    ix = gio.gio_read("{}/lc_intrp_output_d.442".format(ipath), coord)
-    iy = gio.gio_read("{}/lc_intrp_output_d.442".format(ipath), coord2)
-    iz = gio.gio_read("{}/lc_intrp_output_d.442".format(ipath), coord3)
-    irot = gio.gio_read("{}/lc_intrp_output_d.442".format(ipath), 'rotation')
-    
-    idx = np.linspace(0, len(iid)-1, len(iid), dtype=int)
-    randIdx = np.random.choice(idx, size=100000, replace=False)
+    f = plt.figure()
+    ax1 = f.add_subplot(221, projection='3d')
+    ax2 = f.add_subplot(223, projection='3d')
+    ax3 = f.add_subplot(224, projection='3d')
 
-    ds_iid = iid[randIdx]
-    ds_ix = ix[randIdx]
-    ds_iy = iy[randIdx]
-    ds_iz = iz[randIdx]
-    ds_irot = irot[randIdx]
+    path64 = 'testOutput_64N/lc432'
+    path256 = 'testOutput_64N/lc432'
+    pathGals = 'galOutput_32N/lcGals432'
 
-    np.savez('lc_intrp_output_tinySample.npz', id=ds_iid, x=ds_ix, y=ds_iy, 
-                                               z=ds_iz,rot=ds_irot)
-    return;
+    rot64 = gio.gio_read('{}/lc_intrp_full.432'.format(path64), 'rotation')
+    rep64 = gio.gio_read('{}/lc_intrp_full.432'.format(path64), 'replication')
+    rot256 = gio.gio_read('{}/lc_intrp_full.432'.format(path256), 'rotation')
+    rep256 = gio.gio_read('{}/lc_intrp_full.432'.format(path256), 'replication')
+    rotGals = gio.gio_read('{}/lc_extrp_gals.432'.format(pathGals), 'rotation')
+    repGals = gio.gio_read('{}/lc_extrp_gals.432'.format(pathGals), 'replication')
 
-def findDuplicates(lc_type = 'i', dt_type='nonlin'):
+    uniqRep64 = np.unique(rep64, return_counts=True)
+    xReps64 = -((uniqRep64[0] >> 20) - 1) * 256
+    yReps64 = -(((uniqRep64[0] >> 10) & 0x3ff) - 1) * 256
+    zReps64 = -((uniqRep64[0] & 0x3ff) - 1) * 256
 
-    from dtk import sort
-    from dtk import gio
+    uniqRep256 = np.unique(rep256, return_counts=True)
+    xReps256 = -((uniqRep256[0] >> 20) - 1) * 256
+    yReps256 = -(((uniqRep256[0] >> 10) & 0x3ff) - 1) * 256
+    zReps256 = -((uniqRep256[0] & 0x3ff) - 1) * 256
 
-    print('reading data')
-    if(lc_type == 'i'):
-        path1="/home/jphollowed/data/hacc/alphaQ/lightcone/"\
-              "downsampled_particle_intrp_lc/step442_{}".format(dt_type)
-        path2="/home/jphollowed/data/hacc/alphaQ/lightcone/"\
-              "downsampled_particle_intrp_lc/step432_{}".format(dt_type)
-        file1 = "{}/lc_intrp_output_d.442".format(path1)
-        file2 = "{}/lc_intrp_output_d.432".format(path2)
-        outfile = h5.File('dups_interp_{}.hdf5'.format(dt_type), 'w')
-    if(lc_type == 'e'):
-        path1="/home/jphollowed/data/hacc/alphaQ/lightcone/"\
-              "downsampled_particle_extrp_lc/step442_{}".format(dt_type)
-        path2="/home/jphollowed/data/hacc/alphaQ/lightcone/"\
-              "downsampled_particle_extrp_lc/step432_{}".format(dt_type)
-        file1 = "{}/lc_output_d.442".format(path1)
-        file2 = "{}/lc_output_d.432".format(path2)
-        outfile = h5.File('dups_extrap_{}.hdf5'.format(dt_type), 'w')
+    uniqRepGals = np.unique(repGals, return_counts=True)
+    xRepsGals = -((uniqRepGals[0] >> 20) - 1) * 256
+    yRepsGals = -(((uniqRepGals[0] >> 10) & 0x3ff) - 1) * 256
+    zRepsGals = -((uniqRepGals[0] & 0x3ff) - 1) * 256
 
-
-    ids1 = gio.gio_read(file1, 'id')
-    ids2 = gio.gio_read(file2, 'id')
-    
-    print('matching')
-    matches = sort.search_sorted(ids1, ids2)
-
-    matchesMask2 = matches != -1
-    matchesMask1 = matches[matchesMask2]
-
-    print('found {} duplicates'.format(np.sum(matchesMask2)))
-
-    dup_ids1 = ids1[matchesMask1]
-    x1 = gio.gio_read(file1, 'x')[matchesMask1]
-    y1 = gio.gio_read(file1, 'y')[matchesMask1]
-    z1 = gio.gio_read(file1, 'z')[matchesMask1]
-    
-    dup_ids2 = ids2[matchesMask2]
-    x2 = gio.gio_read(file2, 'x')[matchesMask2]
-    y2 = gio.gio_read(file2, 'y')[matchesMask2]
-    z2 = gio.gio_read(file2, 'z')[matchesMask2]
-
-    repeat_frac = float(len(dup_ids2)) / len(ids2) 
-    print('repeat fraction is {}'.format(repeat_frac))
-
-    print('writing out')
-    outfile.create_dataset('repeat_frac', data=np.array([repeat_frac]))
-    outfile.create_dataset('id', data = np.hstack([dup_ids2, dup_ids1]))
-    outfile.create_dataset('x', data = np.hstack([x2, x1]))
-    outfile.create_dataset('y', data = np.hstack([y2, y1]))
-    outfile.create_dataset('z', data = np.hstack([z2, z1]))
-    
-
-def plotPk():
+    repColors64 = np.zeros(len(uniqRep64[0]))
+    repColors256 = np.zeros(len(uniqRep256[0]))
+    repColorsGals = np.zeros(len(uniqRepGals[0]))
 
     pkPath = '/home/joe/gdrive2/work/HEP/data/hacc/alphaQ/lightcone/lc_pk'
     extrp = np.fromfile('{}/cl_ext.bin'.format(pkPath), '>f')
