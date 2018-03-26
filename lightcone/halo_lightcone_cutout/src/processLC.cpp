@@ -498,11 +498,11 @@ void processLC(string dir_name, string out_dir, vector<string> step_strings,
             if(j%20==0){ cout << "Converting positions..." << j+1 << "/" << nRanks << endl; }
             for (int n=0; n<current_size; ++n) {
                 
-                // limit cutout to positive-x axis (since that is where we rotated the halo to)
-                if (b.x[n] > 0.0){
+                // limit cutout to first octant for speed
+                if (b.x[n] > 0.0 && b.y[n] > 0.0 && b.z[n] > 0.0){
                     
                     // do coordinate rotation center halo at (r, 90, 0)
-                    // B and n are the angle and axis of rotation, respectively,
+                    // B and k are the angle and axis of rotation, respectively,
                     // calculated near the beginning of this function
                     float tmp[] = {b.x[n], b.y[n], b.z[n]};
                     vector<float> v(tmp, tmp+3);
@@ -510,7 +510,7 @@ void processLC(string dir_name, string out_dir, vector<string> step_strings,
                     rotate(k, B, v, v_rot);
 
                     // spherical coordinate transformation. Don't write these theta
-                    // and phi values to the respective buffers, since we want to save
+                    // and phi values to their respective buffers, since we want to save
                     // the true theta and phi to file, not these rotated versions
                     float r = (float)sqrt(v_rot[0]*v_rot[0] + v_rot[1]*v_rot[1] + v_rot[2]*v_rot[2]);
                     float v_theta = acos(v_rot[2]/r) * 180.0 / PI * ARCSEC;
