@@ -9,18 +9,15 @@ def downsample(arr, factor=0.01):
     return np.random.choice(arr, int(len(arr)*factor), replace=False)
 
 def makePlot():
-    outDir = "test_alphaQ_cutout_halo"
+    outDir = "test_alphaQ_lcCutout"
     subdirs = glob.glob("{}/*".format(outDir))
     steps = [int(s.split('Cutout')[-1]) for s in subdirs]
     steps = sorted(steps)
-    downsFrac = 0.1
+    downsFrac = 0.05
     dt = np.dtype('<f')
     x = np.array([])
     y = np.array([])
     z = np.array([])
-    xRot = np.array([])
-    yRot = np.array([])
-    zRot = np.array([])
     a = np.array([])
     theta = np.array([])
     phi = np.array([])
@@ -38,9 +35,6 @@ def makePlot():
         xf = "{0}/lcHalosCutout{1}/x.{1}.bin".format(outDir, step)
         yf = "{0}/lcHalosCutout{1}/y.{1}.bin".format(outDir, step)
         zf = "{0}/lcHalosCutout{1}/z.{1}.bin".format(outDir, step)
-        xRotf = "{0}/lcHalosCutout{1}/xRot.{1}.bin".format(outDir, step)
-        yRotf = "{0}/lcHalosCutout{1}/yRot.{1}.bin".format(outDir, step)
-        zRotf = "{0}/lcHalosCutout{1}/zRot.{1}.bin".format(outDir, step)
         af = "{0}/lcHalosCutout{1}/a.{1}.bin".format(outDir, step)
         tf = "{0}/lcHalosCutout{1}/theta.{1}.bin".format(outDir, step)
         pf = "{0}/lcHalosCutout{1}/phi.{1}.bin".format(outDir, step)
@@ -52,15 +46,17 @@ def makePlot():
         x = np.hstack([x, downsample(np.fromfile(xf, dtype=dt), downsFrac)])
         y = np.hstack([y, downsample(np.fromfile(yf, dtype=dt), downsFrac)])
         z = np.hstack([z, downsample(np.fromfile(zf, dtype=dt), downsFrac)])
-        xRot = np.hstack([xRot, downsample(np.fromfile(xRotf, dtype=dt), downsFrac)])
-        yRot = np.hstack([yRot, downsample(np.fromfile(yRotf, dtype=dt), downsFrac)])
-        zRot = np.hstack([zRot, downsample(np.fromfile(zRotf, dtype=dt), downsFrac)])
         a = np.hstack([a, downsample(np.fromfile(af, dtype=dt), downsFrac)])
         theta = np.hstack([theta, downsample(np.fromfile(tf, dtype=dt), downsFrac)/3600])
         phi = np.hstack([phi, downsample(np.fromfile(pf, dtype=dt), downsFrac)/3600])
         thetaRot = np.hstack([thetaRot, downsample(np.fromfile(tRotf, dtype=dt), downsFrac)/3600])
         phiRot = np.hstack([phiRot, downsample(np.fromfile(pRotf, dtype=dt), downsFrac)/3600])
 
+    r = np.sqrt(x**2 + y**2 + z**2)
+    xRot = r*np.sin(thetaRot)*np.cos(phiRot)
+    yRot = r*np.sin(thetaRot)*np.sin(phiRot)
+    zRot = r*np.cos(thetaRot)
+    
     thetaSpan = np.max(theta) - np.min(theta) 
     phiSpan = np.max(phi) - np.min(phi)
     thetaSpanRot = np.max(thetaRot) - np.min(thetaRot) 
@@ -93,7 +89,3 @@ def makePlot():
     ax3.set_title('to equator')
     plt.tight_layout()
     plt.show()
-        
-                
-
-
