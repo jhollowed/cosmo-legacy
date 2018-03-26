@@ -503,7 +503,7 @@ void processLC(string dir_name, string out_dir, vector<string> step_strings,
                     
                     // do coordinate rotation center halo at (r, 90, 0)
                     // B and n are the angle and axis of rotation, respectively,
-                    // near the beginning of this function
+                    // calculated near the beginning of this function
                     float tmp[] = {b.x[n], b.y[n], b.z[n]};
                     vector<float> v(tmp, tmp+3);
                     vector<float> v_rot;
