@@ -8,12 +8,20 @@ from mpl_toolkits.mplot3d import Axes3D
 def downsample(arr, factor=0.01):
     return np.random.choice(arr, int(len(arr)*factor), replace=False)
 
-def makePlot():
-    outDir = "test_alphaQ_lcCutout"
+def makePlot(outDir, downsFrac = 0.01):
+    
     subdirs = glob.glob("{}/*".format(outDir))
+    
+    for i in range(len(subdirs[0].split('/')[-1])):
+        try:
+            (int(subdirs[0].split('/')[-1][i]))
+            prefix = subdirs[0].split('/')[-1][0:i]
+            break
+        except ValueError:
+            continue
+
     steps = [int(s.split('Cutout')[-1]) for s in subdirs]
     steps = sorted(steps)
-    downsFrac = 0.01
     dt = np.dtype('<f')
     x = np.array([])
     y = np.array([])
@@ -33,25 +41,27 @@ def makePlot():
     for i in range(len(steps)):
         
         step = steps[i]
-        xf = "{0}/lcHalosCutout{1}/x.{1}.bin".format(outDir, step)
-        yf = "{0}/lcHalosCutout{1}/y.{1}.bin".format(outDir, step)
-        zf = "{0}/lcHalosCutout{1}/z.{1}.bin".format(outDir, step)
-        af = "{0}/lcHalosCutout{1}/a.{1}.bin".format(outDir, step)
-        tf = "{0}/lcHalosCutout{1}/theta.{1}.bin".format(outDir, step)
-        pf = "{0}/lcHalosCutout{1}/phi.{1}.bin".format(outDir, step)
-        tRotf = "{0}/lcHalosCutout{1}/thetaRot.{1}.bin".format(outDir, step)
-        pRotf = "{0}/lcHalosCutout{1}/phiRot.{1}.bin".format(outDir, step)
-        
+        xf = "{0}/{1}{2}/x.{2}.bin".format(outDir, prefix, step)
+        yf = "{0}/{1}{2}/y.{2}.bin".format(outDir, prefix, step)
+        zf = "{0}/{1}{2}/z.{2}.bin".format(outDir, prefix, step)
+        af = "{0}/{1}{2}/a.{2}.bin".format(outDir, prefix, step)
+        tf = "{0}/{1}{2}/theta.{2}.bin".format(outDir, prefix, step)
+        pf = "{0}/{1}{2}/phi.{2}.bin".format(outDir, prefix, step)
+        tRotf = "{0}/{1}{2}/thetaRot.{2}.bin".format(outDir, prefix, step)
+        pRotf = "{0}/{1}{2}/phiRot.{2}.bin".format(outDir, prefix, step) 
+
         if(len(np.fromfile(xf, dtype=dt)) == 0):
             continue
-        x = np.hstack([x, downsample(np.fromfile(xf, dtype=dt), downsFrac)])
-        y = np.hstack([y, downsample(np.fromfile(yf, dtype=dt), downsFrac)])
-        z = np.hstack([z, downsample(np.fromfile(zf, dtype=dt), downsFrac)])
-        a = np.hstack([a, downsample(np.fromfile(af, dtype=dt), downsFrac)])
-        theta = np.hstack([theta, downsample(np.fromfile(tf, dtype=dt), downsFrac)/3600])
-        phi = np.hstack([phi, downsample(np.fromfile(pf, dtype=dt), downsFrac)/3600])
-        thetaRot = np.hstack([thetaRot, downsample(np.fromfile(tRotf, dtype=dt), downsFrac)/3600])
-        phiRot = np.hstack([phiRot, downsample(np.fromfile(pRotf, dtype=dt), downsFrac)/3600])
+        
+        downs = downsample(np.arange(len(np.fromfile(xf, dtype=dt))), downsFrac)
+        x = np.hstack([x, np.fromfile(xf, dtype=dt)[downs]])
+        y = np.hstack([y, np.fromfile(yf, dtype=dt)[downs]])
+        z = np.hstack([z, np.fromfile(zf, dtype=dt)[downs]])
+        a = np.hstack([a, np.fromfile(af, dtype=dt)[downs]])
+        theta = np.hstack([theta, np.fromfile(tf, dtype=dt)[downs]/3600])
+        phi = np.hstack([phi, np.fromfile(pf, dtype=dt)[downs]/3600])
+        thetaRot = np.hstack([thetaRot, np.fromfile(tRotf, dtype=dt)[downs]/3600])
+        phiRot = np.hstack([phiRot, np.fromfile(pRotf, dtype=dt)[downs]/3600])
 
     r = np.sqrt(x**2 + y**2 + z**2)
     xRot = r*np.sin(thetaRot*conv)*np.cos(phiRot*conv)
@@ -65,10 +75,10 @@ def makePlot():
     
     s1 = ax1.scatter(x, y, z, c=((1/a)-1), s=2, cmap='plasma')
     ax1.scatter(xRot, yRot, zRot, c=((1/a)-1), s=2, cmap='plasma')
-    #f.colorbar(s1)
+    f.colorbar(s1)
     
-    ax2.scatter(phi, theta, c=((1/a)-1), s=2, cmap='plasma')
-    ax3.scatter(phiRot, thetaRot, c=((1/a)-1), s=2, cmap='plasma')
+    ax2.scatter(phi, theta, c=((1/a)-1), s=1, cmap='plasma')
+    ax3.scatter(phiRot, thetaRot, c=((1/a)-1), s=1, cmap='plasma')
     ax1.set_xlabel('x')
     ax1.set_ylabel('y')
     ax1.set_zlabel('z')
