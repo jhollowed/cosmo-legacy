@@ -4,7 +4,15 @@ import mpl_toolkits.mplot3d.axes3d as axes3d
 import pdb
 
 def testRot(p1):
-   
+    '''
+    This code implements the rodrigues rotation forumla; a particular point p on a sphere
+    is chosen (cartesian coords given as p1) to be rotated down onto the x-axis, at (r, pi, 0)
+    in spherical coords. Points surrounding p should rotate accordingly and maintain their
+    configuration after the rotation. 
+
+    :param p1: the cartesian position of the point p prior to rotation
+    '''
+
     tmp = np.zeros(3)
     tmp[0] = np.linalg.norm(p1)
     tmp[1] = np.arccos(p1[2] / tmp[0])
@@ -86,4 +94,63 @@ def testRot(p1):
     ax.scatter(x_h2, y_h2, z_h2, color='m')
     ax.set_xlabel('x')
 
+    plt.show()
+
+
+def visRotationProblemSetup(p1):
+    '''
+    This code visualizes to problem setup for solving the rodrigues rotation formula. 
+    A particular point p on a sphere is chosen (cartesian coords given as p1) to be rotated 
+    down onto the x-axis, p', at (r, pi, 0) in spherical coords. Vectors p and p' are both
+    plotted, to visualize the plane of rotation, as well as p x p', the axis of rotation.
+
+    :param p1: the cartesian position of the point p prior to rotation
+    '''
+
+    tmp = np.zeros(3)
+    tmp[0] = np.linalg.norm(p1)
+    tmp[1] = np.arccos(p1[2] / tmp[0])
+    tmp[2] = np.arctan(p1[1]/p1[0])
+    p1 = tmp
+
+    # mesh sphere
+    theta, phi = np.linspace(0, 2 * np.pi, 40), np.linspace(0, np.pi, 40)
+    THETA, PHI = np.meshgrid(theta, phi)
+    R = p1[0]
+    X = R * np.sin(PHI) * np.cos(THETA)
+    Y = R * np.sin(PHI) * np.sin(THETA)
+    Z = R * np.cos(PHI)
+ 
+    # halo point
+    r_h, theta_h, phi_h = p1[0], p1[1], p1[2]
+    x_h = r_h * np.sin(theta_h) * np.cos(phi_h)
+    y_h = r_h * np.sin(theta_h) * np.sin(phi_h)
+    z_h = r_h * np.cos(theta_h)
+    v1 = [x_h, y_h, z_h]
+
+    # new halo point
+    r_h2, theta_h2, phi_h2 = p1[0], np.pi/2, 0
+    x_h2 = r_h2 * np.sin(theta_h2) * np.cos(phi_h2)
+    y_h2 = r_h2 * np.sin(theta_h2) * np.sin(phi_h2)
+    z_h2 = r_h2 * np.cos(theta_h2)
+    vrot = [x_h2, y_h2, z_h2]
+
+    # angle between new and old points
+    angle = np.arccos(np.dot(v1, vrot) / np.dot(np.linalg.norm(v1), np.linalg.norm(vrot)))
+    t = angle
+    a = [x_h, y_h, z_h]
+    b = [x_h2, y_h2, z_h2]
+    k = np.cross(a, b) / (np.prod(np.linalg.norm([a, b], axis=1)) * np.sin(t))
+
+    # plot
+    fig = plt.figure()
+    ax = fig.add_subplot(111, projection='3d')
+    plot = ax.plot_wireframe(X, Y, Z, rstride=4, cstride=3, lw=0.6, color='k', alpha=0.4)
+    ax.plot([0,x_h], [0,y_h], [0,z_h], color='red', lw=1.6)
+    ax.scatter([x_h], [y_h], [z_h], color='red')
+    ax.plot([0,x_h2], [0,y_h2], [0,z_h2], color='m', lw=1.6)
+    ax.scatter([x_h2], [y_h2], [z_h2], color='m')
+    ax.plot([-k[0],k[0]], [-k[1],k[1]], [-k[2],k[2]], color='k', lw=1)
+    ax.set_xlabel('x')
+    ax.grid(False)
     plt.show()

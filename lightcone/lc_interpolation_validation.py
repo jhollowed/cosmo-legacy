@@ -172,7 +172,7 @@ def saveLightconePathData(epath, ipath, spath, outpath,
     # decrease simulation box side length value by 5% to avoid
     # grabbing objects who originate from some other box replication,
     # but moved into rL by the lightcone position approximation
-    rL = rL * 0.95
+    rL = rL * 0.99
 
     initVolMask_interp = np.logical_and.reduce((abs(ix) < rL, 
                                                abs(iy) < rL, 
