@@ -79,9 +79,8 @@ def downsampleOutput():
 #############################################################################################
 #############################################################################################
 
-def saveLightconePathData(diffRange='max', 
-                         epath, ipath, spath, outpath, 
-                         rL, snapshotSubdirs = False, posDiffOnly=False):
+def saveLightconePathData(epath, ipath, spath, outpath, 
+                          rL, diffRange='max', posDiffOnly=False):
     '''
     This function loads lightcone output data, and inspects the 
     difference in position resulting from the extrapolation and interpolation
@@ -126,7 +125,6 @@ def saveLightconePathData(diffRange='max',
     from dtk import gio
     from dtk import sort
     
-    steps = [421, 432, 442, 453, 464]
     subdirs = glob.glob('{}/*'.format(ipath))
     
     # get lc subdirectory prefix (could be 'lc' or 'lcGals', etc.). 
@@ -170,9 +168,15 @@ def saveLightconePathData(diffRange='max',
     # get rid of everything not in the initial volume (don't
     # consider objects found in replicated boxes, since we have
     # no corresponding snapshot data there)
-    initVolMask_interp = np.logical_or.reduce((abs(ix) > rL, 
-                                               abs(iy) > rL, 
-                                               abs(iz) > rL))
+    
+    # decrease simulation box side length value by 5% to avoid
+    # grabbing objects who originate from some other box replication,
+    # but moved into rL by the lightcone position approximation
+    rL = rL * 0.95
+
+    initVolMask_interp = np.logical_and.reduce((abs(ix) < rL, 
+                                               abs(iy) < rL, 
+                                               abs(iz) < rL))
     iid = iid[initVolMask_interp]
     ix = ix[initVolMask_interp]
     iy = iy[initVolMask_interp]
@@ -180,15 +184,19 @@ def saveLightconePathData(diffRange='max',
     ia = ia[initVolMask_interp]
     irot = irot[initVolMask_interp]
 
-    initVolMask_extrap = np.logical_or.reduce((abs(ex) > rL, 
-                                               abs(ey) > rL, 
-                                               abs(ez) > rL))
+    initVolMask_extrap = np.logical_and.reduce((abs(ex) < rL, 
+                                               abs(ey) < rL, 
+                                               abs(ez) < rL))
     eid = eid[initVolMask_extrap]
     ex = ex[initVolMask_extrap]
     ey = ey[initVolMask_extrap]
     ez = ez[initVolMask_extrap]
     ea = ea[initVolMask_extrap]
     erot = erot[initVolMask_extrap]
+
+    # make sure that worked...
+    if(len(np.unique(irot)) > 1 or len(np.unique(erot)) > 1):
+        raise Exception('particles found in replicated boxes >:(')
 
 
     # find unique objects to begin matching
@@ -277,42 +285,58 @@ def saveLightconePathData(diffRange='max',
         savePath = '{}/max_diff'.format(outpath)
     if(diffRange == 'med'):
         diffVals = np.argsort(posDiff)[::-1][len(xdiff)/2:len(xdiff)/2 + 20][0:10]
-        savePath = "lc_particle_paths/med_diff"
+        savePath = '{}/med_diff'.format(outpath)
     if(diffRange == 'min'):
         diffVals = np.argsort(posDiff)[0:10]
-        savePath = "lc_particle_paths/min_diff"
+        savePath = '{}/min_diff'.format(outpath)
 
-    # read snapshots
+    # read snapshots...     
+    # apply lightcone box rotations to snapshot data
+    sx, sy, sz = 'x', 'y', 'z'
+    if(0):
+        if(irot[0] == 1): 
+            sx, sy = 'y', 'x' 
+        elif(irot[0] == 2): 
+            sy, sz = 'z', 'y'
+        elif(irot[0] == 3): 
+            sx, sy = 'y', 'x'
+            sy, sz = 'z', 'y'
+        elif(irot[0] == 4):
+            sz, sx = 'x', 'z'
+        elif(irot[0] == 5):
+            sx, sy = 'y', 'x'
+            sz, sx = 'x', 'z'
+    
     print("Reading snapshot files")
     sfile0 = sorted(glob.glob('{}/STEP421/*'.format(spath)))[0]
     sid0 = gio.gio_read(sfile0, 'id')
-    sx0 = gio.gio_read(sfile0, 'x')
-    sy0 = gio.gio_read(sfile0, 'y')
-    sz0 = gio.gio_read(sfile0, 'z')
+    sx0 = gio.gio_read(sfile0, sx)
+    sy0 = gio.gio_read(sfile0, sy)
+    sz0 = gio.gio_read(sfile0, sz)
     
     sfile1 = sorted(glob.glob('{}/STEP432/*'.format(spath)))[0]
     sid1 = gio.gio_read(sfile1, 'id')
-    sx1 = gio.gio_read(sfile1, 'x')
-    sy1 = gio.gio_read(sfile1, 'y')
-    sz1 = gio.gio_read(sfile1, 'z')
+    sx1 = gio.gio_read(sfile1, sx)
+    sy1 = gio.gio_read(sfile1, sy)
+    sz1 = gio.gio_read(sfile1, sz)
     
     sfile2 = sorted(glob.glob('{}/STEP442/*'.format(spath)))[0]
     sid2 = gio.gio_read(sfile2, 'id')
-    sx2 = gio.gio_read(sfile2, 'x')
-    sy2 = gio.gio_read(sfile2, 'y')
-    sz2 = gio.gio_read(sfile2, 'z')
+    sx2 = gio.gio_read(sfile2, sx)
+    sy2 = gio.gio_read(sfile2, sy)
+    sz2 = gio.gio_read(sfile2, sz)
     
     sfile3 = sorted(glob.glob('{}/STEP453/*'.format(spath)))[0]
     sid3 = gio.gio_read(sfile3, 'id')
-    sx3 = gio.gio_read(sfile3, 'x')
-    sy3 = gio.gio_read(sfile3, 'y')
-    sz3 = gio.gio_read(sfile3, 'z')
+    sx3 = gio.gio_read(sfile3, sx)
+    sy3 = gio.gio_read(sfile3, sy)
+    sz3 = gio.gio_read(sfile3, sz)
     
     sfile4 = sorted(glob.glob('{}/STEP464/*'.format(spath)))[0]
     sid4 = gio.gio_read(sfile4, 'id')
-    sx4 = gio.gio_read(sfile4, 'x')
-    sy4 = gio.gio_read(sfile4, 'y')
-    sz4 = gio.gio_read(sfile4, 'z')
+    sx4 = gio.gio_read(sfile4, sx)
+    sy4 = gio.gio_read(sfile4, sy)
+    sz4 = gio.gio_read(sfile4, sz)
 
     # loop through the ten particles selected for plotting, get their surrounding
     # snapshot data, and save the data as .npy files. The results can be plotting 
@@ -328,11 +352,18 @@ def saveLightconePathData(diffRange='max',
         this_iy = iy[iMask][idx]
         this_iz = iz[iMask][idx]
         this_ia = ia[iMask][idx]
+        this_irot = irot[iMask][idx]
    
         this_ex = ex[eMask][idx]
         this_ey = ey[eMask][idx]
         this_ez = ez[eMask][idx]
         this_ea = ea[eMask][idx]
+        this_erot = erot[iMask][idx]
+
+        # make sure that box rotation for each particle above is the same 
+        # (if not, we really screwed up somewhere)
+        if(this_irot != this_erot):
+            raise Exception('wuuuuuuut why has this happened')
 
         # snapshot data
         s0_idx = np.where(sid0 == iid[iMask][idx])
@@ -358,14 +389,14 @@ def saveLightconePathData(diffRange='max',
         szi2 = sz2[s2_idx][0]
         szi3 = sz3[s3_idx][0]
         szi4 = sz4[s4_idx][0]
-       
+
         # get snapshot scale factors
         aa = np.linspace(1/(1+200), 1, 500)
-        sai0 = aa[422]
-        sai1 = aa[433]
-        sai2 = aa[443]
-        sai3 = aa[454]
-        sai4 = aa[465]
+        sai0 = aa[421]
+        sai1 = aa[432]
+        sai2 = aa[442]
+        sai3 = aa[453]
+        sai4 = aa[464]
         
         # true particles path for steps 421-464
         truex = np.array([sxi0, sxi1, sxi2, sxi3, sxi4])
@@ -405,36 +436,37 @@ def saveLightconePathData(diffRange='max',
 #############################################################################################
 #############################################################################################
 
-def plotParticlePaths(diffRange = 'max'):
+def plotLightconePaths(dataPath, diffRange = 'max'):
     '''
-    This function plots the same thing as the one above. Instead of doing the particle
-    matching and position diffing, however, it reads the outpt of saveParticlePathData()
-    in the case that that function was run with plot=False. This is to enable local 
-    plotting for better 3d display without having to be on datastar
+    This function plots the 3-dimensional path data as calculated and saved in 
+    saveLightconePathData() above.
+
+    :param dataPath: Location of lightcone object path data (should match the outpath
+                     argument of saveLightconePathData())
+    :param diffRange: whether to use the 'max', 'med'(median) or 'min' diffVals (see 
+                      doc strings in saveLightconePathData() for more info)
     '''
     config(cmap=plt.cm.cool)
 
-    path = '/home/joe/gdrive2/work/HEP/data/hacc/alphaQ/lightcone/lc_particle_paths'
-    duplicateRanges = ['weird', 'duplShared', 'dupl_intrpUnique', 'dupl_extrpUnique']
-    data = '{}/{}_diff'.format(path, diffRange)
-    if(diffRange in duplicateRanges): 
-        data = '{}/{}_ids'.format(path, diffRange)
+    # get data files
+    data = '{}/{}_diff'.format(dataPath, diffRange)
     numFiles = len(glob.glob('{}/truex_*'.format(data)))
 
+    # loop through all files and plot (each file corresponds to one 
+    # lightcone object)
     for i in range(numFiles):
 
-        if(diffRange != 'dupl_extrpUnique'):
-            ix = np.load('{}/ix_{}.npy'.format(data, i))
-            iy = np.load('{}/iy_{}.npy'.format(data, i))
-            iz = np.load('{}/iz_{}.npy'.format(data, i))
-            ia = np.load('{}/ia_{}.npy'.format(data, i))
-            iid = np.load('{}/iid_{}.npy'.format(data, i))
-        
-        if(diffRange != 'weird' and diffRange != 'dupl_intrpUnique'):
-            ex = np.load('{}/ex_{}.npy'.format(data, i))
-            ey = np.load('{}/ey_{}.npy'.format(data, i))
-            ez = np.load('{}/ez_{}.npy'.format(data, i))
-            ea = np.load('{}/ea_{}.npy'.format(data, i))
+        # read object trajectory data
+        ix = np.load('{}/ix_{}.npy'.format(data, i))
+        iy = np.load('{}/iy_{}.npy'.format(data, i))
+        iz = np.load('{}/iz_{}.npy'.format(data, i))
+        ia = np.load('{}/ia_{}.npy'.format(data, i))
+        iid = np.load('{}/iid_{}.npy'.format(data, i))
+    
+        ex = np.load('{}/ex_{}.npy'.format(data, i))
+        ey = np.load('{}/ey_{}.npy'.format(data, i))
+        ez = np.load('{}/ez_{}.npy'.format(data, i))
+        ea = np.load('{}/ea_{}.npy'.format(data, i))
         
         truex = np.load('{}/truex_{}.npy'.format(data, i))
         truey = np.load('{}/truey_{}.npy'.format(data, i))
@@ -446,17 +478,19 @@ def plotParticlePaths(diffRange = 'max'):
         y = np.random.randn(10)
         z = np.random.randn(10)
         
+        # ---------- main 3d plot ----------
+        # plot true path
         ax.plot(truex, truey, truez, '--k.')
+    
+        # plot extrapolated and interpolated paths
+        ax.plot(ex, ey, ez, '-o', lw=2)
+        ax.plot(ix, iy, iz, '-o', lw=2)
         
-        if(diffRange != 'weird' and diffRange != 'dupl_intrpUnique'):
-            ax.plot(ex, ey, ez, '-o', lw=2)
-        
+        # plot star at starting point
         ax.plot([truex[0]], [truey[0]], [truez[0]], '*', ms=10)
         
-        if(diffRange != 'dupl_extrpUnique'):
-            ax.plot(ix, iy, iz, '-o', lw=2)
-            plt.title(r'$\mathrm{{ ID }}\>\>{}$'.format(iid), y=1.08, fontsize=18)
-        
+        # formatting
+        plt.title(r'$\mathrm{{ ID }}\>\>{}$'.format(iid), y=1.08, fontsize=18)
         ax.set_xlabel(r'$x\>\>\mathrm{(Mpc/h)}$', fontsize=12, labelpad=12)
         ax.set_ylabel(r'$y\>\>\mathrm{(Mpc/h)}$', fontsize=12, labelpad=12)
         ax.set_zlabel(r'$z\>\>\mathrm{(Mpc/h)}$', fontsize=12, labelpad=12)
@@ -474,17 +508,15 @@ def plotParticlePaths(diffRange = 'max'):
                 ax.zaxis.get_major_ticks()[t].label.set_color([1, 1, 1]) 
                 ax.zaxis.get_major_ticks()[t].label.set_fontsize(0) 
         
+        # ---------- subplot for x-a projection ----------
         ax_xa = plt.subplot2grid((3,3), (2,0), colspan=2)
+        
         ax_xa.plot(truex, (1/truea)-1, '--k.')
-        
-        if(diffRange != 'weird' and diffRange != 'dupl_intrpUnique'):
-            ax_xa.plot(ex, (1/ea)-1, '-o', lw=2)
-        
+        ax_xa.plot(ex, (1/ea)-1, '-o', lw=2)
+        ax_xa.plot(ix, (1/ia)-1, '-o', lw=2)
         ax_xa.plot(truex[0], (1/truea[0])-1, '*', ms=10)
         
-        if(diffRange != 'dupl_extrpUnique'):
-            ax_xa.plot(ix, (1/ia)-1, '-o', lw=2)
-        
+        # formatting
         ax_xa.set_xlabel(r'$x\>\>\mathrm{(Mpc/h)}$', fontsize=14, labelpad=6)
         ax_xa.set_ylabel(r'$\mathrm{redshift}$', fontsize=14, labelpad=6)
         ax_xa.set_yticks((1/truea)-1)
@@ -494,17 +526,15 @@ def plotParticlePaths(diffRange = 'max'):
         ax_xa.invert_yaxis()
         ax_xa.grid()
 
+        # ---------- subplot for z-a projection ----------
         ax_za = plt.subplot2grid((3,3), (0,2), rowspan=2)
-        ax_za.plot((1/truea)-1, truez, '--k.', label='true path')
         
-        if(diffRange != 'weird' and diffRange != 'dupl_intrpUnique'):
-            ax_za.plot((1/ea)-1, ez, '-o', lw=2, label = 'extrapolation')
-        
+        ax_za.plot((1/truea)-1, truez, '--k.', label='true dataPath')
+        ax_za.plot((1/ea)-1, ez, '-o', lw=2, label = 'extrapolation')
+        ax_za.plot((1/ia)-1, iz, '-o', lw=2, label='interpolation') 
         ax_za.plot((1/truea[0])-1, truez[0], '*', ms=10, label='starting position')
         
-        if(diffRange != 'dupl_extrpUnique'):
-            ax_za.plot((1/ia)-1, iz, '-o', lw=2, label='interpolation')
-        
+        # formatting 
         ax_za.set_ylabel(r'$z\>\>\mathrm{(Mpc/h)}$', fontsize=14, labelpad=6)
         ax_za.set_xlabel(r'$\mathrm{redshift}$', fontsize=14, labelpad=6)
         ax_za.set_xticks(1/(truea)-1)
@@ -513,11 +543,13 @@ def plotParticlePaths(diffRange = 'max'):
         ax_za.yaxis.tick_right()
         ax_za.yaxis.set_label_position("right")
         ax_za.grid()
+
+        # legend
         ax_za.legend(bbox_to_anchor=(1.12, -0.35))
 
+        # done
         plt.gcf().set_size_inches(8, 6)
         plt.gcf().tight_layout()
-
         plt.gcf().canvas.manager.window.move(540, 200)
         plt.show()
 
