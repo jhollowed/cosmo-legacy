@@ -293,19 +293,18 @@ def saveLightconePathData(epath, ipath, spath, outpath,
     # read snapshots...     
     # apply lightcone box rotations to snapshot data
     sx, sy, sz = 'x', 'y', 'z'
-    if(0):
-        if(irot[0] == 1): 
-            sx, sy = 'y', 'x' 
-        elif(irot[0] == 2): 
-            sy, sz = 'z', 'y'
-        elif(irot[0] == 3): 
-            sx, sy = 'y', 'x'
-            sy, sz = 'z', 'y'
-        elif(irot[0] == 4):
-            sz, sx = 'x', 'z'
-        elif(irot[0] == 5):
-            sx, sy = 'y', 'x'
-            sz, sx = 'x', 'z'
+    if(irot[0] == 1): 
+        sx, sy = 'y', 'x' 
+    elif(irot[0] == 2): 
+        sy, sz = 'z', 'y'
+    elif(irot[0] == 3): 
+        sx, sy = 'y', 'x'
+        sy, sz = 'z', 'y'
+    elif(irot[0] == 4):
+        sz, sx = 'x', 'z'
+    elif(irot[0] == 5):
+        sx, sy = 'y', 'x'
+        sz, sx = 'x', 'z'
     
     print("Reading snapshot files")
     sfile0 = sorted(glob.glob('{}/STEP421/*'.format(spath)))[0]
