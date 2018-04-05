@@ -675,25 +675,28 @@ def compareDuplicates(dt_type = 'linear'):
 #############################################################################################
 #############################################################################################
 
-def compareReps():
-
-    colors = plt.cm.viridis(np.linspace(0, 1, 6))
+def compareReps(dir1, dir2, step):
 
     f = plt.figure()
     ax1 = f.add_subplot(221, projection='3d')
     ax2 = f.add_subplot(223, projection='3d')
-    ax3 = f.add_subplot(224, projection='3d')
+    
+    subdirs = glob.glob('{}/*'.format(dir1)) 
+    for i in range(len(subdirs[0].split('/')[-1])):
+        try:
+            (int(subdirs[0].split('/')[-1][i]))
+            prefix = subdirs[0].split('/')[-1][0:i]
+            break
+        except ValueError:
+            continue
+   
+    file1 = sorted(glob.glob("{}/{}{}/*".format(dir1, prefix, step)))[0]
+    file2 = sorted(glob.glob("{}/{}{}/*".format(dir2, prefix, step)))[0]
 
-    path64 = 'testOutput_64N/lc432'
-    path256 = 'testOutput_64N/lc432'
-    pathGals = 'galOutput_32N/lcGals432'
-
-    rot64 = gio.gio_read('{}/lc_intrp_full.432'.format(path64), 'rotation')
-    rep64 = gio.gio_read('{}/lc_intrp_full.432'.format(path64), 'replication')
-    rot256 = gio.gio_read('{}/lc_intrp_full.432'.format(path256), 'rotation')
-    rep256 = gio.gio_read('{}/lc_intrp_full.432'.format(path256), 'replication')
-    rotGals = gio.gio_read('{}/lc_extrp_gals.432'.format(pathGals), 'rotation')
-    repGals = gio.gio_read('{}/lc_extrp_gals.432'.format(pathGals), 'replication')
+    rot64 = gio.gio_read(file1, 'rotation')
+    rep64 = gio.gio_read(file2, 'replication')
+    rot256 = gio.gio_read(file1, 'rotation')
+    rep256 = gio.gio_read(file2, 'replication')
 
     uniqRep64 = np.unique(rep64, return_counts=True)
     xReps64 = -((uniqRep64[0] >> 20) - 1) * 256
@@ -705,30 +708,16 @@ def compareReps():
     yReps256 = -(((uniqRep256[0] >> 10) & 0x3ff) - 1) * 256
     zReps256 = -((uniqRep256[0] & 0x3ff) - 1) * 256
 
-    uniqRepGals = np.unique(repGals, return_counts=True)
-    xRepsGals = -((uniqRepGals[0] >> 20) - 1) * 256
-    yRepsGals = -(((uniqRepGals[0] >> 10) & 0x3ff) - 1) * 256
-    zRepsGals = -((uniqRepGals[0] & 0x3ff) - 1) * 256
+    colors = plt.cm.viridis(np.linspace(0, 1, 6))
+    for i in range(len(xReps64)):
+        plotCube(xReps64[i], yReps64[i], zReps64[i], 256, 256, 256, ax1, colors[xReps64[i]])
+        plotCube(xReps256[i], yReps256[i], zReps256[i], 256, 256, 256, ax2, colors[xReps256[i]])
 
-    repColors64 = np.zeros(len(uniqRep64[0]))
-    repColors256 = np.zeros(len(uniqRep256[0]))
-    repColorsGals = np.zeros(len(uniqRepGals[0]))
-
-    pkPath = '/home/joe/gdrive2/work/HEP/data/hacc/alphaQ/lightcone/lc_pk'
-    extrp = np.fromfile('{}/cl_ext.bin'.format(pkPath), '>f')
-    intrp = np.fromfile('{}/cl_lin.bin'.format(pkPath), '>f')
-    thry = np.fromfile('{}/theory.bin'.format(pkPath), '>f')
-    l_intrp = np.linspace(0, 2500, len(intrp))
-    l_extrp = np.linspace(0, 2500, len(extrp))
-    l_thry = np.linspace(0, 2500, len(thry))
-
-    config(cmap=plt.cm.cool)
+    ax1.set_xlabel('x')
+    ax1.set_ylabel('y')
+    ax1.set_zlabel('z')
+    ax2.set_xlabel('x')
+    ax2.set_ylabel('y')
+    ax2.set_zlabel('z')
     
-    f = plt.figure()
-    ax = f.add_subplot(111)
-    
-    ax.plot(l_intrp, intrp, '.')
-    ax.plot(l_extrp, extrp, '.')
-    #ax.plot(l_thry, thry)
-    #ax.set_yscale('log')
     plt.show()
