@@ -14,7 +14,8 @@ class ChainingMesh
 
     public:
 
-      ChainingMesh(float xmin, float xmax,       // Chaining mesh extents
+      ChainingMesh(int ptype,
+                   float xmin, float xmax,       // Chaining mesh extents
                    float ymin, float ymax,
                    float zmin, float zmax,
                    float dlen,                   // Cell width on a side

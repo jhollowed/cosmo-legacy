@@ -14,9 +14,12 @@
 
 #define ETAMAX 1.0
 
-ChainingMesh::ChainingMesh(float xmin, float xmax, float ymin, float ymax, float zmin, float zmax, 
-                           float dlen, int np, float *xxloc, float *yyloc, float *zzloc, float *hhloc, float *vvloc)
+ChainingMesh::ChainingMesh(int ptype, float xmin, float xmax, float ymin, float ymax, float zmin, 
+                           float zmax, float dlen, int np, float *xxloc, float *yyloc, float *zzloc, 
+                           float *hhloc, float *vvloc)
 {
+  
+  if(ptype == 0){ return; } 
     
   // Set chaining mesh boundaries and determine how many cells per dimension there are
   x0 = xmin; x1 = xmax; Lx = xmax - xmin;

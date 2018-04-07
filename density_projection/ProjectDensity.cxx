@@ -6,6 +6,7 @@
 
 #include "Particles.h"
 #include "ChainingMesh.h"
+#include "CloudsInCells.h"
 #include "Skewer.h"
 
 #ifdef _OPENMP
@@ -42,11 +43,11 @@ int main(int argc, char *argv[])
   // ypix: pixels in the vertical direction in the plane of observation
   // zsamp: sampling frequency of skewer density inerpolation points
 
-  if(argc < 21) {
+  if(argc < 22) {
     std::cerr << "USAGE: " << argv[0] << " <cosmofile> <outfile> <xmin> <xmax> <ymin>" <<
                                          " <ymax> <zmin> <zmax> <mesh_width> <xobs> <yobs>" << 
                                          " <zobs> <depth> <xfov> <fobs> <theta> <phi> " << 
-                                         " <xpix> <ypix> <zsamp> " << std::endl; 
+                                         " <xpix> <ypix> <zsamp> <ptype>" << std::endl; 
     return -1;
   }
 
@@ -59,7 +60,7 @@ int main(int argc, char *argv[])
   float ymax  = atof(argv[6]);
   float zmin  = atof(argv[7]);
   float zmax  = atof(argv[8]);
-  float dmesh   = atof(argv[9]);
+  float dmesh = atof(argv[9]);
   float xobs  = atof(argv[10]);
   float yobs  = atof(argv[11]);
   float zobs  = atof(argv[12]);
@@ -71,6 +72,7 @@ int main(int argc, char *argv[])
   int nxpix   = atoi(argv[18]);
   int nypix   = atoi(argv[19]);
   int nsamp   = atoi(argv[20]);
+  int ptype   = atoi(argv[21]);
 
   // Total number of pixels
   int nxypix = nxpix*nypix;
@@ -91,19 +93,13 @@ int main(int argc, char *argv[])
   float *hh   = p->ExtractH();
   float *vv   = p->ExtractV();
 
-  if(ptype == 0){
-    
-    // Construct cloud in cells mesh that keeps track of dm particles in each cell
-    CloudInCells *mesh = new CloudInCells(xmin, xmax, ymin, ymax, zmin, zmax, dmesh,
-                                          nParticle, xx, yy, zz, hh, vv);
-  
-  } else if(ptype == 1){
-    
-    // Construct chaining mesh that keeps track of baryons in each cell 
-    // (particle plus smoothing sphere) 
-    ChainingMesh *mesh = new ChainingMesh(xmin, xmax, ymin, ymax, zmin, zmax, dmesh, 
-                                          nParticle, xx, yy, zz, hh, vv);
-  }
+  // Construct cloud in cells mesh that keeps track of dm particles in each cell
+  CloudsInCells *cic = new CloudsInCells(ptype, xmin, xmax, ymin, ymax, zmin, zmax, dmesh,
+                                         nParticle, xx, yy, zz, hh, vv);
+  // Construct chaining mesh that keeps track of baryons in each cell 
+  // (particle plus smoothing sphere) 
+  ChainingMesh *cm = new ChainingMesh(ptype, xmin, xmax, ymin, ymax, zmin, zmax, dmesh, 
+                                      nParticle, xx, yy, zz, hh, vv);
 
   // Sample density along each skewer that starts at (xobs, yobs, zobs) and ends on the pixel plane.
 
@@ -139,8 +135,11 @@ int main(int argc, char *argv[])
 
       // Feed skewer into the chaining mesh and compute column density
       int ijpix = ipix*nypix + jpix;
-      pixels[ijpix] = mesh->ColumnDensity(xxs, yys, zzs, nsamp);
-
+      if(ptype == 0){
+          pixels[ijpix] = cic->ColumnDensity(xxs, yys, zzs, nsamp);
+      } else if(ptype == 1){
+          pixels[ijpix] = cm->ColumnDensity(xxs, yys, zzs, nsamp);
+      }
     }
   }
 
@@ -156,7 +155,8 @@ int main(int argc, char *argv[])
 
   // Cleanup
   delete skewer;
-  delete mesh;
+  delete cic;
+  delete cm;
   delete p;
 
   return 0;

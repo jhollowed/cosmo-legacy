@@ -11,9 +11,10 @@
 #include <vector>
 #include <math.h> 
 #include <assert.h>
+#include <stdlib.h>
 
-CloudsInCells::CloudsInCells(float xmin, float xmax, float ymin, float ymax, float zmin, float zmax, 
-                             float dlen, int np, float *xxloc, float *yyloc, float *zzloc, 
+CloudsInCells::CloudsInCells(int ptype, float xmin, float xmax, float ymin, float ymax, float zmin, 
+                             float zmax, float dlen, int np, float *xxloc, float *yyloc, float *zzloc, 
                              float *hhloc, float *vvloc){
 
   // This function creates a mesh of cells, within which the CIC density estimatiion will
@@ -21,10 +22,15 @@ CloudsInCells::CloudsInCells(float xmin, float xmax, float ymin, float ymax, flo
   //
   // Input parameters:
   // 
+  // ptype: the particle type to be used in the projection (0 for dm, 1 for baryon). If
+  //        ptype == 1, the function will simply return, since in that case ChainingMesh
+  //        should be used over CloudsInCells
   // x,y,zmin and x,y,zmax: the comoving cartesian domain of the final render in Mpc/h
   // dlen: symmetric width of mesh cells
   // np: number of particles in domain
-  // xx,yy,zz,hh,vvloc: vectors containing particle position data 
+  // xx,yy,zz,hh,vvloc: vectors containing particle position data
+  
+  if(ptype == 1){ return; } 
     
   // Set mesh boundaries and determine how many cells per dimension there are
   x0 = xmin; x1 = xmax; Lx = xmax - xmin;
@@ -102,19 +108,19 @@ void CloudsInCells::DistributeToCells()
       float pWeight = xWeight * yWeight * zWeight;
 
       // Get weighted density by dividing by cell volume
-      float pWeight /= dr*dr*dr;
+      pWeight /= dr*dr*dr;
 
       // Add this particle's array index to this cell (in vector cellParticles) and add its, 
       // density contribution to the cells cumulative density value (in vector cellDensity)--
       std::vector<int> &pIndices = cellParticles[icell];
-      int jj = pIndices.size();
-      pIndices.resize(jj + 1);
-      pIndices[jj] = i;
+      int isize = pIndices.size();
+      pIndices.resize(isize + 1);
+      pIndices[isize] = i;
       
-      std::vector<int> &pDensities = cellDensity[icell];
-      int jj = pDensities.size();
-      pDensities.resize(jj + 1);
-      pDensities[jj] = pWeight;
+      std::vector<float> &pDensities = cellDensity[icell];
+      int dsize = pDensities.size();
+      pDensities.resize(dsize + 1);
+      pDensities[dsize] = pWeight;
     }  
   }
 
@@ -127,8 +133,9 @@ void CloudsInCells::DistributeToCells()
     nmin = std::min(nmin, nc);
     nmax = std::max(nmax, nc);
   }
-  std::cout << " CIC mesh setup complete ... " << endl; 
-  std::cout << " min particles/cell: " << nmin << endl << " max particles/cell: " << nmax << std::endl;
+  std::cout << " CIC mesh setup complete ... " << std::endl; 
+  std::cout << " min particles/cell: " << nmin << std::endl;
+  std::cout << " max particles/cell: " << nmax << std::endl;
   std::cout << std::endl;
 
 }

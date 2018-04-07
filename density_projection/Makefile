@@ -1,5 +1,4 @@
-
-CXX=icpc
+CXX=g++
 CXXFLAGS=-g -O2 -fopenmp
 LDLIBS=
 LDFLAGS=

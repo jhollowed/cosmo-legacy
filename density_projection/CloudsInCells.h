@@ -9,12 +9,13 @@
 
 #include <vector>
 
-class CloudsinCells
+class CloudsInCells
   {
 
     public:
 
-      CloudsinCells(float xmin, float xmax,
+      CloudsInCells(int ptype,
+                    float xmin, float xmax,
                     float ymin, float ymax,
                     float zmin, float zmax,
                     float dlen,
@@ -23,7 +24,7 @@ class CloudsinCells
                     float *zzloc, float *hhloc,
                     float *vvloc);
 
-      ~CloudsinCells();
+      ~CloudsInCells();
 
       void DistributeToCells();
       int CellIndex(int ii, int jj, int kk);
