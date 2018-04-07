@@ -3,11 +3,11 @@ import pdb
 from matplotlib.ticker import FormatStrFormatter
 import matplotlib.pyplot as plt
 import matplotlib as mpl
-from cycler import cycler
+#from cycler import cycler
 from mpl_toolkits.mplot3d import Axes3D
 from matplotlib import rcParams
 import matplotlib.ticker as plticker
-import h5py as h5
+#import h5py as h5
 import glob
 
 '''
@@ -677,6 +677,8 @@ def compareDuplicates(dt_type = 'linear'):
 
 def compareReps(dir1, dir2, step):
 
+    import genericio as gio
+    
     f = plt.figure()
     ax1 = f.add_subplot(221, projection='3d')
     ax2 = f.add_subplot(223, projection='3d')
@@ -689,29 +691,39 @@ def compareReps(dir1, dir2, step):
             break
         except ValueError:
             continue
-   
+
     file1 = sorted(glob.glob("{}/{}{}/*".format(dir1, prefix, step)))[0]
     file2 = sorted(glob.glob("{}/{}{}/*".format(dir2, prefix, step)))[0]
 
     rot64 = gio.gio_read(file1, 'rotation')
-    rep64 = gio.gio_read(file2, 'replication')
-    rot256 = gio.gio_read(file1, 'rotation')
+    rep64 = gio.gio_read(file1, 'replication')
+    rot256 = gio.gio_read(file2, 'rotation')
     rep256 = gio.gio_read(file2, 'replication')
 
-    uniqRep64 = np.unique(rep64, return_counts=True)
-    xReps64 = -((uniqRep64[0] >> 20) - 1) * 256
-    yReps64 = -(((uniqRep64[0] >> 10) & 0x3ff) - 1) * 256
-    zReps64 = -((uniqRep64[0] & 0x3ff) - 1) * 256
-
-    uniqRep256 = np.unique(rep256, return_counts=True)
-    xReps256 = -((uniqRep256[0] >> 20) - 1) * 256
-    yReps256 = -(((uniqRep256[0] >> 10) & 0x3ff) - 1) * 256
-    zReps256 = -((uniqRep256[0] & 0x3ff) - 1) * 256
-
+    uniqRep64 = sorted(np.unique(rep64))
+    uniqRep256 = sorted(np.unique(rep256))
+    
     colors = plt.cm.viridis(np.linspace(0, 1, 6))
-    for i in range(len(xReps64)):
-        plotCube(xReps64[i], yReps64[i], zReps64[i], 256, 256, 256, ax1, colors[xReps64[i]])
-        plotCube(xReps256[i], yReps256[i], zReps256[i], 256, 256, 256, ax2, colors[xReps256[i]])
+    for j in range(len(uniqRep64)):
+
+        xReps64 = -((uniqRep64[j] >> 20) - 1) * 256
+        yReps64 = -(((uniqRep64[j] >> 10) & 0x3ff) - 1) * 256
+        zReps64 = -((uniqRep64[j] & 0x3ff) - 1) * 256
+        rot1 = rot64[np.where(rep64 == uniqRep64[j])][0]
+        if(np.sum(abs(np.diff(rot64[np.where(rep64 == uniqRep64[j])]))) != 0): 
+            print('shit')
+            return
+
+        xReps256 = -((uniqRep256[j] >> 20) - 1) * 256
+        yReps256 = -(((uniqRep256[j] >> 10) & 0x3ff) - 1) * 256
+        zReps256 = -((uniqRep256[j] & 0x3ff) - 1) * 256
+        rot2 = rot256[np.where(rep256 == uniqRep256[j])][0]
+        if(np.sum(abs(np.diff(rot256[np.where(rep256 == uniqRep256[j])]))) != 0): 
+            print('shit')
+            return
+
+        plotCube(xReps64, yReps64, zReps64, 256, 256, 256, ax1, colors[rot1])
+        plotCube(xReps256, yReps256, zReps256, 256, 256, 256, ax2, colors[rot2])
 
     ax1.set_xlabel('x')
     ax1.set_ylabel('y')
