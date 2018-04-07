@@ -16,7 +16,7 @@ class Particles
 
     public:
 
-      Particles(std::string inputFile, int command);
+      Particles(std::string inputFile, int command, int species);
       
       int ReadCosmoFile();
       void PrintStats();
@@ -40,6 +40,9 @@ class Particles
 
       // Determines what attribute to return (0 for rho, 1 for uu) 
       int vtype;
+
+      // Determines what particle types to read (0 for dm, 1 for bayons)
+      int ptype;
 
       // Particle arrays 
       int nParticle;

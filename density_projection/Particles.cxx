@@ -12,7 +12,7 @@
 #include <vector>
 #include <assert.h>
 
-Particles::Particles(std::string inputFile, int command)
+Particles::Particles(std::string inputFile, int command, int species)
 {
 
   // Set input file
@@ -21,6 +21,10 @@ Particles::Particles(std::string inputFile, int command)
   // Set commmand (0 for density, 1 for uu)
   assert(command == 0 || command == 1);
   vtype = command;
+
+  // Set particle type (0 for dm, 1 for baryons)
+  assert(species == 0 || species == 1);
+  ptype = species;
 
   // Read particle data
   int success = ReadCosmoFile();
@@ -73,7 +77,8 @@ int Particles::ReadCosmoFile()
     return -1;
   }
 
-  // Determine particle count and adjust array size (this will include total particle count, but we will only read baryons)
+  // Determine particle count and adjust array size (this will include total particle count, but we will only 
+  //                                                 read dm or baryon particles, dictated by the value of ptype)
   fseek(inputFile, 0, SEEK_END);
   int nTotal = ftell(inputFile)/(12*sizeof(POSVEL_T)+sizeof(ID_T));
   xx.resize(nTotal);
@@ -103,7 +108,17 @@ int Particles::ReadCosmoFile()
     fread(&rho0, sizeof(POSVEL_T), 1, inputFile);
     fread(&phi0, sizeof(POSVEL_T), 1, inputFile);
     fread(&id0, sizeof(ID_T), 1, inputFile);
-    if (id0%2 == 1) { // This is a baryon 
+    if (id0%2 != 1 && ptype == 0) { // This is a dm particle 
+      if (vtype == 0) psi0 = rho0;
+      else if (vtype == 1) psi0 = uu0;
+      xx[nParticle] = xx0;
+      yy[nParticle] = yy0;
+      zz[nParticle] = zz0;
+      hh[nParticle] = hh0;
+      vv[nParticle] = mm0*psi0/rho0;
+      nParticle++;
+    }
+    if (id0%2 == 1 && ptype == 1) { // This is a baryon 
       if (vtype == 0) psi0 = rho0;
       else if (vtype == 1) psi0 = uu0;
       xx[nParticle] = xx0;
@@ -114,7 +129,7 @@ int Particles::ReadCosmoFile()
       nParticle++;
     }
   }
-  std::cout << " Done reading " << nParticle << " baryonic particles from a total set of " << nTotal << " particles " << std::endl;
+  std::cout << " Done reading " << nParticle << " particles from a total set of " << nTotal << " dm+baryon particles " << std::endl;
 
   // Close file 
   fclose(inputFile);

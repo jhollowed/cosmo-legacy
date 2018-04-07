@@ -24,13 +24,29 @@
 int main(int argc, char *argv[])
 {
 
+  // Read user arguments: 
   //
-  // Read user arguments
-  //
+  // cosmofile: input particle snapshot file in .cosmo format
+  // outfile: the output destination
+  // x,y,zmin and x,y,zmax: the comoving cartesian domain of the final render in Mpc/h
+  // mesh_width: symmetric width of mesh cells
+  // x,y,zobs: comoving cartesian position of the observer in Mpc/h
+  // depth: comoving depth distance, in Mpc/h, to which the observer can "see" (particles 
+  //        beyond this depth will not contribute to pizel densities)
+  // xfov: the observers field of view in the x-direction (y- and z-direction fov assumed 
+  //       symmetric)
+  // fobs:
+  // theta:
+  // phi:
+  // xpix: pixels in the horizontal direction in the plane of observation
+  // ypix: pixels in the vertical direction in the plane of observation
+  // zsamp: sampling frequency of skewer density inerpolation points
 
   if(argc < 21) {
-    std::cerr << "USAGE: " << argv[0] << " <cosmofile> <outfile> <xmin> <xmax> <ymin> <ymax> <zmin> <zmax> <cm_width>" << 
-                                         " <xobs> <yobs> <zobs> <depth> <xfov> <fobs> <theta> <phi> <xpix> <ypix> <zsamp> " << std::endl; 
+    std::cerr << "USAGE: " << argv[0] << " <cosmofile> <outfile> <xmin> <xmax> <ymin>" <<
+                                         " <ymax> <zmin> <zmax> <mesh_width> <xobs> <yobs>" << 
+                                         " <zobs> <depth> <xfov> <fobs> <theta> <phi> " << 
+                                         " <xpix> <ypix> <zsamp> " << std::endl; 
     return -1;
   }
 
@@ -43,7 +59,7 @@ int main(int argc, char *argv[])
   float ymax  = atof(argv[6]);
   float zmin  = atof(argv[7]);
   float zmax  = atof(argv[8]);
-  float dcm   = atof(argv[9]);
+  float dmesh   = atof(argv[9]);
   float xobs  = atof(argv[10]);
   float yobs  = atof(argv[11]);
   float zobs  = atof(argv[12]);
@@ -64,28 +80,32 @@ int main(int argc, char *argv[])
   float yr = 0.5f*(ymin + ymax);
   float zr = 0.5f*(zmin + zmax);
 
-  //
-  // Read particle positions, smoothing lengths, and densities (will only keep track of baryons)
-  //
+  // Read particle positions, smoothing lengths, and densities (will only keep track of 
+  // particles noted as ptype)
+  Particles *p = new Particles(std::string(cosmoFile), 0, ptype);
 
-  Particles *p = new Particles(std::string(cosmoFile), 0);
-
-  int nBaryon = p->NumParticles();
+  int nParticle = p->NumParticles();
   float *xx   = p->ExtractX();
   float *yy   = p->ExtractY();
   float *zz   = p->ExtractZ();
   float *hh   = p->ExtractH();
   float *vv   = p->ExtractV();
 
-  //
-  // Construct chaining mesh that keeps track of particles in each cell (particle plus smoothing sphere)
-  // 
+  if(ptype == 0){
+    
+    // Construct cloud in cells mesh that keeps track of dm particles in each cell
+    CloudInCells *mesh = new CloudInCells(xmin, xmax, ymin, ymax, zmin, zmax, dmesh,
+                                          nParticle, xx, yy, zz, hh, vv);
+  
+  } else if(ptype == 1){
+    
+    // Construct chaining mesh that keeps track of baryons in each cell 
+    // (particle plus smoothing sphere) 
+    ChainingMesh *mesh = new ChainingMesh(xmin, xmax, ymin, ymax, zmin, zmax, dmesh, 
+                                          nParticle, xx, yy, zz, hh, vv);
+  }
 
-  ChainingMesh *cm = new ChainingMesh(xmin, xmax, ymin, ymax, zmin, zmax, dcm, nBaryon, xx, yy, zz, hh, vv);
-
-  //
   // Sample density along each skewer that starts at (xobs, yobs, zobs) and ends on the pixel plane.
-  //
 
   int nthreads = 1;
 #ifdef _OPENMP
@@ -93,7 +113,8 @@ int main(int argc, char *argv[])
   nthreads = omp_get_max_threads();
 #endif
 
-  Skewer *skewer = new Skewer(xobs, yobs, zobs, xr, yr, zr, depth, xfov, fobs, theta, phi, nxpix, nypix, nsamp, nthreads);
+  Skewer *skewer = new Skewer(xobs, yobs, zobs, xr, yr, zr, depth, xfov, fobs, theta, 
+                              phi, nxpix, nypix, nsamp, nthreads);
 
   std::vector<float> pixels;
   pixels.clear();
@@ -118,33 +139,24 @@ int main(int argc, char *argv[])
 
       // Feed skewer into the chaining mesh and compute column density
       int ijpix = ipix*nypix + jpix;
-      pixels[ijpix] = cm->ColumnDensity(xxs, yys, zzs, nsamp);
+      pixels[ijpix] = mesh->ColumnDensity(xxs, yys, zzs, nsamp);
 
     }
   }
 
-  //
   // Take the logarithm of the result
-  //
-
   for (int i=0; i<nxypix; ++i) {
     pixels[i] = log10(std::max(pixels[i], MIN_VAL));
   }
 
-  //
   // Save the result
-  //
-
   FILE *fout = fopen(outFile, "wb");
   for (int i=0; i<nxypix; ++i) fwrite(&pixels[i], sizeof(float), 1, fout);
   fclose(fout);
 
-  //
   // Cleanup
-  //
-
   delete skewer;
-  delete cm;
+  delete mesh;
   delete p;
 
   return 0;
