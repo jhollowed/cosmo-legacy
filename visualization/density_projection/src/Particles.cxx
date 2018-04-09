@@ -15,7 +15,7 @@
 #include "GenericIO.h"
 using namespace gio;
 
-Particles::Particles(std::string inputFile, int command, int species)
+Particles::Particles(std::string inputFile, int command, int species, int fileType)
 {
 
   // Set commmand (0 for density, 1 for uu)
@@ -26,9 +26,9 @@ Particles::Particles(std::string inputFile, int command, int species)
   assert(species == 0 || species == 1);
   ptype = species;
 
-  // Read particle data
+  // Read particle data (fileType of 0 for GIO, 1 for Cosmo)
   int success; 
-  if( fileType == 0{ success = ReadGIOFile(); }
+  if( fileType == 0){ success = ReadGIOFile(); }
   if( fileType == 1){ success = ReadCosmoFile(); }
 
   assert(success == 0);
@@ -48,61 +48,48 @@ int Particles::ReadGIOFile()
   // Determine particle count and adjust array size (this will include total
   // particle count, but we will only read dm or baryon particles, dictated 
   // by the value of ptype)
-  fseek(inputFile, 0, SEEK_END);
-  int nTotal = ftell(inputFile)/(12*sizeof(POSVEL_T)+sizeof(ID_T));
-  xx.resize(nTotal);
-  yy.resize(nTotal);
-  zz.resize(nTotal);
-  hh.resize(nTotal);
-  vv.resize(nTotal);
-
-  // Do the reading now 
-  POSVEL_T xx0, yy0, zz0, vx0, vy0, vz0, mm0, uu0, hh0, mu0, rho0, phi0, vv0;
-  POSVEL_T psi0;
-  ID_T id0;
-  rewind(inputFile);
-  nParticle = 0;
-  std::cout << " Reading from file " << inputFile << " ... " << std::endl;
-  for (int i=0; i<nTotal; ++i) {
-    fread(&xx0, sizeof(POSVEL_T), 1, inputFile);
-    fread(&vx0, sizeof(POSVEL_T), 1, inputFile);
-    fread(&yy0, sizeof(POSVEL_T), 1, inputFile);
-    fread(&vy0, sizeof(POSVEL_T), 1, inputFile);
-    fread(&zz0, sizeof(POSVEL_T), 1, inputFile);
-    fread(&vz0, sizeof(POSVEL_T), 1, inputFile);
-    fread(&mm0, sizeof(POSVEL_T), 1, inputFile);
-    fread(&uu0, sizeof(POSVEL_T), 1, inputFile);
-    fread(&hh0, sizeof(POSVEL_T), 1, inputFile);
-    fread(&mu0, sizeof(POSVEL_T), 1, inputFile);
-    fread(&rho0, sizeof(POSVEL_T), 1, inputFile);
-    fread(&phi0, sizeof(POSVEL_T), 1, inputFile);
-    fread(&id0, sizeof(ID_T), 1, inputFile);
-    if (id0%2 != 1 && ptype == 0) { // This is a dm particle 
-      if (vtype == 0) psi0 = rho0;
-      else if (vtype == 1) psi0 = uu0;
-      xx[nParticle] = xx0;
-      yy[nParticle] = yy0;
-      zz[nParticle] = zz0;
-      hh[nParticle] = hh0;
-      vv[nParticle] = mm0*psi0/rho0;
-      nParticle++;
-    }
-    if (id0%2 == 1 && ptype == 1) { // This is a baryon 
-      if (vtype == 0) psi0 = rho0;
-      else if (vtype == 1) psi0 = uu0;
-      xx[nParticle] = xx0;
-      yy[nParticle] = yy0;
-      zz[nParticle] = zz0;
-      hh[nParticle] = hh0;
-      vv[nParticle] = mm0*psi0/rho0;
-      nParticle++;
-    }
+  int nRanks = reader.readNRanks();
+  size_t current_size;
+  for (int j=0; j<nRanks; ++j) {
+    current_size = reader.readNumElems(j);
+    nTotal = current_size > nTotal ? current_size : nTotal;
   }
-  std::cout << " Done reading " << nParticle << " particles from a total set of " << 
-               nTotal << " dm+baryon particles " << std::endl;
+  nTotal +=10;
+  std::cout<< "max size: " << nTotal << std::endl;
+
+  // start reading 
+  POSVEL_T xx0, yy0, zz0;
+  ID_T id0;
+  
+  xx0.resize(nTotal);
+  yy0.resize(nTotal);
+  zz0.resize(nTotal);
+  id0.resize(nTotal);
+  
+  reader.addVariable("x", &xx0[0]);
+  reader.addVariable("y", &yy0[0]);
+  reader.addVariable("z", &zz0[0]);
+  reader.addVariable("vx", &xx0[0]);
+  reader.addVariable("vy", &yy0[0]);
+  reader.addVariable("vz", &zz0[0]); 
+  reader.addVariable("id", &id0[0]);
+  
+  for (int j=0; j<nRanks; ++j) {
+    
+    size_t current_size = reader.readNumElems(j);
+    reader.readData(j, false);
+   
+    for(int k=0; k<current_size; ++k){ 
+      xx.push_back(xx0[k]);
+      yy.push_back(yy0[k]);
+      zz.push_back(zz0[k]);
+      k++;
+    }
+    if(j == 0){ std::cout << " Done reading on rank 0" << std::endl; }
+  }
 
   // Close file 
-  fclose(inputFile)
+  reader.close()
   return 0;
 }
 
