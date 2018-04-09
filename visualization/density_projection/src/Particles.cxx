@@ -27,6 +27,7 @@ Particles::Particles(std::string inputFile, int command, int species, int fileTy
   ptype = species;
 
   // Read particle data (fileType of 0 for GIO, 1 for Cosmo)
+  filename = inputFile;
   int success; 
   if( fileType == 0){ success = ReadGIOFile(); }
   if( fileType == 1){ success = ReadCosmoFile(); }
@@ -41,13 +42,14 @@ Particles::Particles(std::string inputFile, int command, int species, int fileTy
 int Particles::ReadGIOFile()
 {
   
-  std::cout << "Opening file: " << inputFile << std::endl;
-  GenericIO reader(MPI_COMM_SELF, inputFile)
-  reader.openAndReadHeader(GenericIO::MismatchRedistribute)
+  std::cout << "Opening file: " << filename << std::endl;
+  GenericIO reader(MPI_COMM_SELF, filename);
+  reader.openAndReadHeader(GenericIO::MismatchRedistribute);
 
   // Determine particle count and adjust array size (this will include total
   // particle count, but we will only read dm or baryon particles, dictated 
   // by the value of ptype)
+  size_t nTotal = 0;
   int nRanks = reader.readNRanks();
   size_t current_size;
   for (int j=0; j<nRanks; ++j) {
@@ -58,8 +60,10 @@ int Particles::ReadGIOFile()
   std::cout<< "max size: " << nTotal << std::endl;
 
   // start reading 
-  POSVEL_T xx0, yy0, zz0;
-  ID_T id0;
+  std::vector<float> xx0;
+  std::vector<float> yy0;
+  std::vector<float> zz0;
+  std::vector<int64_t> id0;
   
   xx0.resize(nTotal);
   yy0.resize(nTotal);
@@ -89,7 +93,7 @@ int Particles::ReadGIOFile()
   }
 
   // Close file 
-  reader.close()
+  reader.close();
   return 0;
 }
 
@@ -130,9 +134,9 @@ int Particles::ReadCosmoFile()
 
 #else
 
-  FILE *inputFile = fopen(inputFile.c_str(), "rb");
+  FILE *inputFile = fopen(filename.c_str(), "rb");
   if (!inputFile) {
-    std::cout << " ERROR: Could not open inputFile " << inputFile << std::endl;
+    std::cout << " ERROR: Could not open inputFile " << filename << std::endl;
     return -1;
   }
 
@@ -153,7 +157,7 @@ int Particles::ReadCosmoFile()
   ID_T id0;
   rewind(inputFile);
   nParticle = 0;
-  std::cout << " Reading from file " << inputFile << " ... " << std::endl;
+  std::cout << " Reading from file " << filename << " ... " << std::endl;
   for (int i=0; i<nTotal; ++i) {
     fread(&xx0, sizeof(POSVEL_T), 1, inputFile);
     fread(&vx0, sizeof(POSVEL_T), 1, inputFile);

@@ -1,5 +1,5 @@
 # On jupiter, first run module load mvapich2-2.2b-gcc-5.3.0-o4of6w7
-CXX :=m picxx
+CXX := mpicxx
 CXXFLAGS := -O3 -fopenmp
 
 SRCDIR := ./src
@@ -19,20 +19,20 @@ densityProjection: $(OBJECTS) $(LIBS)
 
 # compilation
 #
-obj/ProjectDensity.o: $(SRCDIR)/ProjectDensity.cxx $(SRCDIR)/Particles.h $(SRCDIR)/ChainingMesh.h $(SRCDIR)/CloudsInCells.h $(SRCDIR)/Skewer.h $(LIBS)
-	$(CXX) -c $(CXXFLAGS) -o $@ $<
-
 obj/Particles.o: $(SRCDIR)/Particles.cxx $(LIBS)
-	$(CXX) -c $(CXXFLAGS) -o $@ $<
+	$(CXX) $(CXXFLAGS) $(INCLUDES) -c $(SRCDIR)/Particles.cxx  -o $(OBJDIR)/Particles.o
 
 obj/ChainingMesh.o: $(SRCDIR)/ChainingMesh.cxx
-	$(CXX) -c $(CXXFLAGS) -o $@ $<
+	$(CXX) $(CXXFLAGS) $(INCLUDES) -c $(SRCDIR)/ChainingMesh.cxx  -o $(OBJDIR)/ChainingMesh.o
 
 obj/CloudsInCells.o: $(SRCDIR)/CloudsInCells.cxx
-	$(CXX) -c $(CXXFLAGS) -o $@ $<
+	$(CXX) $(CXXFLAGS) $(INCLUDES) -c $(SRCDIR)/CloudsInCells.cxx  -o $(OBJDIR)/CloudsInCells.o
 
 obj/Skewer.o: $(SRCDIR)/Skewer.cxx 
-	$(CXX) -c $(CXXFLAGS) -o $@ $<
+	$(CXX) $(CXXFLAGS) $(INCLUDES) -c $(SRCDIR)/Skewer.cxx  -o $(OBJDIR)/Skewer.o
+
+obj/ProjectDensity.o: $(SRCDIR)/ProjectDensity.cxx $(SRCDIR)/Particles.h $(SRCDIR)/ChainingMesh.h $(SRCDIR)/CloudsInCells.h $(SRCDIR)/Skewer.h $(LIBS)
+	$(CXX) $(CXXFLAGS) $(INCLUDES) -c $(SRCDIR)/ProjectDensity.cxx  -o $(OBJDIR)/ProjectDensity.o
 
 clean:
 	rm -f densityProjection $(OBJDIR)/*.o 

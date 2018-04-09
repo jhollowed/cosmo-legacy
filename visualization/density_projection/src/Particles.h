@@ -16,8 +16,9 @@ class Particles
 
     public:
 
-      Particles(std::string inputFile, int command, int species);
+      Particles(std::string inputFile, int command, int species, int fileType);
       
+      int ReadGIOFile();
       int ReadCosmoFile();
       void PrintStats();
 
@@ -36,9 +37,9 @@ class Particles
       typedef int64_t ID_T;
 
       // Particle file
-      std::string cosmoFile;
+      std::string filename;
 
-      // Determines what attribute to return (0 for rho, 1 for uu) 
+      // Determines what attribute to return (0 for rho, 1 for uu) (relevant for baryons)
       int vtype;
 
       // Determines what particle types to read (0 for dm, 1 for bayons)

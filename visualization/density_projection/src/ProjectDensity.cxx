@@ -8,10 +8,8 @@
 #include "ChainingMesh.h"
 #include "CloudsInCells.h"
 #include "Skewer.h"
-
-#ifdef _OPENMP
 #include <omp.h>
-#endif
+#include "mpi.h"
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -19,6 +17,8 @@
 #include <iostream>
 #include <iomanip>
 #include <string>
+#include <sys/stat.h>
+#include <sstream>
 
 #define MIN_VAL 1.0e-30f
 
@@ -30,29 +30,31 @@ int main(int argc, char *argv[])
   // cosmofile: input particle snapshot file in .cosmo format
   // outfile: the output destination
   // x,y,zmin and x,y,zmax: the comoving cartesian domain of the final render in Mpc/h
-  // mesh_width: symmetric width of mesh cells
+  // mesh_width: symmetric width of mesh cells in comoving Mpc/h
   // x,y,zobs: comoving cartesian position of the observer in Mpc/h
   // depth: comoving depth distance, in Mpc/h, to which the observer can "see" (particles 
   //        beyond this depth will not contribute to pizel densities)
   // xfov: the observers field of view in the x-direction (y- and z-direction fov assumed 
-  //       symmetric)
+  //       symmetric) in degrees
   // fobs:
   // theta:
   // phi:
   // xpix: pixels in the horizontal direction in the plane of observation
   // ypix: pixels in the vertical direction in the plane of observation
   // zsamp: sampling frequency of skewer density inerpolation points
+  
+  MPI_Init(&argc, &argv);
 
-  if(argc < 22) {
-    std::cerr << "USAGE: " << argv[0] << " <cosmofile> <outfile> <xmin> <xmax> <ymin>" <<
+  if(argc < 23) {
+    std::cerr << "USAGE: " << argv[0] << " <inputFile> <outfile> <xmin> <xmax> <ymin>" <<
                                          " <ymax> <zmin> <zmax> <mesh_width> <xobs> <yobs>" << 
                                          " <zobs> <depth> <xfov> <fobs> <theta> <phi> " << 
-                                         " <xpix> <ypix> <zsamp> <ptype>" << std::endl; 
+                                         " <xpix> <ypix> <zsamp> <ptype> <fileType>" << std::endl; 
     return -1;
   }
 
-  char cosmoFile[200], outFile[200];
-  sprintf(cosmoFile, argv[1]);
+  char inputFile[200], outFile[200];
+  sprintf(inputFile, argv[1]);
   sprintf(outFile,   argv[2]);
   float xmin  = atof(argv[3]);
   float xmax  = atof(argv[4]);
@@ -73,7 +75,8 @@ int main(int argc, char *argv[])
   int nypix   = atoi(argv[19]);
   int nsamp   = atoi(argv[20]);
   int ptype   = atoi(argv[21]);
-
+  int ftype   = atoi(argv[22]);
+  
   // Total number of pixels
   int nxypix = nxpix*nypix;
 
@@ -84,7 +87,7 @@ int main(int argc, char *argv[])
 
   // Read particle positions, smoothing lengths, and densities (will only keep track of 
   // particles noted as ptype)
-  Particles *p = new Particles(std::string(cosmoFile), 0, ptype);
+  Particles *p = new Particles(std::string(inputFile), 0, ptype, ftype);
 
   int nParticle = p->NumParticles();
   float *xx   = p->ExtractX();
@@ -158,7 +161,8 @@ int main(int argc, char *argv[])
   delete cic;
   delete cm;
   delete p;
-
+  
+  MPI_Finalize();
   return 0;
 }
 
