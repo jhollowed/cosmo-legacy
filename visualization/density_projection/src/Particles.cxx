@@ -12,11 +12,11 @@
 #include <vector>
 #include <assert.h>
 
+#include "GenericIO.h"
+using namespace gio;
+
 Particles::Particles(std::string inputFile, int command, int species)
 {
-
-  // Set input file
-  cosmoFile = inputFile;
 
   // Set commmand (0 for density, 1 for uu)
   assert(command == 0 || command == 1);
@@ -27,13 +27,85 @@ Particles::Particles(std::string inputFile, int command, int species)
   ptype = species;
 
   // Read particle data
-  int success = ReadCosmoFile();
+  int success; 
+  if( fileType == 0{ success = ReadGIOFile(); }
+  if( fileType == 1){ success = ReadCosmoFile(); }
+
   assert(success == 0);
 
   // Print some stats
   PrintStats();
 
 }
+
+int Particles::ReadGIOFile()
+{
+  
+  std::cout << "Opening file: " << inputFile << std::endl;
+  GenericIO reader(MPI_COMM_SELF, inputFile)
+  reader.openAndReadHeader(GenericIO::MismatchRedistribute)
+
+  // Determine particle count and adjust array size (this will include total
+  // particle count, but we will only read dm or baryon particles, dictated 
+  // by the value of ptype)
+  fseek(inputFile, 0, SEEK_END);
+  int nTotal = ftell(inputFile)/(12*sizeof(POSVEL_T)+sizeof(ID_T));
+  xx.resize(nTotal);
+  yy.resize(nTotal);
+  zz.resize(nTotal);
+  hh.resize(nTotal);
+  vv.resize(nTotal);
+
+  // Do the reading now 
+  POSVEL_T xx0, yy0, zz0, vx0, vy0, vz0, mm0, uu0, hh0, mu0, rho0, phi0, vv0;
+  POSVEL_T psi0;
+  ID_T id0;
+  rewind(inputFile);
+  nParticle = 0;
+  std::cout << " Reading from file " << inputFile << " ... " << std::endl;
+  for (int i=0; i<nTotal; ++i) {
+    fread(&xx0, sizeof(POSVEL_T), 1, inputFile);
+    fread(&vx0, sizeof(POSVEL_T), 1, inputFile);
+    fread(&yy0, sizeof(POSVEL_T), 1, inputFile);
+    fread(&vy0, sizeof(POSVEL_T), 1, inputFile);
+    fread(&zz0, sizeof(POSVEL_T), 1, inputFile);
+    fread(&vz0, sizeof(POSVEL_T), 1, inputFile);
+    fread(&mm0, sizeof(POSVEL_T), 1, inputFile);
+    fread(&uu0, sizeof(POSVEL_T), 1, inputFile);
+    fread(&hh0, sizeof(POSVEL_T), 1, inputFile);
+    fread(&mu0, sizeof(POSVEL_T), 1, inputFile);
+    fread(&rho0, sizeof(POSVEL_T), 1, inputFile);
+    fread(&phi0, sizeof(POSVEL_T), 1, inputFile);
+    fread(&id0, sizeof(ID_T), 1, inputFile);
+    if (id0%2 != 1 && ptype == 0) { // This is a dm particle 
+      if (vtype == 0) psi0 = rho0;
+      else if (vtype == 1) psi0 = uu0;
+      xx[nParticle] = xx0;
+      yy[nParticle] = yy0;
+      zz[nParticle] = zz0;
+      hh[nParticle] = hh0;
+      vv[nParticle] = mm0*psi0/rho0;
+      nParticle++;
+    }
+    if (id0%2 == 1 && ptype == 1) { // This is a baryon 
+      if (vtype == 0) psi0 = rho0;
+      else if (vtype == 1) psi0 = uu0;
+      xx[nParticle] = xx0;
+      yy[nParticle] = yy0;
+      zz[nParticle] = zz0;
+      hh[nParticle] = hh0;
+      vv[nParticle] = mm0*psi0/rho0;
+      nParticle++;
+    }
+  }
+  std::cout << " Done reading " << nParticle << " particles from a total set of " << 
+               nTotal << " dm+baryon particles " << std::endl;
+
+  // Close file 
+  fclose(inputFile)
+  return 0;
+}
+
 
 int Particles::ReadCosmoFile()
 {
@@ -71,14 +143,15 @@ int Particles::ReadCosmoFile()
 
 #else
 
-  FILE *inputFile = fopen(cosmoFile.c_str(), "rb");
+  FILE *inputFile = fopen(inputFile.c_str(), "rb");
   if (!inputFile) {
-    std::cout << " ERROR: Could not open cosmoFile " << cosmoFile << std::endl;
+    std::cout << " ERROR: Could not open inputFile " << inputFile << std::endl;
     return -1;
   }
 
-  // Determine particle count and adjust array size (this will include total particle count, but we will only 
-  //                                                 read dm or baryon particles, dictated by the value of ptype)
+  // Determine particle count and adjust array size (this will include total
+  // particle count, but we will only read dm or baryon particles, dictated 
+  // by the value of ptype)
   fseek(inputFile, 0, SEEK_END);
   int nTotal = ftell(inputFile)/(12*sizeof(POSVEL_T)+sizeof(ID_T));
   xx.resize(nTotal);
@@ -93,7 +166,7 @@ int Particles::ReadCosmoFile()
   ID_T id0;
   rewind(inputFile);
   nParticle = 0;
-  std::cout << " Reading from file " << cosmoFile << " ... " << std::endl;
+  std::cout << " Reading from file " << inputFile << " ... " << std::endl;
   for (int i=0; i<nTotal; ++i) {
     fread(&xx0, sizeof(POSVEL_T), 1, inputFile);
     fread(&vx0, sizeof(POSVEL_T), 1, inputFile);
@@ -129,7 +202,8 @@ int Particles::ReadCosmoFile()
       nParticle++;
     }
   }
-  std::cout << " Done reading " << nParticle << " particles from a total set of " << nTotal << " dm+baryon particles " << std::endl;
+  std::cout << " Done reading " << nParticle << " particles from a total set of " << 
+               nTotal << " dm+baryon particles " << std::endl;
 
   // Close file 
   fclose(inputFile);
