@@ -943,8 +943,8 @@ def compareDuplicates(duplicatePath, steps, lcSuffix, plotMode='show', outDir='.
     axe = f.add_subplot(121, projection='3d')
     axi = f.add_subplot(122, projection='3d')
     plt.suptitle('step {} - step {}'.format(steps[0], steps[1]))
-    axe.set_title('{}\nDuplicate fraction: {:.2f}'.format(lcSuffix[0], dupl2['repeat_frac'][:][0]))
-    axi.set_title('{}\nDuplicate fraction: {:.2E}'.format(lcSuffix[1], dupl1['repeat_frac'][:][0]))
+    axi.set_title('{}\nDuplicate fraction: {:.2E}'.format(lcSuffix[0], dupl1['repeat_frac'][:][0]))
+    axe.set_title('{}\nDuplicate fraction: {:.2f}'.format(lcSuffix[1], dupl2['repeat_frac'][:][0]))
 
     # find intersection and symmetric difference of the two outputs
     maski = np.in1d(dupl1['id'], dupl2['id'])
