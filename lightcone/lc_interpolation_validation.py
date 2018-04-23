@@ -20,17 +20,43 @@ This file contains functions for inspecting and visualizing lightcone output
 #
 #######################################
 
-def config(cmap, numColors=3): 
+def config(cmap, numColors=3):
+    '''
+    This function prepares the matplotlib plotting environment in
+    my perferred way. It sets the plotting color cycle to be a 
+    discrete sampling of a desired colormap, and does some other
+    formatting.
+
+    Params:
+    :param cmap: The colormap to use to build a new color cycle
+    :param numColors: The length of the color cycle. The colormap 
+                      cmap will be sampled at an interval of
+                      1/numColors to populate the color cycle. 
+    :return: None
+    '''
     
     rcParams.update({'figure.autolayout': True})
     params = {'text.usetex': False, 'mathtext.fontset': 'stixsans'}
     rcParams.update(params)
-    colors = cmap(np.linspace(0.2, 0.8, numColors))
+    colors = cmap(np.linspace(0.1, 0.9, numColors))
     c = cycler('color', colors)
     plt.rcParams["axes.prop_cycle"] = c
     
 
-def plotCube(x, y, z, xw, yw, zw, ax, color, alpha=1):
+def plotBox(x, y, z, xw, yw, zw, ax, color, alpha=1):
+    '''
+    Plot a three dimensional rectangular prism, with the position 
+    of its corner nearest the origin, and prism side widths, specified. 
+
+    Params:
+    :param x: The x-position of the prism corner nearest the origin
+    :param y: The y-position of the prism corner nearest the origin
+    :param z: The z-position of the prism corner nearest the origin
+    :param xw: The width of the prism in the x-dimension
+    :param yw: The width of the prism in the y-dimension
+    :param zw: The width of the prism in the z-dimension
+    :return: None
+    '''
 
     xx, yy = np.meshgrid([x, x+xw], [y, y+yw])
     ax.plot_surface(xx, yy, np.ones(np.shape(xx))*z, color=color, alpha=alpha, shade=False)
@@ -44,39 +70,6 @@ def plotCube(x, y, z, xw, yw, zw, ax, color, alpha=1):
     ax.plot_surface(xx, np.ones(np.shape(xx))*y, zz, color=color, alpha=alpha, shade=False)
     ax.plot_surface(xx, np.ones(np.shape(xx))*(y+yw), zz, color=color, alpha=alpha, shade=False)
 
-
-def downsampleOutput():
-    
-    # do these imports here, since there are other functions in this file that
-    # are intended to run on systems where dtk and/or gio may not be available
-    from dtk import gio
-    from dtk import sort 
-
-    ipath="/home/jphollowed/data/hacc/alphaQ/lightcone/downsampled_particle_intrp_lc/step442"
-   
-    x = 'x'
-    y = 'y'
-    z = 'z'
-
-    print("Reading interpolation files")
-    iid = gio.gio_read("{}/lc_intrp_output_d.442".format(ipath), 'id')
-    ix = gio.gio_read("{}/lc_intrp_output_d.442".format(ipath), x)
-    iy = gio.gio_read("{}/lc_intrp_output_d.442".format(ipath), y)
-    iz = gio.gio_read("{}/lc_intrp_output_d.442".format(ipath), z)
-    irot = gio.gio_read("{}/lc_intrp_output_d.442".format(ipath), 'rotation')
-    
-    idx = np.linspace(0, len(iid)-1, len(iid), dtype=int)
-    randIdx = np.random.choice(idx, size=100000, replace=False)
-
-    ds_iid = iid[randIdx]
-    ds_ix = ix[randIdx]
-    ds_iy = iy[randIdx]
-    ds_iz = iz[randIdx]
-    ds_irot = irot[randIdx]
-
-    np.savez('lc_intrp_output_tinySample.npz', id=ds_iid, x=ds_ix, y=ds_iy, 
-                                               z=ds_iz,rot=ds_irot)
-    return;
 
 #############################################################################################
 #############################################################################################
@@ -138,6 +131,7 @@ def saveLightconePathData(epath, ipath, spath, outpath, rL, diffRange='max',
                         redshift differences between idnetical objects in the 
                         extrapolation and interpolation outputs. Return after
                         plotting (particle path data won't be output)
+    :return: None
     '''
 
     # do these imports here, since there are other functions in this file that
@@ -501,7 +495,7 @@ def saveLightconePathData(epath, ipath, spath, outpath, rL, diffRange='max',
 #############################################################################################
 #############################################################################################
 
-def plotLightconePaths(dataPath, diffRange = 'max'):
+def plotLightconePaths(dataPath, diffRange = 'max', plotMode='show'):
     '''
     This function plots the 3-dimensional path data as calculated and saved in 
     saveLightconePathData() above.
@@ -510,7 +504,13 @@ def plotLightconePaths(dataPath, diffRange = 'max'):
                      argument of saveLightconePathData())
     :param diffRange: whether to use the 'max', 'med'(median) or 'min' diffVals (see 
                       doc strings in saveLightconePathData() for more info)
+    :param plotMode: The plotting mode. Options are 'show' or 'save'. If 'show', the
+                     figures will be opened upon function completion. If 'save', they
+                     will be saved as .png files to the current directory.
+    :return: None
     '''
+    if plotMode not in ['show', 'save']:
+        raise Exception('Unknown plotMode {}. Options are \'show\' or \'save\'.'.format(plotMode))
     config(cmap=plt.cm.cool)
 
     # get data files
@@ -616,17 +616,39 @@ def plotLightconePaths(dataPath, diffRange = 'max'):
         plt.gcf().set_size_inches(8, 6)
         plt.gcf().tight_layout()
         plt.gcf().canvas.manager.window.move(540, 200)
-        plt.show()
+        
+        if(plotMode == 'show'):
+            plt.show()
+        else:
+            plt.savefig('lc_trajectory_{}Diff_{}'.format(diffRange, i))
 
 #############################################################################################
 #############################################################################################
 
-def findDuplicates(lc_type = 'i', dt_type='nonlin'):
+def findDuplicates(lc_type = 'i'):
+    '''
+    This function finds particle/object duplicates across timesteps in lightcone 
+    output. Specifically, it finds particles that do not satisfy the following:
+    The particle, defined by a tuple containing an id and box replication identifier,
+    should be found only *once* in the lightcone, at one unique lightcone snapshot
+    output file. If not, it means this particle has crossed the lightcone twice, 
+    implying superluminal travel. It would then be considered a "duplicate particle".
+
+    All duplicate particles that are found have all of their data columns saved to 
+    an hdf5 file.
+
+    Params:
+    :param lcSuffix: An identifier string that will be used as a filename suffix
+                     for the output hdf5 files. This can be used to distinguish 
+                     between multiple lightcones within which duplicates will be 
+                     searched for. 
+    :return: None
+    '''
 
     # do these imports here, since there are other functions in this file that
     # are intended to run on systems where dtk and/or gio may not be available
     from dtk import sort
-    from dtk import gio
+    from genericio import gio
 
     print('reading data')
     if(lc_type == 'i'):
@@ -681,16 +703,44 @@ def findDuplicates(lc_type = 'i', dt_type='nonlin'):
 #############################################################################################
 #############################################################################################
 
-def compareDuplicates(dt_type = 'linear'):
+def compareDuplicates(duplicatePath, step):
+    '''
+    This function visualizes the output of the validation function, 
+    findDuplicates(). That function finds all particle duplicates between
+    two lightcone steps (explained in detail in the findDuplicates() doc
+    string) and outputs their positions to an hdf5 file. This function 
+    opens that file, and plots a downsampling of those particles on 3d
+    axes.
 
-    path = '/home/joe/gdrive2/work/HEP/data/hacc/alphaQ/lightcone/lc_duplicates'
-    idupl = h5.File('{}/dups_interp_{}.hdf5'.format(path, dt_type), 'r')
-    edupl = h5.File('{}/dups_extrap_{}.hdf5'.format(path, dt_type), 'r')
-    dslc = np.load('lc_intrp_output_tinySample.npz')
+    Two runs of findDuplicates() is expected to have been run, with results 
+    saved to the same location. This is becuase the intended use of this 
+    validation test is to inspect the duplicates present in a lightcone
+    timestep resultant from running the old (extrapolation) vs new (interpolation)
+    methods. 
+
+    Params:
+    :param deplicatePath: the output directory of two previous runs of 
+                          findDuplicates().
+    :param step: the step that was run through findDuplicates() whose 
+                 output this function should plot. This should be the 
+                 earlier snapshot number of a given timestep (smaller
+                 step number)
+    :param plotMode: The plotting mode. Options are 'show' or 'save'. If 'show', the
+                     figures will be opened upon function completion. If 'save', they
+                     will be saved as .png files to the current directory.
+    :return: None
+    '''
+    if plotMode not in ['show', 'save']:
+        raise Exception('Unknown plotMode {}. Options are \'show\' or \'save\'.'.format(plotMode))
+
+    # open files
+    idupl = h5.File('{}/dups_interp_{}.hdf5'.format(duplicatePath), 'r')
+    edupl = h5.File('{}/dups_extrap_{}.hdf5'.format(duplicatePath), 'r')
 
     print('Duplicate fraction for old output: {}'.format(edupl['repeat_frac'][:][0]))
     print('Duplicate fraction for new output: {}'.format(idupl['repeat_frac'][:][0]))
     
+    # setup plotting
     f = plt.figure(0)
     axe = f.add_subplot(121, projection='3d')
     axi = f.add_subplot(122, projection='3d')
@@ -698,62 +748,90 @@ def compareDuplicates(dt_type = 'linear'):
     axe.set_title('Extrapolation\nDuplicate fraction: {:.2f}'.format(edupl['repeat_frac'][:][0]))
     axi.set_title('Interpolation\nDuplicate fraction: {:.2E}'.format(idupl['repeat_frac'][:][0]))
 
-    pdb.set_trace()
-
+    # find intersection and symmetric difference of the two outputs
     maski = np.in1d(idupl['id'], edupl['id'])
     maske = np.in1d(edupl['id'], idupl['id'])
-    maske_nokeep = np.random.choice(np.where(~maske)[0], int(len(np.where(~maske)[0])*0.9), replace=False)
+    maske_nokeep = np.random.choice(np.where(~maske)[0], 
+                                    int(len(np.where(~maske)[0])*0.9), replace=False)
     maske[maske_nokeep] = 1
-    e_downsample_idx = np.random.choice(np.linspace(0, len(edupl['id'][:])-1, len(edupl['id'][:]), dtype=int), 
-                                    int(len(edupl['id'][:])*0.1), replace=False)
+    e_downsample_idx = np.random.choice(np.linspace(0, len(edupl['id'][:])-1, 
+                                        len(edupl['id'][:]), dtype=int), 
+                                        int(len(edupl['id'][:])*0.1), replace=False)
     e_downsample = np.zeros(len(edupl['id'][:]), dtype = bool)
     e_downsample[e_downsample_idx] = 1
-
-    #axi.plot(dslc['x'], dslc['y'], dslc['z'], '.y', ms=1)
-    #axe.plot(dslc['x'], dslc['y'], dslc['z'], '.y', ms=1)
     
-    axe.plot(edupl['x'][e_downsample], edupl['y'][e_downsample], edupl['z'][e_downsample], '.g', ms=1)
-    axe.plot(edupl['x'][~maske], edupl['y'][~maske], edupl['z'][~maske], '+m', mew=1)
+    # do plotting. The extrapolation is downsampled, while the interpolated output
+    # is not, since the extrapolated output should have far mroe duplicate objects
+    axe.plot(edupl['x'][e_downsample], edupl['y'][e_downsample], edupl['z'][e_downsample], 
+            '.g', ms=1, label='shared duplicates')
+    axe.plot(edupl['x'][~maske], edupl['y'][~maske], edupl['z'][~maske], 
+             '+m', mew=1, label='unique duplicates')
     axe.set_xlabel('x (Mpc/h)')
     axe.set_ylabel('y (Mpc/h)')
     axe.set_zlabel('y (Mpc/h)')
+    axe.legend()
 
-    axi.plot(idupl['x'], idupl['y'], idupl['z'], '.b', ms=1)
-    axi.plot(idupl['x'][~maski], idupl['y'][~maski], idupl['z'][~maski], '+r', mew=1)
+    axi.plot(idupl['x'], idupl['y'], idupl['z'], 
+             '.b', ms=1, label='shared duplicates')
+    axi.plot(idupl['x'][~maski], idupl['y'][~maski], idupl['z'][~maski], 
+             '+r', mew=1, label='unique duplicates')
     axi.set_xlabel('x (Mpc/h)')
     axi.set_ylabel('y (Mpc/h)')
     axi.set_zlabel('y (Mpc/h)')
+    ax1.legend()
 
+    if(plotMode == 'show'):
+        plt.show()
+    else:
+        f.savefig('lc_duplicates_{}'.format(step))
 
-    #distMask = np.linalg.norm(np.array([idupl[ax1][:], idupl[ax2][:]]).T, axis=1) < 255
-    #print(np.sum(distMask))
-
-    #axi.plot(idupl[ax1][distMask], idupl[ax2][distMask], 'xk', mew=1)
-    
-    #np.save('weirdIds.npy', idupl['id'][distMask])
-    
-    #dupl_intrpUnique = np.logical_and(~distMask, ~maski)
-    
-    #np.save('duplSharedIds.npy', idupl['id'][maski])
-    #np.save('dupl_intrpUniqueIds.npy', idupl['id'][dupl_intrpUnique])
-    #np.save('dupl_extrpUniqueIds.npy', edupl['id'][~maske])
- 
-    plt.show()
 
 #############################################################################################
 #############################################################################################
 
-def compareReps(dir1, dir2, step):
 
+def compareReps(lcDir1, lcDir2, step):
+    '''
+    This function compares the simulation box replication rotations
+    between two lightcones. The intended reason for running this validation
+    test is to ensure that two lightcone runs given the same random seed
+    produce the same box rotations. It will plot all box replications present 
+    in the output at the input step in 3d space, with each box being color
+    coded by its rotation value. Refer to the Creating Lightcones in HACC 
+    document to see the details of box rotation and replication
+
+    Params:
+    :param lcDir1: A directory containing lightcone output. 
+                   It is assumed that this directory follows the 
+                   naming and structure convention given in fig 6 of 
+                   the Creating Lightcones in HACC notes (with one 
+                   subdirectory per snapshot).
+    :param lcDir2: A second directory containing lightcone output, 
+                   following the description of lcDir1, to compare to 
+                   the output of lcDir1.
+    :param step: The step to use in the comparison. Different steps 
+                 will generally plot box replications at different 
+                 spatial positions (those that overlap the shell of the
+                 lightcone at the step)
+    :param plotMode: The plotting mode. Options are 'show' or 'save'. If 'show', the
+                     figures will be opened upon function completion. If 'save', they
+                     will be saved as .png files to the current directory.
+    :return: None
+    '''
+    if plotMode not in ['show', 'save']:
+        raise Exception('Unknown plotMode {}. Options are \'show\' or \'save\'.'.format(plotMode))
+    
     # do these imports here, since there are other functions in this file that
     # are intended to run on systems where dtk and/or gio may not be available
     import genericio as gio
-    
+   
+    # setup plottong
     f = plt.figure()
     ax1 = f.add_subplot(221, projection='3d')
     ax2 = f.add_subplot(223, projection='3d')
     
-    subdirs = glob.glob('{}/*'.format(dir1)) 
+    # find 
+    subdirs = glob.glob('{}/*'.format(lcDir1)) 
     for i in range(len(subdirs[0].split('/')[-1])):
         try:
             (int(subdirs[0].split('/')[-1][i]))
@@ -762,8 +840,8 @@ def compareReps(dir1, dir2, step):
         except ValueError:
             continue
 
-    file1 = sorted(glob.glob("{}/{}{}/*".format(dir1, prefix, step)))[0]
-    file2 = sorted(glob.glob("{}/{}{}/*".format(dir2, prefix, step)))[0]
+    file1 = sorted(glob.glob("{}/{}{}/*".format(lcDir1, prefix, step)))[0]
+    file2 = sorted(glob.glob("{}/{}{}/*".format(lcDir2, prefix, step)))[0]
 
     rot64 = gio.gio_read(file1, 'rotation')
     rep64 = gio.gio_read(file1, 'replication')
@@ -792,8 +870,8 @@ def compareReps(dir1, dir2, step):
             print('shit')
             return
 
-        plotCube(xReps64, yReps64, zReps64, 256, 256, 256, ax1, colors[rot1])
-        plotCube(xReps256, yReps256, zReps256, 256, 256, 256, ax2, colors[rot2])
+        plotBox(xReps64, yReps64, zReps64, 256, 256, 256, ax1, colors[rot1])
+        plotBox(xReps256, yReps256, zReps256, 256, 256, 256, ax2, colors[rot2])
 
     ax1.set_xlabel('x')
     ax1.set_ylabel('y')
@@ -802,7 +880,10 @@ def compareReps(dir1, dir2, step):
     ax2.set_ylabel('y')
     ax2.set_zlabel('z')
     
-    plt.show()
+    if(plotMode == 'show'):
+        plt.show()
+    else:
+        f.savefig('lc_boxRotations_{}'.format(step))
 
 
 #############################################################################################
@@ -838,7 +919,13 @@ def comvDist_vs_z(steps, lcDirs, lcNames=['second order corrections w/ weighting
                      false, only generate the error (bottom) axes.
     :param cosmology: simulation from which to assume cosmological parameters.
                       Default is 'alphaQ'
+    :param plotMode: The plotting mode. Options are 'show' or 'save'. If 'show', the
+                     figures will be opened upon function completion. If 'save', they
+                     will be saved as .png files to the current directory.
+    :return: None
     '''
+    if plotMode not in ['show', 'save']:
+        raise Exception('Unknown plotMode {}. Options are \'show\' or \'save\'.'.format(plotMode))
     
     # do these imports here, since there are other functions in this file that
     # are intended to run on systems where dtk and/or gio may not be available
@@ -946,5 +1033,7 @@ def comvDist_vs_z(steps, lcDirs, lcNames=['second order corrections w/ weighting
             ax2.legend(loc="upper right")
             ax2.grid(True)
 
-    # done!
-    plt.show()
+    if(plotMode == 'show'):
+        plt.show()
+    else:
+        f.savefig('lc_comvDist_v_redshift_{}-{}'.format(steps[0], steps[-1]))
