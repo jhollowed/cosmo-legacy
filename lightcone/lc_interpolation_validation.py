@@ -80,9 +80,205 @@ def plotBox(x, y, z, xw, yw, zw, ax, color, alpha=1):
 #
 #######################################
 
+def lightconeHistograms(lcDir1, lcDir2, rL, mode='particles', 
+                              plotMode='show', outDir='.'):
+    '''
+    This function plots the difference in particle/object position, velocity, and
+    redshift, between two different lightcone runs, as histograms
+
+    Params:
+    :param lcDir1: path to a lightcone output directory It is assumed that this 
+                   directory follows the naming and structure convention given in 
+                   fig 6 of the Creating Lightcones in HACC notes (with one 
+                   subdirectory per snapshot).
+    :param lcDir2: path toanother lightcone output directory, to compare with the 
+                   output at lcDir1. This lightone put should have been run with 
+                   identical parameters, on the same cimulation volume, as the run 
+                   that generated the data at lcDir1. The same directory structure 
+                   as explained in the docstring for arg lcDir1 is assumed here as well.
+    :param rL: the box width of the simulation from which the lightcones give in lcDir1
+               and lcDir2 were generated
+    :param mode: whether to perform the snapshot object match-up on particles or
+                 halos. If mode=="particles", then find the object in each snapshot
+                 by matching on it's 'id'. If mode=="halos", then find the object
+                 in each snapshot by matching it's 'tree_node_index' and 
+                 'desc_node_index'.
+    :param plotMode: The plotting mode. Options are 'show' or 'save'. If 'show', the
+                     figures will be opened upon function completion. If 'save', they
+                     will be saved as .png files to the current directory, unless otherwise
+                     specified in the 'outDir' arg
+    :param outDir: where to save figures, if plotMode == 'save'
+    :return: None
+    '''
+    if plotMode not in ['show', 'save']:
+        raise Exception('Unknown plotMode {}. Options are \'show\' or \'save\'.'.format(plotMode))
+
+    # do these imports here, since there are other functions in this file that
+    # are intended to run on systems where dtk and/or gio may not be available
+    import genericio as gio
+    from dtk import sort
+    
+    subdirs = glob.glob('{}/*'.format(lcDir1))
+    
+    # get lc subdirectory prefix (could be 'lc' or 'lcGals', etc.). 
+    # prefix of subdirs in lcDir2 and lcDir1 assumed to be the same.
+    for i in range(len(subdirs[0].split('/')[-1])):
+        try:
+            (int(subdirs[0].split('/')[-1][i]))
+            prefix = subdirs[0].split('/')[-1][0:i]
+            break
+        except ValueError:
+            continue
+
+    # get file names in 442 subdir for interpolated and extrapolated lc data
+    # (sort them to grab only the unhashed file header)
+    file1 = sorted(glob.glob('{}/{}{}/*'.format(lcDir1, prefix, step)))[0]
+    file2 = sorted(glob.glob('{}/{}{}/*'.format(lcDir2, prefix, step)))[0]
+   
+    # set id types to read based on the mode
+    if(mode == 'particles'):
+        idName = 'id'
+    if(mode == 'halos'):
+        idName = 'tree_node_index'
+    else:
+        raise Exception('mode parameter must be \'particles\' or \'halos\'')
+        
+    # read data
+    print("Reading files from {}".format(lcDir1.split('/')[-1]))
+    iid = gio.gio_read(file1, 'id')
+    ix = gio.gio_read(file1, 'x')
+    iy = gio.gio_read(file1, 'y')
+    iz = gio.gio_read(file1, 'z')
+    ivx = gio.gio_read(file1, 'vx')
+    ivy = gio.gio_read(file1, 'vy')
+    ivz = gio.gio_read(file1, 'vz')
+    ia = gio.gio_read(file1, 'a')
+    irot = gio.gio_read(file1, 'rotation')
+
+    print("Reading files from {}".format(lcDir2.split('/')[-1]))
+    eid = gio.gio_read(file2, 'id')
+    ex = gio.gio_read(file2, 'x')
+    ey = gio.gio_read(file2, 'y')
+    ez = gio.gio_read(file2, 'z')
+    evx = gio.gio_read(file2, 'vx')
+    evy = gio.gio_read(file2, 'vy')
+    evz = gio.gio_read(file2, 'vz')
+    ea = gio.gio_read(file2, 'a')
+    erot = gio.gio_read(file2, 'rotation')
+
+    # get rid of everything not in the initial volume (don't
+    # consider objects found in replicated boxes, so matchup
+    # is simplified)
+
+    # decrease simulation box side length value by 1% to avoid
+    # grabbing objects who originate from some other box replication,
+    # but moved into rL by the lightcone position approximation
+    rL = rL * 0.99
+
+    initVolMask1 = np.logical_and.reduce((abs(ix) < rL, 
+                                               abs(iy) < rL, 
+                                               abs(iz) < rL))
+    iid = iid[initVolMask1]
+    ix = ix[initVolMask1]
+    iy = iy[initVolMask1]
+    iz = iz[initVolMask1]
+    ia = ia[initVolMask1]
+    irot = irot[initVolMask1]
+
+    initVolMask2 = np.logical_and.reduce((abs(ex) < rL, 
+                                               abs(ey) < rL, 
+                                               abs(ez) < rL))
+    eid = eid[initVolMask2]
+    ex = ex[initVolMask2]
+    ey = ey[initVolMask2]
+    ez = ez[initVolMask2]
+    ea = ea[initVolMask2]
+    erot = erot[initVolMask2]
+
+    # make sure that worked...
+    if(len(np.unique(irot)) > 1 or len(np.unique(erot)) > 1):
+        raise Exception('particles found in replicated boxes >:(')
+
+
+    # find unique objects to begin matching 
+    print('finding unique')
+    iunique = np.unique(iid, return_counts=True)
+    eunique = np.unique(eid, return_counts=True)
+    if(max(iunique[1]) > 1 or max(eunique[1]) > 1): 
+        # There were duplicates found in this volume. pdb trace?
+        pass
+    
+    # get rid of duplicates in interpolation lc data
+    iuniqueMask = np.ones(len(iid), dtype=bool)
+    iuniqueMask[np.where(np.in1d(iid, iunique[0][iunique[1] > 1]))[0]] = 0
+
+    print('get intersecting data (union of interp and extrap lc objects)')
+    intersection_itoe = np.in1d(iid[iuniqueMask], eid)
+    intersection_etoi = np.in1d(eid, iid[iuniqueMask])
+
+    print('sorting extrap data array by id to match order of interp data array')
+    eSort = np.argsort(eid[intersection_etoi])
+
+    # do binary search using dtk utility to find each object from the interpolation
+    # lc data in the extrapolation lc data
+    print('matching arrays')
+    matchMap = sort.search_sorted(eid[intersection_etoi], 
+                                  iid[iuniqueMask][intersection_itoe], sorter=eSort)
+
+    iMask = np.linspace(0, len(iid)-1, len(iid), dtype=int)[iuniqueMask][intersection_itoe]
+    eMask = np.linspace(0, len(eid)-1, len(eid), dtype=int)[intersection_etoi][matchMap]
+
+    print('diffing positions')
+    xdiff = ix[iMask] - ex[eMask]
+    ydiff = iy[iMask] - ey[eMask]
+    zdiff = iz[iMask] - ez[eMask]
+    posDiff = np.linalg.norm(np.array([xdiff, ydiff, zdiff]).T, axis=1) 
+    
+    print('diffing velocities')
+    vxdiff = ivx[iMask] - evx[eMask]
+    vydiff = ivy[iMask] - evy[eMask]
+    vzdiff = ivz[iMask] - evz[eMask]
+    mag_vDiff = np.linalg.norm(np.array([vxdiff, vydiff, vzdiff]).T, axis=1)[0]
+    
+    print('diffing redshift')
+    redshiftDiff = np.abs(((1/ia)-1)[iMask] - ((1/ea)-1)[eMask])
+ 
+    # plot position, velocity, and redshift differences between interpolated
+    # and extrapolated output as historgrams
+    
+    config(cmap=plt.cm.plasma)
+    colors = plt.rcParams['axes.prop_cycle'].by_key()['color']
+    bins = 300
+    pdb.set_trace()
+    
+    f = plt.figure(0) 
+    ax =  f.add_subplot(311)
+    ax.hist(posDiff, bins, color=colors[0])
+    ax.set_yscale('log')
+    ax.set_xlabel(r'$\left|\vec{r}_\mathrm{extrap} - \vec{r}_\mathrm{interp}\right|\>\>\mathrm{(Mpc/h)}$', fontsize=18)
+    
+    ax2 =  f.add_subplot(312)
+    ax2.hist(mag_vDiff, bins, color=colors[1])
+    ax2.set_yscale('log')
+    ax2.set_xlabel(r'$\left|\vec{v}_\mathrm{extrap} - \vec{v}_\mathrm{interp}\right| \>\>\mathrm{(km/s)}$', fontsize=18)
+    
+    ax3 =  f.add_subplot(313)
+    ax3.hist(redshiftDiff, bins, color=colors[2])
+    ax3.set_yscale('log')
+    ax3.set_xlabel(r'$\left|z_\mathrm{extrap} - z_\mathrm{interp}\right|$', fontsize=18)
+    
+    if(plotMode == 'show'):
+        plt.show()
+    else:
+        plt.savefig('{}/lc_diffHists_{}'.format(outDir, step))
+
+
+#############################################################################################
+#############################################################################################
+
+
 def saveLightconePathData(epath, ipath, spath, outpath, rL, diffRange='max', 
-                          mode='particles', snapshotSubdirs = False, 
-                          posDiffOnly=False):
+                          mode='particles', snapshotSubdirs = False):
     '''
     This function loads lightcone output data, and inspects the 
     difference in position resulting from the extrapolation and interpolation
@@ -116,6 +312,7 @@ def saveLightconePathData(epath, ipath, spath, outpath, rL, diffRange='max',
                   generate the data at epath and ipath
     :param outpath: where to write out the path data (npy files)
     :param rL: the box width of the simulation from which the lightcones at epath
+               and ipath were generated
     :param diffRange: whether to use the 'max', 'med'(median) or 'min' diffVals
                and ipath were generated, in comoving Mpc/h
     :param mode: whether to perform the snapshot object match-up on particles or
@@ -128,10 +325,6 @@ def saveLightconePathData(epath, ipath, spath, outpath, rL, diffRange='max',
                             assume one flat directory with the the step number
                             "XXX" in the filenames somewhere, as "*.XXX.*" where
                             * is a wildcard
-    :param posDiffOnly: If true, plot histograms of the position, velocity, and 
-                        redshift differences between idnetical objects in the 
-                        extrapolation and interpolation outputs. Return after
-                        plotting (particle path data won't be output)
     :return: None
     '''
 
@@ -265,34 +458,6 @@ def saveLightconePathData(epath, ipath, spath, outpath, rL, diffRange='max',
     print('diffing redshift')
     redshiftDiff = np.abs(((1/ia)-1)[iMask] - ((1/ea)-1)[eMask])
  
-    # plot position, velocity, and redshift differences between interpolated
-    # and extrapolated output as historgrams, if posDiffOnly = True
-    if(posDiffOnly):
-        
-        config(cmap=plt.cm.plasma)
-        colors = plt.rcParams['axes.prop_cycle'].by_key()['color']
-        bins = 300
-        pdb.set_trace()
-        
-        f = plt.figure(0) 
-        ax =  f.add_subplot(311)
-        ax.hist(posDiff, bins, color=colors[0])
-        ax.set_yscale('log')
-        ax.set_xlabel(r'$\left|\vec{r}_\mathrm{extrap} - \vec{r}_\mathrm{interp}\right|\>\>\mathrm{(Mpc/h)}$', fontsize=18)
-        
-        ax2 =  f.add_subplot(312)
-        ax2.hist(mag_vDiff, bins, color=colors[1])
-        ax2.set_yscale('log')
-        ax2.set_xlabel(r'$\left|\vec{v}_\mathrm{extrap} - \vec{v}_\mathrm{interp}\right| \>\>\mathrm{(km/s)}$', fontsize=18)
-        
-        ax3 =  f.add_subplot(313)
-        ax3.hist(redshiftDiff, bins, color=colors[2])
-        ax3.set_yscale('log')
-        ax3.set_xlabel(r'$\left|z_\mathrm{extrap} - z_\mathrm{interp}\right|$', fontsize=18)
-        
-        plt.show()
-        return
-
     # find objects with position differences that are the max, median, or min of 
     # all object differences, depending on the argument given as diffRange. In the
     # case that diffRange='max', for instance, an array diffVals is created that 
@@ -493,10 +658,12 @@ def saveLightconePathData(epath, ipath, spath, outpath, rL, diffRange='max',
         np.save('{}/truea_{}.npy'.format(savePath, i), truea)
         print("saved {} for particle {}".format(diffRange, i))
 
+
 #############################################################################################
 #############################################################################################
 
-def plotLightconePaths(dataPath, diffRange = 'max', plotMode='show'):
+
+def plotLightconePaths(dataPath, diffRange = 'max', plotMode='show', outDir='.'):
     '''
     This function plots the 3-dimensional path data as calculated and saved in 
     saveLightconePathData() above.
@@ -508,7 +675,9 @@ def plotLightconePaths(dataPath, diffRange = 'max', plotMode='show'):
                       doc strings in saveLightconePathData() for more info)
     :param plotMode: The plotting mode. Options are 'show' or 'save'. If 'show', the
                      figures will be opened upon function completion. If 'save', they
-                     will be saved as .png files to the current directory.
+                     will be saved as .png files to the current directory, unless
+                     otherwise specified in outDir.
+    :param outDir: where to save figures, if plotMode == 'save'
     :return: None
     '''
     if plotMode not in ['show', 'save']:
@@ -622,7 +791,7 @@ def plotLightconePaths(dataPath, diffRange = 'max', plotMode='show'):
         if(plotMode == 'show'):
             plt.show()
         else:
-            plt.savefig('lc_trajectory_{}Diff_{}'.format(diffRange, i))
+            plt.savefig('{}/lc_trajectory_{}Diff_{}'.format(outDir, diffRange, i))
 
 #############################################################################################
 #############################################################################################
@@ -718,7 +887,7 @@ def findDuplicates(lcDir, steps, lcSuffix, outDir):
 #############################################################################################
 
 
-def compareDuplicates(duplicatePath, step, lcSuffix, plotMode='show'):
+def compareDuplicates(duplicatePath, steps, lcSuffix, plotMode='show', outDir='.'):
     '''
     This function visualizes the output of the validation function, 
     findDuplicates(). That function finds all particle duplicates between
@@ -736,23 +905,26 @@ def compareDuplicates(duplicatePath, step, lcSuffix, plotMode='show'):
     Params:
     :param deplicatePath: the output directory of two previous runs of 
                           findDuplicates().
-    :param step: the step that was run through findDuplicates() whose 
-                 output this function should plot. This should be the 
-                 earlier snapshot number of a given timestep (smaller
-                 step number)
+    :param steps: an array of two lightcone outputs, by snapshot number, between 
+                  which a corresponding run of finDuplicates() checked for duplicate 
+                  particles/objects.
     :param lcSuffix: An identifier string that will be assumed as a filename suffix
                      for the input hdf5 files. This should be array of length 2, with
                      each element agreeing with the lcSuffix input for a run of 
                      findDuplicates() which wrote to the directory duplicatePath
     :param plotMode: The plotting mode. Options are 'show' or 'save'. If 'show', the
                      figures will be opened upon function completion. If 'save', they
-                     will be saved as .png files to the current directory.
+                     will be saved as .png files to the current directory, unless otherwise
+                     specified in the 'outDir' arg
+    :param outDir: where to save figures, if plotMode == 'save'
     :return: None
     '''
     if plotMode not in ['show', 'save']:
         raise Exception('Unknown plotMode {}. Options are \'show\' or \'save\'.'.format(plotMode))
     if(len(lcSuffix) != 2):
         raise Exception('Input array lcSuffix should be of legnth 2. See function docstrings')
+    if(len(steps) != 2):
+        raise Exception('Only two step numbers should be passed in the \'steps\' arg')
 
     # open files
     dupl1 = h5.File('{}/dups_{}.hdf5'.format(duplicatePath, lcSuffix[0]), 'r')
@@ -765,7 +937,7 @@ def compareDuplicates(duplicatePath, step, lcSuffix, plotMode='show'):
     f = plt.figure(0)
     axe = f.add_subplot(121, projection='3d')
     axi = f.add_subplot(122, projection='3d')
-    plt.suptitle('step 432 - step 442')
+    plt.suptitle('step {} - step {}'.format(steps[0], steps[1]))
     axe.set_title('{}\nDuplicate fraction: {:.2f}'.format(lcSuffix[0], dupl2['repeat_frac'][:][0]))
     axi.set_title('{}\nDuplicate fraction: {:.2E}'.format(lcSuffix[1], dupl1['repeat_frac'][:][0]))
 
@@ -804,7 +976,7 @@ def compareDuplicates(duplicatePath, step, lcSuffix, plotMode='show'):
     if(plotMode == 'show'):
         plt.show()
     else:
-        f.savefig('lc_duplicates_{}'.format(step))
+        f.savefig('{}/lc_duplicates_{}'.format(outDir, step))
 
 
 #############################################################################################
@@ -913,8 +1085,8 @@ def compareReps(lcDir1, lcDir2, step):
 #############################################################################################
 
 
-def comvDist_vs_z(steps, lcDirs, lcNames=['second order corrections w/ weighting', 'uncorrected'], 
-                   twoPanel=True, cosmology='alphaQ'):
+def comvDist_vs_z(lcDirs, steps, lcNames=['second order corrections w/ weighting', 'uncorrected'], 
+                  twoPanel=True, cosmology='alphaQ'):
     '''
     This function computes and plots the error in the comoving-distance 
     vs. redshift relation for lightcone outputs, using that returned by 
