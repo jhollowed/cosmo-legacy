@@ -939,10 +939,10 @@ def compareDuplicates(duplicatePath, steps, lcSuffix, plotMode='show', outDir='.
     print('Duplicate fraction for {} output: {}'.format(lcSuffix[1], dupl2['repeat_frac'][:][0]))
     
     # setup plotting
-    f = plt.figure(0)
+    f = plt.figure(1)
     axe = f.add_subplot(121, projection='3d')
     axi = f.add_subplot(122, projection='3d')
-    plt.suptitle('step {} - step {}'.format(steps[0], steps[1]))
+    title = f.suptitle('step {} - step {}'.format(steps[0], steps[1]))
     axi.set_title('{}\nDuplicate fraction: {:.2E}'.format(lcSuffix[0], dupl1['repeat_frac'][:][0]))
     axe.set_title('{}\nDuplicate fraction: {:.2f}'.format(lcSuffix[1], dupl2['repeat_frac'][:][0]))
 
@@ -1026,7 +1026,7 @@ def compareReps(lcDir1, lcDir2, step, plotMode='show', outDir='.'):
     import genericio as gio
    
     # setup plottong
-    f = plt.figure()
+    f = plt.figure(2)
     ax1 = f.add_subplot(221, projection='3d')
     ax2 = f.add_subplot(223, projection='3d')
     
@@ -1162,7 +1162,7 @@ def comvDist_vs_z(lcDirs, steps, lcNames=['second order corrections w/ weighting
     # set up plotting
     config(cmap=plt.cm.plasma, numColors=3)
     colors = plt.rcParams['axes.prop_cycle'].by_key()['color']
-    f = plt.figure()
+    f = plt.figure(3)
     
     if(twoPanel):
         ax1 = f.add_subplot(211)
