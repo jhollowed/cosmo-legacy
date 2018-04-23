@@ -1,14 +1,17 @@
-import numpy as np
+
 import pdb
-from matplotlib.ticker import FormatStrFormatter
-import matplotlib.pyplot as plt
+import glob
+import h5py as h5
+import numpy as np
+from astropy.cosmology import FlatLambdaCDM
+
 import matplotlib as mpl
 from cycler import cycler
-from mpl_toolkits.mplot3d import Axes3D
 from matplotlib import rcParams
+import matplotlib.pyplot as plt
 import matplotlib.ticker as plticker
-import h5py as h5
-import glob
+from mpl_toolkits.mplot3d import Axes3D
+from matplotlib.ticker import FormatStrFormatter
 
 '''
 This file contains functions for inspecting and visualizing lightcone output
@@ -80,8 +83,8 @@ def plotBox(x, y, z, xw, yw, zw, ax, color, alpha=1):
 #
 #######################################
 
-def lightconeHistograms(lcDir1, lcDir2, rL, mode='particles', 
-                              plotMode='show', outDir='.'):
+def lightconeHistograms(lcDir1, lcDir2, step, rL, mode='particles', 
+                        plotMode='show', outDir='.'):
     '''
     This function plots the difference in particle/object position, velocity, and
     redshift, between two different lightcone runs, as histograms
@@ -96,6 +99,7 @@ def lightconeHistograms(lcDir1, lcDir2, rL, mode='particles',
                    identical parameters, on the same cimulation volume, as the run 
                    that generated the data at lcDir1. The same directory structure 
                    as explained in the docstring for arg lcDir1 is assumed here as well.
+    :param step: teh lightcone output step at which to perform the comparison
     :param rL: the box width of the simulation from which the lightcones give in lcDir1
                and lcDir2 were generated
     :param mode: whether to perform the snapshot object match-up on particles or
@@ -138,7 +142,7 @@ def lightconeHistograms(lcDir1, lcDir2, rL, mode='particles',
     # set id types to read based on the mode
     if(mode == 'particles'):
         idName = 'id'
-    if(mode == 'halos'):
+    elif(mode == 'halos'):
         idName = 'tree_node_index'
     else:
         raise Exception('mode parameter must be \'particles\' or \'halos\'')
@@ -249,7 +253,6 @@ def lightconeHistograms(lcDir1, lcDir2, rL, mode='particles',
     config(cmap=plt.cm.plasma)
     colors = plt.rcParams['axes.prop_cycle'].by_key()['color']
     bins = 300
-    pdb.set_trace()
     
     f = plt.figure(0) 
     ax =  f.add_subplot(311)
@@ -353,7 +356,7 @@ def saveLightconePathData(epath, ipath, spath, outpath, rL, diffRange='max',
     # set id types to read based on the mode
     if(mode == 'particles'):
         idName = 'id'
-    if(mode == 'halos'):
+    elif(mode == 'halos'):
         idName = 'tree_node_index'
     else:
         raise Exception('mode parameter must be \'particles\' or \'halos\'')
@@ -852,7 +855,9 @@ def findDuplicates(lcDir, steps, lcSuffix, outDir):
     outfile = h5.File('{}/duplicates_{}.hdf5'.format(outDir, lcSuffix), 'w')
 
     ids1 = gio.gio_read(file1, 'id')
+    ids1 = np.ndarray.flatten(ids1)
     ids2 = gio.gio_read(file2, 'id')
+    ids2 = np.ndarray.flatten(ids2)
     
     print('matching')
     matches = sort.search_sorted(ids1, ids2)
@@ -863,19 +868,19 @@ def findDuplicates(lcDir, steps, lcSuffix, outDir):
     print('found {} duplicates'.format(np.sum(matchesMask2)))
 
     dup_ids1 = ids1[matchesMask1]
-    x1 = gio.gio_read(file1, 'x')[matchesMask1]
-    y1 = gio.gio_read(file1, 'y')[matchesMask1]
-    z1 = gio.gio_read(file1, 'z')[matchesMask1]
+    x1 = np.squeeze(gio.gio_read(file1, 'x')[matchesMask1])
+    y1 = np.squeeze(gio.gio_read(file1, 'y')[matchesMask1])
+    z1 = np.squeeze(gio.gio_read(file1, 'z')[matchesMask1])
     
     dup_ids2 = ids2[matchesMask2]
-    x2 = gio.gio_read(file2, 'x')[matchesMask2]
-    y2 = gio.gio_read(file2, 'y')[matchesMask2]
-    z2 = gio.gio_read(file2, 'z')[matchesMask2]
-
+    x2 = np.squeeze(gio.gio_read(file2, 'x')[matchesMask2])
+    y2 = np.squeeze(gio.gio_read(file2, 'y')[matchesMask2])
+    z2 = np.squeeze(gio.gio_read(file2, 'z')[matchesMask2])
+    
     repeat_frac = float(len(dup_ids2)) / len(ids2) 
     print('repeat fraction is {}'.format(repeat_frac))
 
-    print('writing out')
+    print('writing out {}'.format('{}/duplicates_{}.hdf5'.format(outDir, lcSuffix)))
     outfile.create_dataset('repeat_frac', data=np.array([repeat_frac]))
     outfile.create_dataset('id', data = np.hstack([dup_ids2, dup_ids1]))
     outfile.create_dataset('x', data = np.hstack([x2, x1]))
@@ -927,11 +932,11 @@ def compareDuplicates(duplicatePath, steps, lcSuffix, plotMode='show', outDir='.
         raise Exception('Only two step numbers should be passed in the \'steps\' arg')
 
     # open files
-    dupl1 = h5.File('{}/dups_{}.hdf5'.format(duplicatePath, lcSuffix[0]), 'r')
-    dupl2 = h5.File('{}/dups_{}.hdf5'.format(duplicatePath, lcSuffix[1]), 'r')
+    dupl1 = h5.File('{}/duplicates_{}.hdf5'.format(duplicatePath, lcSuffix[0]), 'r')
+    dupl2 = h5.File('{}/duplicates_{}.hdf5'.format(duplicatePath, lcSuffix[1]), 'r')
 
-    print('Duplicate fraction for {} output: {}'.format(lcSuffix[0], dupl2['repeat_frac'][:][0]))
-    print('Duplicate fraction for {} output: {}'.format(lcSuffix[1], dupl1['repeat_frac'][:][0]))
+    print('Duplicate fraction for {} output: {}'.format(lcSuffix[0], dupl1['repeat_frac'][:][0]))
+    print('Duplicate fraction for {} output: {}'.format(lcSuffix[1], dupl2['repeat_frac'][:][0]))
     
     # setup plotting
     f = plt.figure(0)
@@ -971,19 +976,19 @@ def compareDuplicates(duplicatePath, steps, lcSuffix, plotMode='show', outDir='.
     axi.set_xlabel('x (Mpc/h)')
     axi.set_ylabel('y (Mpc/h)')
     axi.set_zlabel('y (Mpc/h)')
-    ax1.legend()
+    axi.legend()
 
     if(plotMode == 'show'):
         plt.show()
     else:
-        f.savefig('{}/lc_duplicates_{}'.format(outDir, step))
+        f.savefig('{}/lc_duplicates_{}-{}'.format(outDir, steps[0], steps[1]))
 
 
 #############################################################################################
 #############################################################################################
 
 
-def compareReps(lcDir1, lcDir2, step):
+def compareReps(lcDir1, lcDir2, step, plotMode='show', outDir='.'):
     '''
     This function compares the simulation box replication rotations
     between two lightcones. The intended reason for running this validation
@@ -1008,7 +1013,9 @@ def compareReps(lcDir1, lcDir2, step):
                  lightcone at the step)
     :param plotMode: The plotting mode. Options are 'show' or 'save'. If 'show', the
                      figures will be opened upon function completion. If 'save', they
-                     will be saved as .png files to the current directory.
+                     will be saved as .png files to the current directory, unless otherwise
+                     specified in the 'outDir' arg
+    :param outDir: where to save figures, if plotMode == 'save'
     :return: None
     '''
     if plotMode not in ['show', 'save']:
@@ -1078,7 +1085,7 @@ def compareReps(lcDir1, lcDir2, step):
     if(plotMode == 'show'):
         plt.show()
     else:
-        f.savefig('lc_boxRotations_{}'.format(step))
+        f.savefig('{}/lc_boxRotations_{}'.format(outDir, step))
 
 
 #############################################################################################
@@ -1086,7 +1093,7 @@ def compareReps(lcDir1, lcDir2, step):
 
 
 def comvDist_vs_z(lcDirs, steps, lcNames=['second order corrections w/ weighting', 'uncorrected'], 
-                  twoPanel=True, cosmology='alphaQ'):
+                  twoPanel=True, cosmology='alphaQ', plotMode='show', outDir='.'):
     '''
     This function computes and plots the error in the comoving-distance 
     vs. redshift relation for lightcone outputs, using that returned by 
@@ -1116,7 +1123,9 @@ def comvDist_vs_z(lcDirs, steps, lcNames=['second order corrections w/ weighting
                       Default is 'alphaQ'
     :param plotMode: The plotting mode. Options are 'show' or 'save'. If 'show', the
                      figures will be opened upon function completion. If 'save', they
-                     will be saved as .png files to the current directory.
+                     will be saved as .png files to the current directory, unless otherwise
+                     specified in the 'outDir' arg
+    :param outDir: where to save figures, if plotMode == 'save'
     :return: None
     '''
     if plotMode not in ['show', 'save']:
@@ -1231,4 +1240,4 @@ def comvDist_vs_z(lcDirs, steps, lcNames=['second order corrections w/ weighting
     if(plotMode == 'show'):
         plt.show()
     else:
-        f.savefig('lc_comvDist_v_redshift_{}-{}'.format(steps[0], steps[-1]))
+        f.savefig('{}/lc_comvDist_v_redshift_{}-{}'.format(outDir, steps[0], steps[-1]))
