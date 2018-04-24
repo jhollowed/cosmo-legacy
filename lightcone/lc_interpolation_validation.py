@@ -41,7 +41,7 @@ def config(cmap, numColors=3):
     rcParams.update({'figure.autolayout': True})
     params = {'text.usetex': False, 'mathtext.fontset': 'stixsans'}
     rcParams.update(params)
-    colors = cmap(np.linspace(0.1, 0.9, numColors))
+    colors = cmap(np.linspace(0.2, 0.8, numColors))
     c = cycler('color', colors)
     plt.rcParams["axes.prop_cycle"] = c
     
@@ -233,41 +233,41 @@ def lightconeHistograms(lcDir1, lcDir2, step, rL, mode='particles',
     eMask = np.linspace(0, len(eid)-1, len(eid), dtype=int)[intersection_etoi][matchMap]
 
     print('diffing positions')
-    xdiff = ix[iMask] - ex[eMask]
-    ydiff = iy[iMask] - ey[eMask]
-    zdiff = iz[iMask] - ez[eMask]
+    xdiff = np.squeeze(ix[iMask] - ex[eMask])
+    ydiff = np.squeeze(iy[iMask] - ey[eMask])
+    zdiff = np.squeeze(iz[iMask] - ez[eMask])
     posDiff = np.linalg.norm(np.array([xdiff, ydiff, zdiff]).T, axis=1) 
     
     print('diffing velocities')
-    vxdiff = ivx[iMask] - evx[eMask]
-    vydiff = ivy[iMask] - evy[eMask]
-    vzdiff = ivz[iMask] - evz[eMask]
-    mag_vDiff = np.linalg.norm(np.array([vxdiff, vydiff, vzdiff]).T, axis=1)[0]
+    vxdiff = np.squeeze(ivx[iMask] - evx[eMask])
+    vydiff = np.squeeze(ivy[iMask] - evy[eMask])
+    vzdiff = np.squeeze(ivz[iMask] - evz[eMask])
+    mag_vDiff = np.linalg.norm(np.array([vxdiff, vydiff, vzdiff]).T, axis=1)
     
     print('diffing redshift')
     redshiftDiff = np.abs(((1/ia)-1)[iMask] - ((1/ea)-1)[eMask])
  
     # plot position, velocity, and redshift differences between interpolated
     # and extrapolated output as historgrams
-    
+
     config(cmap=plt.cm.plasma)
     colors = plt.rcParams['axes.prop_cycle'].by_key()['color']
     bins = 300
     
     f = plt.figure(0) 
     ax =  f.add_subplot(311)
-    ax.hist(posDiff, bins, color=colors[0])
-    ax.set_yscale('log')
+    ax.hist(posDiff, bins, color=colors[0], log=True)
+    ax.set_ylim(ymin=1)
     ax.set_xlabel(r'$\left|\vec{r}_\mathrm{extrap} - \vec{r}_\mathrm{interp}\right|\>\>\mathrm{(Mpc/h)}$', fontsize=18)
     
     ax2 =  f.add_subplot(312)
-    ax2.hist(mag_vDiff, bins, color=colors[1])
-    ax2.set_yscale('log')
+    ax2.hist(mag_vDiff, bins, color=colors[1], log=True)
+    ax2.set_ylim(ymin=1)
     ax2.set_xlabel(r'$\left|\vec{v}_\mathrm{extrap} - \vec{v}_\mathrm{interp}\right| \>\>\mathrm{(km/s)}$', fontsize=18)
     
     ax3 =  f.add_subplot(313)
-    ax3.hist(redshiftDiff, bins, color=colors[2])
-    ax3.set_yscale('log')
+    ax3.hist(redshiftDiff, bins, color=colors[2], log=True)
+    ax3.set_ylim(ymin=1)
     ax3.set_xlabel(r'$\left|z_\mathrm{extrap} - z_\mathrm{interp}\right|$', fontsize=18)
     
     if(plotMode == 'show'):
