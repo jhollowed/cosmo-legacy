@@ -20,9 +20,9 @@ class CloudsInCells
                     float zmin, float zmax,
                     float dlen,
                     int np,
-                    float *xxloc, float *yyloc,
-                    float *zzloc, float *hhloc,
-                    float *vvloc);
+                    float *xxloc, 
+                    float *yyloc,
+                    float *zzloc);
 
       ~CloudsInCells();
 
@@ -32,24 +32,26 @@ class CloudsInCells
 
     protected: 
       
-      // Particle and chaining mesh cell counts
+      // Particle and CIC cell counts
       int nParticle;
       int nMeshX;
       int nMeshY;
       int nMeshZ;
       int nMesh;
 
-      // Chaining mesh boundaries
+      // CIC boundaries
       float x0, x1, y0, y1, z0, z1;
       float Lx, Ly, Lz;
       float dr; 
+
+      // cell vectors
+      std::vector<int> *cellParticles;
+      std::vector<float> *cellDensity;
 
       // Particle attributes
       float *xx;
       float *yy;
       float *zz;
-      float *hh;
-      float *vv;
 
       // Each CIC cell contains an array of particle indices and particle
       // density contributions 

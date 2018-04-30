@@ -36,8 +36,6 @@ ChainingMesh::ChainingMesh(int ptype, float xmin, float xmax, float ymin, float 
   xx = xxloc;
   yy = yyloc;
   zz = zzloc;
-  hh = hhloc;
-  vv = vvloc;
 
   // Instantiate array holding particle indices for each cell
   ipi = new std::vector<int>[nMesh];

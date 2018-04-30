@@ -81,6 +81,7 @@ Skewer::Skewer(float xobs, float yobs, float zobs, float xrot, float yrot, float
 
 }
 
+
 void Skewer::InterpolationPoints(int nt, int ipix, int jpix)
 {
 
@@ -137,6 +138,7 @@ void Skewer::InterpolationPoints(int nt, int ipix, int jpix)
   }
 
 }
+
 
 Skewer::~Skewer()
 {

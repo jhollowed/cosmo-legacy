@@ -16,9 +16,8 @@ class Particles
 
     public:
 
-      Particles(std::string inputFile, int command, int species, int fileType);
+      Particles(std::string inputFile, int command1, int command2, int command3);
       
-      int ReadGIOFile();
       int ReadCosmoFile();
       void PrintStats();
 
@@ -38,12 +37,16 @@ class Particles
 
       // Particle file
       std::string filename;
-
-      // Determines what attribute to return (0 for rho, 1 for uu) (relevant for baryons)
-      int vtype;
-
+      
       // Determines what particle types to read (0 for dm, 1 for bayons)
       int ptype;
+
+      // Determines what attribute to return (0 for rho, 1 for uu) (relevant for baryons)
+      int projMode;
+
+      // Indicates what simulation run type this input data came from (0 for gravity only, 1 for hydro)
+      int runType;
+      
 
       // Particle arrays 
       int nParticle;
@@ -51,7 +54,7 @@ class Particles
       std::vector<float> yy;
       std::vector<float> zz;
       std::vector<float> hh;
-      std::vector<float> vv; // This will be the attribute we are projecting (density by default)
+      std::vector<float> vv; // This will be the attribute we are projecting (decided by projMode)
 
   } ;
 #endif

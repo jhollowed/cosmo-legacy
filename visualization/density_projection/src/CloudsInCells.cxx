@@ -23,14 +23,16 @@ CloudsInCells::CloudsInCells(int ptype, float xmin, float xmax, float ymin, floa
   // Input parameters:
   // 
   // ptype: the particle type to be used in the projection (0 for dm, 1 for baryon). If
-  //        ptype == 1, the function will simply return, since in that case ChainingMesh
+  //        ptype == 1, the function will stop and notify that in that casei, ChainingMesh
   //        should be used over CloudsInCells
   // x,y,zmin and x,y,zmax: the comoving cartesian domain of the final render in Mpc/h
   // dlen: symmetric width of mesh cells
   // np: number of particles in domain
-  // xx,yy,zz,hh,vvloc: vectors containing particle position data
+  // xx,yy,zz: vectors containing particle position data
   
-  if(ptype == 1){ return; } 
+  if(ptype == 1){
+      throw invalid_argument("If pttype==1, the ChainingMesh density estimation should be used")
+  } 
     
   // Set mesh boundaries and determine how many cells per dimension there are
   x0 = xmin; x1 = xmax; Lx = xmax - xmin;
@@ -42,7 +44,8 @@ CloudsInCells::CloudsInCells(int ptype, float xmin, float xmax, float ymin, floa
   nMeshZ = static_cast<int>(ceil(Lz/dr));
   nMesh  = nMeshX*nMeshY*nMeshZ;
   
-  // Instantiate an array of vectors, the vectors holding particle indices for each cell
+  // Instantiate two arrays of vectors, the vectors holding particle indices and 
+  // densities for each cell
   cellParticles = new std::vector<int>[nMesh];
   cellDensity = new std::vector<float>[nMesh];
   
@@ -51,8 +54,6 @@ CloudsInCells::CloudsInCells(int ptype, float xmin, float xmax, float ymin, floa
   xx = xxloc;
   yy = yyloc;
   zz = zzloc;
-  hh = hhloc;
-  vv = vvloc;
 
   // Fill cellParticles so that each array contains the list of all particles indices whose 
   // position is within the cell, and fll cellDensity so that each array contains the weighted
@@ -65,7 +66,7 @@ CloudsInCells::CloudsInCells(int ptype, float xmin, float xmax, float ymin, floa
 void CloudsInCells::DistributeToCells()
 {
 
-  // This function loads all CIC cells with indices of their intersecting particles, 
+  // This function fills all CIC cells with indices of their intersecting particles, 
   // and distributes the particles masses (normalized to 1) to cell verticies, weighted
   // inversely proportional to their distance from each vertex
 
@@ -91,7 +92,6 @@ void CloudsInCells::DistributeToCells()
       float xx0 = xx[p];
       float yy0 = yy[p];
       float zz0 = zz[p];
-      float hh0 = hh[p];
 
       // Determine if this particle is within dr of this cells negative vertex
       if( abs(xx0 - xcell) > dr || 
@@ -110,7 +110,7 @@ void CloudsInCells::DistributeToCells()
       // Get weighted density by dividing by cell volume
       pWeight /= dr*dr*dr;
 
-      // Add this particle's array index to this cell (in vector cellParticles) and add its, 
+      // Add this particle's array index to this cell (in vector cellParticles) and add its 
       // density contribution to the cells cumulative density value (in vector cellDensity)--
       std::vector<int> &pIndices = cellParticles[icell];
       int isize = pIndices.size();
@@ -149,7 +149,7 @@ float CloudsInCells::ColumnDensity(float *xxs, float *yys, float *zzs, int nsamp
  // Input args:
  // xxs, yys, zzs: x, y, and z positions defining the interpolation points 
  //                along the skewer, in Mpc/h
- // nsamp: the sampling frequency along the skewer (length of the xxs, yys, zzs vectors)
+ // nsamp: the number of sampling points along the skewer (length of the xxs, yys, zzs vectors)
 
   double colDensity = 0.0;
   int prevCell = -1;
@@ -186,21 +186,16 @@ float CloudsInCells::ColumnDensity(float *xxs, float *yys, float *zzs, int nsamp
       std::vector<float> &pDensities = cellDensity[thisCell];
       int np = pIndices.size();
 
-      // Cycle over all particles within the cell and increment value to colDensity
-      for (int j=0; j<np; ++j) {
-        int p = pIndices[j];
-        float xxp = xx[p];
-        float yyp = yy[p];
-        float zzp = zz[p];
-        float hhp = hh[p];
-        float vvp = vv[p]; 
-        colDensity += pDensities[j];
-      }
+      // Increment value to colDensity for this cell
+      colDensity += pDensities[j];
     }
   }
+
+  // done with all cells
   return static_cast<float>(colDensity);
 
 }
+
 
 int CloudsInCells::CellIndex(int ii, int jj, int kk)
 {
@@ -208,6 +203,7 @@ int CloudsInCells::CellIndex(int ii, int jj, int kk)
   assert(ii >= 0 && ii < nMeshX && jj >= 0 && jj < nMeshY && kk >= 0 && kk < nMeshZ);
   return (ii*nMeshY + jj)*nMeshZ + kk;
 }
+
 
 CloudsInCells::~CloudsInCells()
 {
