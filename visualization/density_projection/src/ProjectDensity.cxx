@@ -19,6 +19,7 @@
 #include <string>
 #include <sys/stat.h>
 #include <sstream>
+#include <stdexcept>
 
 #define MIN_VAL 1.0e-30f
 

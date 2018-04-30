@@ -8,6 +8,8 @@
 #define Skewer_h 
 
 #include <vector>
+#include <iostream>
+#include <math.h>
 
 class Skewer
   {

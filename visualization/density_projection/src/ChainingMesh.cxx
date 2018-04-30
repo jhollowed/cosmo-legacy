@@ -6,12 +6,6 @@
 
 #include "ChainingMesh.h"
 
-#include <iostream>
-#include <iomanip>
-#include <vector>
-#include <math.h> 
-#include <assert.h>
-
 #define ETAMAX 1.0
 
 ChainingMesh::ChainingMesh(int ptype, float xmin, float xmax, float ymin, float ymax, float zmin, 

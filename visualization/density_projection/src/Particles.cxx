@@ -5,43 +5,34 @@
 
 #include "Particles.h"
 
-#include <stdio.h>
-#include <stdlib.h>
-#include <iostream>
-#include <iomanip>
-#include <vector>
-#include <assert.h>
-
-#include "GenericIO.h"
-using namespace gio;
-
 Particles::Particles(std::string inputFile, int command1, int command2, int command3)
 {
 
   // Set particle type (0 for dm, 1 for baryons)
   if( !(command1 == 0 || command1 == 1) ){
-    throw invalid_argument("arg ptype must be 0 (dark matter) or 1 (baryons)")_
+    throw std::invalid_argument("arg ptype must be 0 (dark matter) or 1 (baryons)");
   }
   ptype = command1;
   
   // If using baryons, set projMode (0 for density, 1 for uu)
   if(ptype == 1){
     if( !(command2 == 0 || command2 == 1) ){
-      throw invalid_argument("arg projMode must be 0 (project density) or 1 (project temperature)")
+      throw std::invalid_argument("arg projMode must be 0 (project density) or "
+			          "1 (project temperature)");
     }
-    projMode = command;
+    projMode = command2;
   } else {
     projMode = 0;
   }
 
   // Set run type (0 for gravity-only, 1 for hydro)
   if( !(command3 == 0 || command3 == 1) ){
-    throw invalid_argument("arg runType must be 0 (gravity-only) or 1 (hydro)")
+    throw std::invalid_argument("arg runType must be 0 (gravity-only) or 1 (hydro)");
   }
   runType = command3;
   if(ptype == 1 && runType == 0){
-    throw invalid_argument("if arg ptype==1, then the input data must be from a hydro 
-                            simulation (runType=1)")
+    throw std::invalid_argument("if arg ptype==1, then the input data must be from a hydro "
+                           "simulation (runType=1)");
   }
   
   // Read particle data

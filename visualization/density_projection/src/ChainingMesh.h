@@ -8,6 +8,10 @@
 #define ChainingMesh_h
 
 #include <vector>
+#include <iostream>
+#include <iomanip>
+#include <math.h> 
+#include <assert.h>
 
 class ChainingMesh
   {

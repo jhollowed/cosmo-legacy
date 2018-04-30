@@ -6,20 +6,18 @@ SRCDIR := ./src
 OBJDIR := ./obj
 OBJECTS := $(OBJDIR)/ProjectDensity.o $(OBJDIR)/Particles.o $(OBJDIR)/ChainingMesh.o $(OBJDIR)/CloudsInCells.o $(OBJDIR)/Skewer.o
 
-TRUNK_LOC := /homes/jphollowed/code/lc_interpolation/jupiter
-INCLUDES := -I $(SRCDIR) -I /homes/jphollowed/code/lc_interpolation/genericio
-LIBS := $(TRUNK_LOC)/mpi/lib/libGenericIOMPI.a
+INCLUDES := -I $(SRCDIR)
 
 all: densityProjection
 
 # linking
 #
-densityProjection: $(OBJECTS) $(LIBS)
-	$(CXX) $(CXXFLAGS) $(LDFLAGS) -L$(TRUNK_LOC)/mpi/lib -lGenericIOMPI -L$(TRUNK_LOC)/frontend/lib -lGenericIO -o $@ $^ $(LDLIBS)
+densityProjection: $(OBJECTS)
+	$(CXX) $(CXXFLAGS) $(LDFLAGS) -o $@ $^ $(LDLIBS)
 
 # compilation
 #
-obj/Particles.o: $(SRCDIR)/Particles.cxx $(LIBS)
+obj/Particles.o: $(SRCDIR)/Particles.cxx
 	$(CXX) $(CXXFLAGS) $(INCLUDES) -c $(SRCDIR)/Particles.cxx  -o $(OBJDIR)/Particles.o
 
 obj/ChainingMesh.o: $(SRCDIR)/ChainingMesh.cxx
@@ -31,7 +29,7 @@ obj/CloudsInCells.o: $(SRCDIR)/CloudsInCells.cxx
 obj/Skewer.o: $(SRCDIR)/Skewer.cxx 
 	$(CXX) $(CXXFLAGS) $(INCLUDES) -c $(SRCDIR)/Skewer.cxx  -o $(OBJDIR)/Skewer.o
 
-obj/ProjectDensity.o: $(SRCDIR)/ProjectDensity.cxx $(SRCDIR)/Particles.h $(SRCDIR)/ChainingMesh.h $(SRCDIR)/CloudsInCells.h $(SRCDIR)/Skewer.h $(LIBS)
+obj/ProjectDensity.o: $(SRCDIR)/ProjectDensity.cxx $(SRCDIR)/Particles.h $(SRCDIR)/ChainingMesh.h $(SRCDIR)/CloudsInCells.h $(SRCDIR)/Skewer.h
 	$(CXX) $(CXXFLAGS) $(INCLUDES) -c $(SRCDIR)/ProjectDensity.cxx  -o $(OBJDIR)/ProjectDensity.o
 
 clean:

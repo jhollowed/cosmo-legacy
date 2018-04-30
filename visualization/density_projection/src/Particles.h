@@ -10,6 +10,10 @@
 #include <stdlib.h>
 #include <vector>
 #include <string>
+#include <stdexcept>
+#include <iostream>
+#include <iomanip>
+#include <assert.h>
 
 class Particles
   {

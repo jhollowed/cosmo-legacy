@@ -6,16 +6,8 @@
 
 #include "CloudsInCells.h"
 
-#include <iostream>
-#include <iomanip>
-#include <vector>
-#include <math.h> 
-#include <assert.h>
-#include <stdlib.h>
-
 CloudsInCells::CloudsInCells(int ptype, float xmin, float xmax, float ymin, float ymax, float zmin, 
-                             float zmax, float dlen, int np, float *xxloc, float *yyloc, float *zzloc, 
-                             float *hhloc, float *vvloc){
+                             float zmax, float dlen, int np, float *xxloc, float *yyloc, float *zzloc){
 
   // This function creates a mesh of cells, within which the CIC density estimatiion will
   // be performed, that spans the range specified with x,y,zmin,max
@@ -31,7 +23,7 @@ CloudsInCells::CloudsInCells(int ptype, float xmin, float xmax, float ymin, floa
   // xx,yy,zz: vectors containing particle position data
   
   if(ptype == 1){
-      throw invalid_argument("If pttype==1, the ChainingMesh density estimation should be used")
+      throw std::invalid_argument("If pttype==1, the ChainingMesh density estimation should be used");
   } 
     
   // Set mesh boundaries and determine how many cells per dimension there are
@@ -108,7 +100,7 @@ void CloudsInCells::DistributeToCells()
       float pWeight = xWeight * yWeight * zWeight;
 
       // Get weighted density by dividing by cell volume
-      pWeight /= dr*dr*dr;
+      // pWeight /= dr*dr*dr;
 
       // Add this particle's array index to this cell (in vector cellParticles) and add its 
       // density contribution to the cells cumulative density value (in vector cellDensity)--
@@ -186,8 +178,10 @@ float CloudsInCells::ColumnDensity(float *xxs, float *yys, float *zzs, int nsamp
       std::vector<float> &pDensities = cellDensity[thisCell];
       int np = pIndices.size();
 
-      // Increment value to colDensity for this cell
-      colDensity += pDensities[j];
+      // Increment value to colDensity for each weighted particle in this cell
+      for (int j=0; j<np; ++j) {
+	colDensity += pDensities[j];
+      }
     }
   }
 

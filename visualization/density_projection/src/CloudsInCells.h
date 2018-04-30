@@ -8,6 +8,12 @@
 #define CloudsinCells_h
 
 #include <vector>
+#include <stdexcept>
+#include <iostream>
+#include <iomanip>
+#include <math.h> 
+#include <stdlib.h>
+#include <assert.h>
 
 class CloudsInCells
   {
@@ -43,10 +49,6 @@ class CloudsInCells
       float x0, x1, y0, y1, z0, z1;
       float Lx, Ly, Lz;
       float dr; 
-
-      // cell vectors
-      std::vector<int> *cellParticles;
-      std::vector<float> *cellDensity;
 
       // Particle attributes
       float *xx;
