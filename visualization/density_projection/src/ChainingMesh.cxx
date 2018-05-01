@@ -24,16 +24,23 @@ ChainingMesh::ChainingMesh(int ptype, float xmin, float xmax, float ymin, float 
   nMeshY = static_cast<int>(ceil(Ly/dr));
   nMeshZ = static_cast<int>(ceil(Lz/dr));
   nMesh  = nMeshX*nMeshY*nMeshZ;
+  
+  if(nMesh < 0){
+    throw std::runtime_error("Number of mesh cells evaluated as negative; ensure min and max"
+                             " values are beign passed in the expected order");
+  }
 
   // Set data arrays
   nParticle = np;
   xx = xxloc;
   yy = yyloc;
   zz = zzloc;
-
+  hh = hhloc;
+  vv = vvloc;
+  
   // Instantiate array holding particle indices for each cell
   ipi = new std::vector<int>[nMesh];
-
+  
   // Setup interaction lists within ipi so that each array contains the
   // list of all particles indices whose smoothing sphere intersects with the cell.
   setupInteractionLists();
@@ -128,6 +135,7 @@ float ChainingMesh::ColumnDensity(float *xxs, float *yys, float *zzs, int nsamp)
     float xx0 = xxs[i];
     float yy0 = yys[i];
     float zz0 = zzs[i];
+    //std::cout << xx0 << " " << yy0 << " " << zz0 << std::endl; 
     bool inside = (xx0 >= x0 && xx0 < x1 && yy0 >= y0 && yy0 < y1 && zz0 >= z0 && zz0 < z1) ? true : false;
 
     if (inside) { 
@@ -137,9 +145,14 @@ float ChainingMesh::ColumnDensity(float *xxs, float *yys, float *zzs, int nsamp)
       int kk0 = static_cast<int>(floor((zz0-z0)/dr));
       int ic0 = CellIndex(ii0, jj0, kk0);
 
+      if(ii0<0 || jj0<0 || kk0<0){
+        throw std::runtime_error("Partciles found beyond the domain specified, aborting");
+      }
+
       // Get interaction list for this cell 
       std::vector<int> &cpi = ipi[ic0];
       int np = cpi.size();
+      //std::cout << "np: " << np  << std::endl; 
 
       // Cycle over all particles within the cell and increment value to colDensity
       for (int j=0; j<np; ++j) {
@@ -149,11 +162,10 @@ float ChainingMesh::ColumnDensity(float *xxs, float *yys, float *zzs, int nsamp)
         float zzp = zz[p];
         float hhp = hh[p];
         float vvp = vv[p]; 
+        //colDensity += 1;
         colDensity += SPHInterpolation(xx0, yy0, zz0, xxp, yyp, zzp, hhp, vvp);
-      }
-    
+      }    
     }
-
   }
 
   return static_cast<float>(colDensity);

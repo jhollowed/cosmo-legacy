@@ -15,7 +15,7 @@ CloudsInCells::CloudsInCells(int ptype, float xmin, float xmax, float ymin, floa
   // Input parameters:
   // 
   // ptype: the particle type to be used in the projection (0 for dm, 1 for baryon). If
-  //        ptype == 1, the function will stop and notify that in that casei, ChainingMesh
+  //        ptype == 1, the function will just return early, since in that case ChainingMesh
   //        should be used over CloudsInCells
   // x,y,zmin and x,y,zmax: the comoving cartesian domain of the final render in Mpc/h
   // dlen: symmetric width of mesh cells
@@ -23,7 +23,7 @@ CloudsInCells::CloudsInCells(int ptype, float xmin, float xmax, float ymin, floa
   // xx,yy,zz: vectors containing particle position data
   
   if(ptype == 1){
-      throw std::invalid_argument("If pttype==1, the ChainingMesh density estimation should be used");
+    return;
   } 
     
   // Set mesh boundaries and determine how many cells per dimension there are
@@ -35,7 +35,12 @@ CloudsInCells::CloudsInCells(int ptype, float xmin, float xmax, float ymin, floa
   nMeshY = static_cast<int>(ceil(Ly/dr));
   nMeshZ = static_cast<int>(ceil(Lz/dr));
   nMesh  = nMeshX*nMeshY*nMeshZ;
-  
+
+  if(nMesh < 0){
+		throw std::runtime_error("Number of mesh cells evaluated as negative; ensure min and max"
+                             " values are beign passed in the expected order");
+  }
+
   // Instantiate two arrays of vectors, the vectors holding particle indices and 
   // densities for each cell
   cellParticles = new std::vector<int>[nMesh];

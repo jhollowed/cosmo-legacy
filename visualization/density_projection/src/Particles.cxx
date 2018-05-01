@@ -49,6 +49,7 @@ Particles::Particles(std::string inputFile, int command1, int command2, int comm
 int Particles::ReadCosmoFile()
 {
 
+#define TESTING
 #ifdef TESTING
 
   // generate a uniform distribution of particles for testing
@@ -59,8 +60,10 @@ int Particles::ReadCosmoFile()
   xx.resize(nTotal);
   yy.resize(nTotal);
   zz.resize(nTotal);
-  hh.resize(nTotal);
-  vv.resize(nTotal);
+  if(ptype == 1){
+     hh.resize(nTotal);
+     vv.resize(nTotal);
+  }
  
   float dxp = 50.0/nPdim;
   float dyp = 50.0/nPdim;
@@ -73,8 +76,10 @@ int Particles::ReadCosmoFile()
         xx[nParticle] = i*dxp; 
         yy[nParticle] = j*dyp;
         zz[nParticle] = k*dzp;
-        hh[nParticle] = 1.0f;
-        vv[nParticle] = 1.0f;
+        if(ptype == 1){
+          hh[nParticle] = 1.0f;
+          vv[nParticle] = 1.0f;
+        }
         nParticle++;
       }
     }

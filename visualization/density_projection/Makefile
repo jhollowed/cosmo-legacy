@@ -1,6 +1,6 @@
 # On jupiter, first run module load mvapich2-2.2b-gcc-5.3.0-o4of6w7
 CXX := mpicxx
-CXXFLAGS := -O3 -fopenmp
+CXXFLAGS := -g -O3 -fopenmp
 
 SRCDIR := ./src
 OBJDIR := ./obj
@@ -8,11 +8,11 @@ OBJECTS := $(OBJDIR)/ProjectDensity.o $(OBJDIR)/Particles.o $(OBJDIR)/ChainingMe
 
 INCLUDES := -I $(SRCDIR)
 
-all: densityProjection
+all: ProjectDensity
 
 # linking
 #
-densityProjection: $(OBJECTS)
+ProjectDensity: $(OBJECTS)
 	$(CXX) $(CXXFLAGS) $(LDFLAGS) -o $@ $^ $(LDLIBS)
 
 # compilation
@@ -33,5 +33,5 @@ obj/ProjectDensity.o: $(SRCDIR)/ProjectDensity.cxx $(SRCDIR)/Particles.h $(SRCDI
 	$(CXX) $(CXXFLAGS) $(INCLUDES) -c $(SRCDIR)/ProjectDensity.cxx  -o $(OBJDIR)/ProjectDensity.o
 
 clean:
-	rm -f densityProjection $(OBJDIR)/*.o 
+	rm -f ProjectDensity $(OBJDIR)/*.o 
 

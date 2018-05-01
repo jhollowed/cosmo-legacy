@@ -37,7 +37,7 @@ int main(int argc, char *argv[])
   //        beyond this depth will not contribute to pixel densities)
   // xfov: the observers field of view in the x-direction (y- and z-direction fov assumed 
   //       symmetric) in degrees
-  // fobs:
+  // fobs: 
   // theta: coaltitude angle, in degrees, defining the simulation box rotation about its center
   // phi: azimuthal angle, in degrees, defining the simulation box rotation about its center
   // xpix: pixels in the horizontal direction in the plane of observation
@@ -147,6 +147,7 @@ int main(int argc, char *argv[])
           pixels[ijpix] = cic->ColumnDensity(xxs, yys, zzs, nsamp);
       } else if(ptype == 1){
           pixels[ijpix] = cm->ColumnDensity(xxs, yys, zzs, nsamp);
+          //std::cout << pixels[ijpix] << std::endl;
       }
     }
   }

@@ -6,7 +6,7 @@ C_OPT 		= -O
 	$(C) $(C_COMPILE) $*.C
 
 colormap: colormap.o
-	$(C) $(C_OPT) -L$(LIBDIR) colormap.o -o colormap	
+	$(C) $(C_OPT) -L$(LIBDIR) colormap.o -o colormap colormap.C	
 
 clean:
 	rm *.o 
