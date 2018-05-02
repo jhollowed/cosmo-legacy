@@ -74,8 +74,31 @@ def plotBox(x, y, z, xw, yw, zw, ax, color, alpha=1):
     ax.plot_surface(xx, np.ones(np.shape(xx))*(y+yw), zz, color=color, alpha=alpha, shade=False)
 
 
+def pair(k1, k2, safe=True):
+    """
+    Cantor pairing function
+    http://en.wikipedia.org/wiki/Pairing_function#Cantor_pairing_function
+    """
+    z = int(0.5 * (k1 + k2) * (k1 + k2 + 1) + k2)
+    if safe and (k1, k2) != depair(z):
+        raise ValueError("{} and {} cannot be paired".format(k1, k2))
+    return z
+
+def depair(z):
+    """
+    Inverse of Cantor pairing function
+    http://en.wikipedia.org/wiki/Pairing_function#Inverting_the_Cantor_pairing_function
+    """
+    w = np.floor((np.sqrt(8 * z + 1) - 1)/2)
+    t = (w**2 + w) / 2
+    y = int(z - t)
+    x = int(w - y)
+    # assert z != pair(x, y, safe=False):
+    return x, y
+
+
 #############################################################################################
-#############################################################################################
+
 
 #######################################
 #
@@ -116,6 +139,8 @@ def lightconeHistograms(lcDir1, lcDir2, step, rL, mode='particles',
     '''
     if plotMode not in ['show', 'save']:
         raise Exception('Unknown plotMode {}. Options are \'show\' or \'save\'.'.format(plotMode))
+    if mode not in ['particles', 'halos']:
+        raise Exception('Unknown mode {}. Options are \'particles\' or \'halos\'.'.format(mode))
 
     # do these imports here, since there are other functions in this file that
     # are intended to run on systems where dtk and/or gio may not be available
@@ -144,8 +169,6 @@ def lightconeHistograms(lcDir1, lcDir2, step, rL, mode='particles',
         idName = 'id'
     elif(mode == 'halos'):
         idName = 'tree_node_index'
-    else:
-        raise Exception('mode parameter must be \'particles\' or \'halos\'')
         
     # read data
     print("Reading files from {}".format(lcDir1.split('/')[-1]))
@@ -311,8 +334,9 @@ def saveLightconePathData(epath, ipath, spath, outpath, rL, diffRange='max',
                   interpolation driver. Should have been run with identical 
                   parameters, on the same cimulation volume, as the run that 
                   generated the data at epath
-    :param spath: path to snapshot data from the simulation that was used to 
-                  generate the data at epath and ipath
+    :param spath: path to top-level directory of snapshot data from the simulation 
+                  that was used to generate the data at epath and ipath. If mode=='halos', 
+                  this should be the path to the top-level directory of merger tree data
     :param outpath: where to write out the path data (npy files)
     :param rL: the box width of the simulation from which the lightcones at epath
                and ipath were generated
@@ -336,6 +360,12 @@ def saveLightconePathData(epath, ipath, spath, outpath, rL, diffRange='max',
     import genericio as gio
     from dtk import sort
     
+    if mode not in ['particles', 'halos']:
+        raise Exception('Unknown mode {}. Options are \'particles\' or \'halos\'.'.format(mode))
+    if diffRange not in ['min', 'med', 'max']:
+        raise Exception('Unknown diffRange {}. Options are \'min\', \'med\', or \'max\'.'
+                        .format(diffRange))
+    
     subdirs = glob.glob('{}/*'.format(ipath))
     
     # get lc subdirectory prefix (could be 'lc' or 'lcGals', etc.). 
@@ -358,8 +388,6 @@ def saveLightconePathData(epath, ipath, spath, outpath, rL, diffRange='max',
         idName = 'id'
     elif(mode == 'halos'):
         idName = 'tree_node_index'
-    else:
-        raise Exception('mode parameter must be \'particles\' or \'halos\'')
         
     # read data
     print("Reading interpolation files")
@@ -494,6 +522,10 @@ def saveLightconePathData(epath, ipath, spath, outpath, rL, diffRange='max',
     elif(irot[0] == 5):
         sx, sy = 'y', 'x'
         sz, sx = 'x', 'z'
+    if(mode=='halos'):
+        sx = 'fof_halo_mean_{}'.format(sx)
+        sy = 'fof_halo_mean_{}'.format(sy)
+        sz = 'fof_halo_mean_{}'.format(sz)
     
     print("Reading snapshot files")
     # sort snapshot files and grad the first in the list so that we are
@@ -503,56 +535,71 @@ def saveLightconePathData(epath, ipath, spath, outpath, rL, diffRange='max',
         sfile0 = sorted(glob.glob('{}/STEP421/*'.format(spath)))[0]
     else:
         sfile0 = sorted(glob.glob('{}/*.421*'.format(spath)))[0]
-    sid0 = gio.gio_read(sfile0, idName)
-    sx0 = gio.gio_read(sfile0, sx)
-    sy0 = gio.gio_read(sfile0, sy)
-    sz0 = gio.gio_read(sfile0, sz)
+    sid0 = np.squeeze(gio.gio_read(sfile0, idName))
+    sx0 = np.squeeze(gio.gio_read(sfile0, sx))
+    sy0 = np.squeeze(gio.gio_read(sfile0, sy))
+    sz0 = np.squeeze(gio.gio_read(sfile0, sz))
     if(mode == 'halos'):
-        sdid0 = gio.gio_read(sfile0, 'desc_node_index')  
+        # if halo mode is specified, read the descedent node index, 
+        # fof tag, and mass. Sign flip and mask the fof tag to recover
+        # the true tag without any fragment bits
+        sdid0 = np.squeeze(gio.gio_read(sfile0, 'desc_node_index'))
+        stag0 = np.squeeze(gio.gio_read(sfile0, 'fof_halo_tag'))
+        #stag0_mask = stag0 < 0
+        #stag0[stag0_mask] = (-1*stag0[stag0_mask]) & 0xFFFFFFFFFFFF
+        smass0 = np.squeeze(gio.gio_read(sfile0, 'fof_halo_mass'))
 
     if(snapshotSubdirs): 
         sfile1 = sorted(glob.glob('{}/STEP432/*'.format(spath)))[0]
     else:
         sfile1 = sorted(glob.glob('{}/*.432*'.format(spath)))[0]
-    sid1 = gio.gio_read(sfile1, idName)
-    sx1 = gio.gio_read(sfile1, sx)
-    sy1 = gio.gio_read(sfile1, sy)
-    sz1 = gio.gio_read(sfile1, sz)
+    sid1 = np.squeeze(gio.gio_read(sfile1, idName))
+    sx1 = np.squeeze(gio.gio_read(sfile1, sx))
+    sy1 = np.squeeze(gio.gio_read(sfile1, sy))
+    sz1 = np.squeeze(gio.gio_read(sfile1, sz))
     if(mode == 'halos'):
-        sdid1 = gio.gio_read(sfile1, 'desc_node_index')  
+        sdid1 = np.squeeze(gio.gio_read(sfile1, 'desc_node_index'))  
+        stag1 = np.squeeze(gio.gio_read(sfile1, 'fof_halo_tag'))
+        smass1 = np.squeeze(gio.gio_read(sfile1, 'fof_halo_mass'))
     
     if(snapshotSubdirs): 
         sfile2 = sorted(glob.glob('{}/STEP442/*'.format(spath)))[0]
     else:
         sfile2 = sorted(glob.glob('{}/*.442*'.format(spath)))[0]
-    sid2 = gio.gio_read(sfile2, idName)
-    sx2 = gio.gio_read(sfile2, sx)
-    sy2 = gio.gio_read(sfile2, sy)
-    sz2 = gio.gio_read(sfile2, sz)
+    sid2 = np.squeeze(gio.gio_read(sfile2, idName))
+    sx2 = np.squeeze(gio.gio_read(sfile2, sx))
+    sy2 = np.squeeze(gio.gio_read(sfile2, sy))
+    sz2 = np.squeeze(gio.gio_read(sfile2, sz))
     if(mode == 'halos'):
-        sdid2 = gio.gio_read(sfile2, 'desc_node_index')  
+        sdid2 = np.squeeze(gio.gio_read(sfile2, 'desc_node_index'))  
+        stag2 = np.squeeze(gio.gio_read(sfile2, 'fof_halo_tag'))
+        smass2 = np.squeeze(gio.gio_read(sfile2, 'fof_halo_mass'))
     
     if(snapshotSubdirs): 
         sfile3 = sorted(glob.glob('{}/STEP453/*'.format(spath)))[0]
     else:
         sfile3 = sorted(glob.glob('{}/*.453*'.format(spath)))[0]
-    sid3 = gio.gio_read(sfile3, idName)
-    sx3 = gio.gio_read(sfile3, sx)
-    sy3 = gio.gio_read(sfile3, sy)
-    sz3 = gio.gio_read(sfile3, sz)
+    sid3 = np.squeeze(gio.gio_read(sfile3, idName))
+    sx3 = np.squeeze(gio.gio_read(sfile3, sx))
+    sy3 = np.squeeze(gio.gio_read(sfile3, sy))
+    sz3 = np.squeeze(gio.gio_read(sfile3, sz))
     if(mode == 'halos'):
-        sdid3 = gio.gio_read(sfile3, 'desc_node_index')  
+        sdid3 = np.squeeze(gio.gio_read(sfile3, 'desc_node_index'))  
+        stag3 = np.squeeze(gio.gio_read(sfile3, 'fof_halo_tag'))
+        smass3 = np.squeeze(gio.gio_read(sfile3, 'fof_halo_mass'))
     
     if(snapshotSubdirs): 
         sfile4 = sorted(glob.glob('{}/STEP464/*'.format(spath)))[0]
     else:
         sfile4 = sorted(glob.glob('{}/*.464*'.format(spath)))[0]
-    sid4 = gio.gio_read(sfile4, idName)
-    sx4 = gio.gio_read(sfile4, sx)
-    sy4 = gio.gio_read(sfile4, sy)
-    sz4 = gio.gio_read(sfile4, sz)
+    sid4 = np.squeeze(gio.gio_read(sfile4, idName))
+    sx4 = np.squeeze(gio.gio_read(sfile4, sx))
+    sy4 = np.squeeze(gio.gio_read(sfile4, sy))
+    sz4 = np.squeeze(gio.gio_read(sfile4, sz))
     if(mode == 'halos'):
-        sdid4 = gio.gio_read(sfile4, 'desc_node_index')  
+        sdid4 = np.squeeze(gio.gio_read(sfile4, 'desc_node_index'))  
+        stag4 = np.squeeze(gio.gio_read(sfile4, 'fof_halo_tag'))
+        smass4 = np.squeeze(gio.gio_read(sfile4, 'fof_halo_mass'))
 
     # loop through the ten particles selected for plotting, get their surrounding
     # snapshot data, and save the data as .npy files. The results can be plotting 
@@ -574,7 +621,7 @@ def saveLightconePathData(epath, ipath, spath, outpath, rL, diffRange='max',
         this_ey = ey[eMask][idx]
         this_ez = ez[eMask][idx]
         this_ea = ea[eMask][idx]
-        this_erot = erot[iMask][idx]
+        this_erot = erot[eMask][idx]
 
         # make sure that box rotation for each particle above is the same 
         # (if not, we really screwed up somewhere)
@@ -588,35 +635,102 @@ def saveLightconePathData(epath, ipath, spath, outpath, rL, diffRange='max',
             s2_idx = np.where(sid2 == iid[iMask][idx])
             s3_idx = np.where(sid3 == iid[iMask][idx])
             s4_idx = np.where(sid4 == iid[iMask][idx])
+        
+            sxi0 = sx0[s0_idx][0]
+            sxi1 = sx1[s1_idx][0]
+            sxi2 = sx2[s2_idx][0]
+            sxi3 = sx3[s3_idx][0]
+            sxi4 = sx4[s4_idx][0]
+            
+            syi0 = sy0[s0_idx][0]
+            syi1 = sy1[s1_idx][0]
+            syi2 = sy2[s2_idx][0]
+            syi3 = sy3[s3_idx][0]
+            syi4 = sy4[s4_idx][0]
+            
+            szi0 = sz0[s0_idx][0]
+            szi1 = sz1[s1_idx][0]
+            szi2 = sz2[s2_idx][0]
+            szi3 = sz3[s3_idx][0]
+            szi4 = sz4[s4_idx][0]
+        
         if(mode == 'halos'):
-            # match the halo tree node index to the node index 
-            # and descendent node index of steps 442 and 432, 
-            # respectively
-            s1_idx = np.where(sdid1 == iid[iMask][idx])
-            s2_idx = np.where(sid2 == iid[iMask][idx])
-            # match the tree and descendent node idecies to those
-            # found above
-            s0_idx = np.where(sdid0 == sid1[s1_idx])
-            s3_idx = np.where(sid3 == sdid2[s2_idx])
-            s4_idx = np.where(sid4 == sdid3[s3_idx])
+            # match the halo tag from the lightcone to the merger tree
+            # There will be several matches, corresponding to all of the
+            # fragments associated with this halo in the merger tree. 
+            # We can determine exactly which fragment we should be using by 
+            # also comparing to the mass
+            # Recall that, for the halo lightcone, output step number 442
+            # takes halo properties from snapshot *453*, because of backward
+            # interpolation!
+            if(iid[iMask][idx] < 0):
+                s3_idx = np.where(stag3 == iid[iMask][idx])[0]
+            else:
+                s3_idx = np.where(stag3 == iid[iMask][idx])[0]
 
-        sxi0 = sx0[s0_idx][0]
-        sxi1 = sx1[s1_idx][0]
-        sxi2 = sx2[s2_idx][0]
-        sxi3 = sx3[s3_idx][0]
-        sxi4 = sx4[s4_idx][0]
+            # match the tree and descendent node idecies to those
+            # found above. If two or more tree relatives are found, 
+            # just choose the most massive one to use for the trajectory
+            s4_idx = np.where(sid4 == sdid3[s3_idx])[0]
+           
+            s2_idx = np.where(sdid2 == sid3[s3_idx])[0]
+            if(len(s2_idx) > 1):
+                fragMask = np.argmax(smass2[s2_idx])
+                s2_idx = np.array([s2_idx[fragMask]])
+            
+            s1_idx = np.where(sdid1 == sid2[s2_idx])[0]
+            if(len(s1_idx) > 1):
+                fragMask = np.argmax(smass1[s1_idx])
+                s1_idx = np.array([s1_idx[fragMask]])
+            
+            s0_idx = np.where(sdid0 == sid1[s1_idx])[0]
+            if(len(s0_idx) > 1):
+                fragMask = np.argmax(smass1[s0_idx])
+                s0_idx = np.array([s0_idx[fragMask]])
         
-        syi0 = sy0[s0_idx][0]
-        syi1 = sy1[s1_idx][0]
-        syi2 = sy2[s2_idx][0]
-        syi3 = sy3[s3_idx][0]
-        syi4 = sy4[s4_idx][0]
-        
-        szi0 = sz0[s0_idx][0]
-        szi1 = sz1[s1_idx][0]
-        szi2 = sz2[s2_idx][0]
-        szi3 = sz3[s3_idx][0]
-        szi4 = sz4[s4_idx][0]
+            # now record snapshot positions of this halo, for which ever of
+            # these four steps that it exists, starting at step 453 (it must exist
+            # there, since that is the step on which our lightcone step 442 is based)
+            sxi3 = sx3[s3_idx][0]
+            syi3 = sy3[s3_idx][0]
+            szi3 = sz3[s3_idx][0]
+            
+            if(sdid3[s3_idx] != -1):
+                sxi4 = sx4[s4_idx][0]
+                syi4 = sy4[s4_idx][0]
+                szi4 = sz4[s4_idx][0]
+            else:
+                sxi4 = sxi3
+                syi4 = syi3
+                szi4 = szi3
+            
+            if(len(s2_idx) > 0):
+                sxi2 = sx2[s2_idx][0]
+                syi2 = sy2[s2_idx][0]
+                szi2 = sz2[s2_idx][0]
+            else:
+                sxi2 = sxi3
+                syi2 = syi3
+                szi2 = szi3
+            
+            if(len(s1_idx) > 0):
+                sxi1 = sx1[s1_idx][0]
+                syi1 = sy1[s1_idx][0]
+                szi1 = sz1[s1_idx][0]
+            else:
+                sxi1 = sxi2
+                syi1 = syi2
+                szi1 = szi2
+            
+            if(len(s0_idx) > 0):
+                sxi0 = sx0[s0_idx][0]
+                syi0 = sy0[s0_idx][0]
+                szi0 = sz0[s0_idx][0]
+            else:
+                sxi0 = sxi1
+                syi0 = syi1
+                szi0 = szi1
+
 
         # get snapshot scale factors
         aa = np.linspace(1/(1+200), 1, 500)
@@ -632,16 +746,30 @@ def saveLightconePathData(epath, ipath, spath, outpath, rL, diffRange='max',
         truez = np.array([szi0, szi1, szi2, szi3, szi4])
         truea = np.array([sai0, sai1, sai2, sai3, sai4])
        
-        # approximated particle paths for steps 442-453 
-        interpolx = np.array([sxi2, this_ix])
-        interpoly = np.array([syi2, this_iy])
-        interpolz = np.array([szi2, this_iz])
-        interpola = np.array([sai2, this_ia])
+        if(mode == 'halos'):
+            # approximated particle paths for steps 442-453 
+            interpolx = np.array([this_ix, sxi3])
+            interpoly = np.array([this_iy, syi3])
+            interpolz = np.array([this_iz, szi3])
+            interpola = np.array([this_ia, sai3])
 
-        extrapx = np.array([sxi2, this_ex])
-        extrapy = np.array([syi2, this_ey])
-        extrapz = np.array([szi2, this_ez])
-        extrapa = np.array([sai2, this_ea])
+            extrapx = np.array([this_ex, sxi3])
+            extrapy = np.array([this_ey, syi3])
+            extrapz = np.array([this_ez, szi3])
+            extrapa = np.array([this_ea, sai3])
+
+        elif(mode == 'particles'):
+            # approximated particle paths for steps 442-453 
+            interpolx = np.array([sxi2, this_ix])
+            interpoly = np.array([syi2, this_iy])
+            interpolz = np.array([szi2, this_iz])
+            interpola = np.array([sai2, this_ia])
+
+            extrapx = np.array([sxi2, this_ex])
+            extrapy = np.array([syi2, this_ey])
+            extrapz = np.array([szi2, this_ez])
+            extrapa = np.array([sai2, this_ea])
+
        
         # done! save particle path data    
         np.save('{}/ix_{}.npy'.format(savePath, i), interpolx)
@@ -685,15 +813,20 @@ def plotLightconePaths(dataPath, diffRange = 'max', plotMode='show', outDir='.')
     '''
     if plotMode not in ['show', 'save']:
         raise Exception('Unknown plotMode {}. Options are \'show\' or \'save\'.'.format(plotMode))
+    if diffRange not in ['min', 'med', 'max']:
+        raise Exception('Unknown diffRange {}. Options are \'min\', \'med\', or \'max\'.'
+                        .format(diffRange))
+    
     config(cmap=plt.cm.cool)
 
     # get data files
     data = '{}/{}_diff'.format(dataPath, diffRange)
-    numFiles = len(glob.glob('{}/truex_*'.format(data)))
+    files = glob.glob('{}/truex_*'.format(data))
+    fileNums = [int(f.split('_')[-1].split('.')[0]) for f in files]
 
     # loop through all files and plot (each file corresponds to one 
     # lightcone object)
-    for i in range(numFiles):
+    for i in fileNums:
 
         # read object trajectory data
         ix = np.load('{}/ix_{}.npy'.format(data, i))
@@ -799,7 +932,8 @@ def plotLightconePaths(dataPath, diffRange = 'max', plotMode='show', outDir='.')
 #############################################################################################
 #############################################################################################
 
-def findDuplicates(lcDir, steps, lcSuffix, outDir):
+def findDuplicates(lcDir, steps, lcSuffix, outDir, mode='particles', 
+                   mergerTreeDir=None, mergerTreeSubdirs=False):
     '''
     This function finds particle/object duplicates across timesteps in lightcone 
     output. Specifically, it finds particles that do not satisfy the following:
@@ -819,16 +953,40 @@ def findDuplicates(lcDir, steps, lcSuffix, outDir):
                   and structure convention given in fig 6 of the Creating Lightcones 
                   in HACC notes (with one subdirectory per snapshot).
     :param steps: an array of two lightcone outputs, by snapshot number, between 
-                  which to check for duplicate particles/objects.
+                  which to check for duplicate particles/objects. If mode == 'halos',
+                  this array needs to contain three steps, the two that bound the 
+                  lightcone timestep of interest, and the snapshot step following the
+                  inital two ("following", as in, toward lower redshift). If the 
+                  lightcone timestep of interest spans merger tree snapshot 475 and 487,
+                  this array should be [475, 487, 499]
     :param lcSuffix: An identifier string that will be used as a filename suffix
                      for the output hdf5 files. This can be used to distinguish 
                      between multiple lightcones within which duplicates will be 
                      searched for.
     :param outDir: Location to save the output hdf5 file
+    :param mode: whether to perform the object match-up on particles or
+                 halos. If mode=="halos", then match on descendant merger 
+                 tree indices rather than id
+    :param mergerTreeDir: If mode=='halos', then this argument must be passed as the path
+                   to the top-level directory of the merger tree snapshots that were 
+                   used to run the lightcone
+    :param mergerTreeSubdirs: If true, assume that the merger tree data is grouped into
+                              subdirectories of the format "STEPXXX". Otherwise, 
+                              assume one flat directory with the the step number
+                              "XXX" in the filenames somewhere, as "*.XXX.*" where
+                              * is a wildcard
     :return: None
     '''
-    if(len(steps) != 2):
-        raise Exception('Only two step numbers should be passed in the \'steps\' arg')
+    if(len(steps) != 2 and mode == 'particles'):
+        raise Exception('Exactly two step numbers should be passed in the \'steps\' arg if '\
+                        'mode==\'particles\'')
+    if(len(steps) != 3 and mode == 'particles'):
+        raise Exception('Exactly three step numbers should be passed in the \'steps\' arg if '\
+                        'mode==\'halos\'')
+    if mode not in ['particles', 'halos']:
+        raise Exception('Unknown mode {}. Options are \'particles\' or \'halos\'.'.format(mode))
+    if(mode == 'halos' and mergerTreeDir == None):
+        raise Exception('if mode==\'halos\', fofDir must be passed')
 
     # do these imports here, since there are other functions in this file that
     # are intended to run on systems where dtk and/or gio may not be available
@@ -836,6 +994,7 @@ def findDuplicates(lcDir, steps, lcSuffix, outDir):
     from dtk import sort
     
     subdirs = glob.glob('{}/*'.format(lcDir))
+    steps = sorted(steps)
     
     # get lc subdirectory prefix (could be 'lc' or 'lcGals', etc.). 
     # prefix of subdirs in epath and lcDir assumed to be the same.
@@ -854,28 +1013,80 @@ def findDuplicates(lcDir, steps, lcSuffix, outDir):
     file2 = sorted(glob.glob('{}/{}{}/*'.format(lcDir, prefix, steps[1])))[0]
     outfile = h5.File('{}/duplicates_{}.hdf5'.format(outDir, lcSuffix), 'w')
 
-    ids1 = gio.gio_read(file1, 'id')
-    ids1 = np.ndarray.flatten(ids1)
-    ids2 = gio.gio_read(file2, 'id')
-    ids2 = np.ndarray.flatten(ids2)
+    if(mode == 'particles'): 
+        # read particle data
+        ids1 = np.squeeze(gio.gio_read(file1, 'id'))
+        repl1 = np.squeeze(gio.gio_read(file1, 'replication'))
+        ids2 = np.squeeze(gio.gio_read(file2, 'id'))
+        repl2 = np.squeeze(gio.gio_read(file2, 'replication'))
     
+    elif(mode == 'halos'):
+        # read halo data
+        ids1 = np.squeeze(gio.gio_read(file1, 'id'))
+        repl1 = np.squeeze(gio.gio_read(file1, 'replication'))
+        
+        pdb.set_trace()
+        # open merger tree files to do matchup
+        if(mergerTreeSubdirs):
+            mt_file1 = sorted(glob.glob('{}/STEP{}/*'.format(mergerTreeDir, steps[1])))[0]
+            mt_file2 = sorted(glob.glob('{}/STEP{}/*'.format(mergerTreeDir, steps[2])))[0]
+        else:
+            mt_file1 = sorted(glob.glob('{}/*.{}.*'.format(mergerTreeDir, steps[1])))[0]
+            mt_file2 = sorted(glob.glob('{}/*.{}.*'.format(mergerTreeDir, steps[2])))[0]
+
+        mt_ids1 = np.squeeze(gio.gio_read(mt_file1, 'fof_halo_tag'))
+        mt_desc_indices1 = np.squeeze(gio.gio_read(mt_file1, 'desc_node_index'))
+        mt_tree_indices2 = np.squeeze(gio.gio_read(mt_file2, 'tree_node_index'))
+        mt_ids2 = np.squeeze(gio.gio_read(mt_file2, 'fof_halo_tag'))
+        
+        # find location of each lightcone object in merger tree
+        mt_loc = sort.search_sorted(mt_ids1, ids1)
+        if(np.sum(mt_loc==-1) != 0): 
+            raise Exception('output in lightcone not found in merger trees, maybe passed'\
+                            ' the wrong files?')
+        
+        # match to lower redshift step
+        desc_matches = mt_desc_indices1[mt_loc]
+        mt_matches = sort.search_sorted(mt_tree_indices2, desc_matches)
+        
+        # mask out halos who did not have a descendant 
+        mt_matches_mask = np_matches != -1
+        mt_matches = mt_matches[mt_matches_mask]
+
+        # ok got everything we need
+        ids1 = ids1[mt_matches_mask]
+        repl1 = repl1[mt_matches_mask]
+        ids2 = mt_ids2[mt_matches]
+        repl2 = np.squeeze(gio.gio_read(file2, 'replication'))[mt_matches]
+        
+    
+    # do matchup
     print('matching')
-    matches = sort.search_sorted(ids1, ids2)
-
-    matchesMask2 = matches != -1
-    matchesMask1 = matches[matchesMask2]
-
+    idMatches = sort.search_sorted(ids1, ids2)
+    
+    # remove matches that aren't in the same box replication
+    for i in range(len(idMatches)):
+        if(idMatches[i] == -1): continue
+        j = matchesMask1[i]
+        if(repl2[i] != repl1[j]):
+            idMatches[j] = -1
+    
+    matchesMask2 = idMatches != -1
+    matchesMask1 = idMatches[matchesMask2]
+        
     print('found {} duplicates'.format(np.sum(matchesMask2)))
 
     dup_ids1 = ids1[matchesMask1]
     x1 = np.squeeze(gio.gio_read(file1, 'x')[matchesMask1])
     y1 = np.squeeze(gio.gio_read(file1, 'y')[matchesMask1])
     z1 = np.squeeze(gio.gio_read(file1, 'z')[matchesMask1])
+    repl1 = np.squeeze(gio.gio_read(file1, 'replication')[matchesMask1])
     
     dup_ids2 = ids2[matchesMask2]
     x2 = np.squeeze(gio.gio_read(file2, 'x')[matchesMask2])
     y2 = np.squeeze(gio.gio_read(file2, 'y')[matchesMask2])
     z2 = np.squeeze(gio.gio_read(file2, 'z')[matchesMask2])
+    repl2 = np.squeeze(gio.gio_read(file2, 'replication')[matchesMask2])
     
     repeat_frac = float(len(dup_ids2)) / len(ids2) 
     print('repeat fraction is {}'.format(repeat_frac))
@@ -883,6 +1094,7 @@ def findDuplicates(lcDir, steps, lcSuffix, outDir):
     print('writing out {}'.format('{}/duplicates_{}.hdf5'.format(outDir, lcSuffix)))
     outfile.create_dataset('repeat_frac', data=np.array([repeat_frac]))
     outfile.create_dataset('id', data = np.hstack([dup_ids2, dup_ids1]))
+    outfile.create_dataset('replication', data = np.hstack([repl2, repl1]))
     outfile.create_dataset('x', data = np.hstack([x2, x1]))
     outfile.create_dataset('y', data = np.hstack([y2, y1]))
     outfile.create_dataset('z', data = np.hstack([z2, z1]))
@@ -939,7 +1151,7 @@ def compareDuplicates(duplicatePath, steps, lcSuffix, plotMode='show', outDir='.
     print('Duplicate fraction for {} output: {}'.format(lcSuffix[1], dupl2['repeat_frac'][:][0]))
     
     # setup plotting
-    f = plt.figure(1)
+    f = plt.figure(1, figsize=(12, 6))
     axe = f.add_subplot(121, projection='3d')
     axi = f.add_subplot(122, projection='3d')
     title = f.suptitle('step {} - step {}'.format(steps[0], steps[1]))
