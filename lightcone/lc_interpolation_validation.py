@@ -523,9 +523,9 @@ def saveLightconePathData(epath, ipath, spath, outpath, rL, diffRange='max',
         sx, sy = 'y', 'x'
         sz, sx = 'x', 'z'
     if(mode=='halos'):
-        sx = 'fof_halo_mean_{}'.format(sx)
-        sy = 'fof_halo_mean_{}'.format(sy)
-        sz = 'fof_halo_mean_{}'.format(sz)
+        sx = 'fof_halo_center_{}'.format(sx)
+        sy = 'fof_halo_center_{}'.format(sy)
+        sz = 'fof_halo_center_{}'.format(sz)
     
     print("Reading snapshot files")
     # sort snapshot files and grad the first in the list so that we are
@@ -659,7 +659,8 @@ def saveLightconePathData(epath, ipath, spath, outpath, rL, diffRange='max',
             # There will be several matches, corresponding to all of the
             # fragments associated with this halo in the merger tree. 
             # We can determine exactly which fragment we should be using by 
-            # also comparing to the mass
+            # selecting the one with the largest mass, as was done in the
+            # lightcone calculation
             # Recall that, for the halo lightcone, output step number 442
             # takes halo properties from snapshot *453*, because of backward
             # interpolation!
@@ -668,9 +669,8 @@ def saveLightconePathData(epath, ipath, spath, outpath, rL, diffRange='max',
             else:
                 s3_idx = np.where(stag3 == iid[iMask][idx])[0]
 
-            # match the tree and descendent node idecies to those
-            # found above. If two or more tree relatives are found, 
-            # just choose the most massive one to use for the trajectory
+            # match the tree and descendent node idices to those
+            # found above.
             s4_idx = np.where(sid4 == sdid3[s3_idx])[0]
            
             s2_idx = np.where(sdid2 == sid3[s3_idx])[0]
@@ -929,8 +929,10 @@ def plotLightconePaths(dataPath, diffRange = 'max', plotMode='show', outDir='.')
         else:
             plt.savefig('{}/lc_trajectory_{}Diff_{}'.format(outDir, diffRange, i))
 
+
 #############################################################################################
 #############################################################################################
+
 
 def findDuplicates(lcDir, steps, lcSuffix, outDir, mode='particles', 
                    mergerTreeDir=None, mergerTreeSubdirs=False):
