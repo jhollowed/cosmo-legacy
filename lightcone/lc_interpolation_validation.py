@@ -304,7 +304,7 @@ def lightconeHistograms(lcDir1, lcDir2, step, rL, mode='particles',
 
 
 def saveLightconePathData(epath, ipath, spath, outpath, rL, diffRange='max', 
-                          mode='particles', snapshotSubdirs = False):
+                          mode='particles', snapshotSubdirs = False, fragmentsOnly=False):
     '''
     This function loads lightcone output data, and inspects the 
     difference in position resulting from the extrapolation and interpolation
@@ -352,6 +352,8 @@ def saveLightconePathData(epath, ipath, spath, outpath, rL, diffRange='max',
                             assume one flat directory with the the step number
                             "XXX" in the filenames somewhere, as "*.XXX.*" where
                             * is a wildcard
+    :param fragmentsOnly: Whether or not to inspect the trajectories of fragment halos
+                          only, in the case that mode == 'halos'
     :return: None
     '''
 
@@ -425,21 +427,34 @@ def saveLightconePathData(epath, ipath, spath, outpath, rL, diffRange='max',
                                                abs(iy) < rL, 
                                                abs(iz) < rL))
     iid = iid[initVolMask_interp]
-    ix = ix[initVolMask_interp]
-    iy = iy[initVolMask_interp]
-    iz = iz[initVolMask_interp]
-    ia = ia[initVolMask_interp]
-    irot = irot[initVolMask_interp]
+    if(fragmentsOnly)
+        fragmentMask = iid < 0
+    else
+        fragmentMask = np.ones(len(iid), dtype=bool)
+    iid = iid[fragmentMask]
+    
+    ix = ix[initVolMask_interp][fragmentMask]
+    iy = iy[initVolMask_interp][fragmentMask]
+    iz = iz[initVolMask_interp][fragmentMask]
+    ia = ia[initVolMask_interp][fragmentMask]
+    irot = irot[initVolMask_interp][fragmentMask]
+
 
     initVolMask_extrap = np.logical_and.reduce((abs(ex) < rL, 
                                                abs(ey) < rL, 
                                                abs(ez) < rL))
     eid = eid[initVolMask_extrap]
-    ex = ex[initVolMask_extrap]
-    ey = ey[initVolMask_extrap]
-    ez = ez[initVolMask_extrap]
-    ea = ea[initVolMask_extrap]
-    erot = erot[initVolMask_extrap]
+    if(fragmentsOnly)
+        fragmentMask = eid < 0
+    else
+        fragmentMask = np.ones(len(eid), dtype=bool)
+    eid = eid[fragmentMask]
+
+    ex = ex[initVolMask_extrap][fragmentMask]
+    ey = ey[initVolMask_extrap][fragmentMask]
+    ez = ez[initVolMask_extrap][fragmentMask]
+    ea = ea[initVolMask_extrap][fragmentMask]
+    erot = erot[initVolMask_extrap][fragmentMask]
 
     # make sure that worked...
     if(len(np.unique(irot)) > 1 or len(np.unique(erot)) > 1):
@@ -607,6 +622,7 @@ def saveLightconePathData(epath, ipath, spath, outpath, rL, diffRange='max',
     for i in range(len(diffVals)):
 
         idx = diffVals[i]
+                
         print('Matching to snapshots for idx {} with diff of {}'.format(idx,posDiff[idx]))
         print('Particle ID is {}'.format(iid[iMask][idx]))
         
