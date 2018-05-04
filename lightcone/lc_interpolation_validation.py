@@ -1088,7 +1088,6 @@ def findDuplicates(lcDir, steps, lcSuffix, outDir, mode='particles',
         
         # find location of each lightcone object in merger tree
         mt_loc = search_sorted(mt_ids1, ids1)
-        pdb.set_trace()
         if(np.sum(mt_loc==-1) != 0): 
             raise Exception('output in lightcone not found in merger trees, maybe passed'\
                             ' the wrong files?')
