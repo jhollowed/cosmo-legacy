@@ -427,9 +427,9 @@ def saveLightconePathData(epath, ipath, spath, outpath, rL, diffRange='max',
                                                abs(iy) < rL, 
                                                abs(iz) < rL))
     iid = iid[initVolMask_interp]
-    if(fragmentsOnly)
+    if(fragmentsOnly):
         fragmentMask = iid < 0
-    else
+    else:
         fragmentMask = np.ones(len(iid), dtype=bool)
     iid = iid[fragmentMask]
     
@@ -444,9 +444,9 @@ def saveLightconePathData(epath, ipath, spath, outpath, rL, diffRange='max',
                                                abs(ey) < rL, 
                                                abs(ez) < rL))
     eid = eid[initVolMask_extrap]
-    if(fragmentsOnly)
+    if(fragmentsOnly):
         fragmentMask = eid < 0
-    else
+    else:
         fragmentMask = np.ones(len(eid), dtype=bool)
     eid = eid[fragmentMask]
 
@@ -995,10 +995,11 @@ def findDuplicates(lcDir, steps, lcSuffix, outDir, mode='particles',
                               * is a wildcard
     :return: None
     '''
+
     if(len(steps) != 2 and mode == 'particles'):
         raise Exception('Exactly two step numbers should be passed in the \'steps\' arg if '\
                         'mode==\'particles\'')
-    if(len(steps) != 3 and mode == 'particles'):
+    if(len(steps) != 3 and mode == 'halos'):
         raise Exception('Exactly three step numbers should be passed in the \'steps\' arg if '\
                         'mode==\'halos\'')
     if mode not in ['particles', 'halos']:
@@ -1043,7 +1044,6 @@ def findDuplicates(lcDir, steps, lcSuffix, outDir, mode='particles',
         ids1 = np.squeeze(gio.gio_read(file1, 'id'))
         repl1 = np.squeeze(gio.gio_read(file1, 'replication'))
         
-        pdb.set_trace()
         # open merger tree files to do matchup
         if(mergerTreeSubdirs):
             mt_file1 = sorted(glob.glob('{}/STEP{}/*'.format(mergerTreeDir, steps[1])))[0]
@@ -1067,7 +1067,7 @@ def findDuplicates(lcDir, steps, lcSuffix, outDir, mode='particles',
         desc_matches = mt_desc_indices1[mt_loc]
         mt_matches = sort.search_sorted(mt_tree_indices2, desc_matches)
         
-        # mask out halos who did not have a descendant 
+        # mask out halos which did not have a descendant 
         mt_matches_mask = np_matches != -1
         mt_matches = mt_matches[mt_matches_mask]
 
@@ -1085,13 +1085,13 @@ def findDuplicates(lcDir, steps, lcSuffix, outDir, mode='particles',
     # remove matches that aren't in the same box replication
     for i in range(len(idMatches)):
         if(idMatches[i] == -1): continue
-        j = matchesMask1[i]
+        j = idMatches[i]
         if(repl2[i] != repl1[j]):
-            idMatches[j] = -1
+            idMatches[i] = -1
     
     matchesMask2 = idMatches != -1
     matchesMask1 = idMatches[matchesMask2]
-        
+   
     print('found {} duplicates'.format(np.sum(matchesMask2)))
 
     dup_ids1 = ids1[matchesMask1]
@@ -1105,6 +1105,9 @@ def findDuplicates(lcDir, steps, lcSuffix, outDir, mode='particles',
     y2 = np.squeeze(gio.gio_read(file2, 'y')[matchesMask2])
     z2 = np.squeeze(gio.gio_read(file2, 'z')[matchesMask2])
     repl2 = np.squeeze(gio.gio_read(file2, 'replication')[matchesMask2])
+
+    if( np.sum(abs(dup_ids1 - dup_ids2)) != 0 and np.sum(abs(repl1 - repl2)) != 0 ): 
+        raise Exception('non-duplicates marked as duplicates')
     
     repeat_frac = float(len(dup_ids2)) / len(ids2) 
     print('repeat fraction is {}'.format(repeat_frac))
@@ -1173,20 +1176,25 @@ def compareDuplicates(duplicatePath, steps, lcSuffix, plotMode='show', outDir='.
     axe = f.add_subplot(121, projection='3d')
     axi = f.add_subplot(122, projection='3d')
     title = f.suptitle('step {} - step {}'.format(steps[0], steps[1]))
-    axi.set_title('{}\nDuplicate fraction: {:.2E}'.format(lcSuffix[0], dupl1['repeat_frac'][:][0]))
-    axe.set_title('{}\nDuplicate fraction: {:.2f}'.format(lcSuffix[1], dupl2['repeat_frac'][:][0]))
+    axi.set_title('{}\nDuplicate fraction: {:.3E}'.format(lcSuffix[0], dupl1['repeat_frac'][:][0]))
+    axe.set_title('{}\nDuplicate fraction: {:.3E}'.format(lcSuffix[1], dupl2['repeat_frac'][:][0]))
 
     # find intersection and symmetric difference of the two outputs
     maski = np.in1d(dupl1['id'], dupl2['id'])
     maske = np.in1d(dupl2['id'], dupl1['id'])
-    maske_nokeep = np.random.choice(np.where(~maske)[0], 
-                                    int(len(np.where(~maske)[0])*0.9), replace=False)
-    maske[maske_nokeep] = 1
-    e_downsample_idx = np.random.choice(np.linspace(0, len(dupl2['id'][:])-1, 
-                                        len(dupl2['id'][:]), dtype=int), 
-                                        int(len(dupl2['id'][:])*0.1), replace=False)
-    e_downsample = np.zeros(len(dupl2['id'][:]), dtype = bool)
-    e_downsample[e_downsample_idx] = 1
+
+    # downsample extrapolated output for faster plotting
+    if(len(maske) > 1000):
+        maske_nokeep = np.random.choice(np.where(~maske)[0], 
+                                        int(len(np.where(~maske)[0])*0.9), replace=False)
+        maske[maske_nokeep] = 1
+        e_downsample_idx = np.random.choice(np.linspace(0, len(dupl2['id'][:])-1, 
+                                            len(dupl2['id'][:]), dtype=int), 
+                                            int(len(dupl2['id'][:])*0.1), replace=False)
+        e_downsample = np.zeros(len(dupl2['id'][:]), dtype = bool)
+        e_downsample[e_downsample_idx] = 1
+    else:
+        e_downsample = np.ones(len(dupl2['id'][:]), dtype=bool)
     
     # do plotting. The extrapolation is downsampled, while the interpolated output
     # is not, since the extrapolated output should have far mroe duplicate objects
@@ -1197,7 +1205,7 @@ def compareDuplicates(duplicatePath, steps, lcSuffix, plotMode='show', outDir='.
     axe.set_xlabel('x (Mpc/h)')
     axe.set_ylabel('y (Mpc/h)')
     axe.set_zlabel('y (Mpc/h)')
-    axe.legend()
+    axe.legend(bbox_to_anchor=(0.1, 0.1))
 
     axi.plot(dupl1['x'], dupl1['y'], dupl1['z'], 
              '.b', ms=1, label='shared duplicates')
@@ -1206,7 +1214,7 @@ def compareDuplicates(duplicatePath, steps, lcSuffix, plotMode='show', outDir='.
     axi.set_xlabel('x (Mpc/h)')
     axi.set_ylabel('y (Mpc/h)')
     axi.set_zlabel('y (Mpc/h)')
-    axi.legend()
+    axi.legend(bbox_to_anchor=(0.1, 0.1))
 
     if(plotMode == 'show'):
         plt.show()
@@ -1260,7 +1268,7 @@ def compareReps(lcDir1, lcDir2, step, plotMode='show', outDir='.'):
     ax1 = f.add_subplot(221, projection='3d')
     ax2 = f.add_subplot(223, projection='3d')
     
-    # find 
+    # find subdir prefix 
     subdirs = glob.glob('{}/*'.format(lcDir1)) 
     for i in range(len(subdirs[0].split('/')[-1])):
         try:
@@ -1275,35 +1283,44 @@ def compareReps(lcDir1, lcDir2, step, plotMode='show', outDir='.'):
     file1 = sorted(glob.glob("{}/{}{}/*".format(lcDir1, prefix, step)))[0]
     file2 = sorted(glob.glob("{}/{}{}/*".format(lcDir2, prefix, step)))[0]
 
-    rot64 = gio.gio_read(file1, 'rotation')
-    rep64 = gio.gio_read(file1, 'replication')
-    rot256 = gio.gio_read(file2, 'rotation')
-    rep256 = gio.gio_read(file2, 'replication')
+    rot1 = gio.gio_read(file1, 'rotation')
+    rep1 = gio.gio_read(file1, 'replication')
+    rot2 = gio.gio_read(file2, 'rotation')
+    rep2 = gio.gio_read(file2, 'replication')
 
-    uniqRep64 = sorted(np.unique(rep64))
-    uniqRep256 = sorted(np.unique(rep256))
+    # find all box replications
+    uniqRep1 = sorted(np.unique(rep1))
+    uniqRep2 = sorted(np.unique(rep2))
     
+    # sample color map for each of the 6 possible rotation values, as described in 
+    # section 4.5 the Creating Lightcones in HACC doc
     colors = plt.cm.viridis(np.linspace(0, 1, 6))
-    for j in range(len(uniqRep64)):
 
-        xReps64 = -((uniqRep64[j] >> 20) - 1) * 256
-        yReps64 = -(((uniqRep64[j] >> 10) & 0x3ff) - 1) * 256
-        zReps64 = -((uniqRep64[j] & 0x3ff) - 1) * 256
-        rot1 = rot64[np.where(rep64 == uniqRep64[j])][0]
-        if(np.sum(abs(np.diff(rot64[np.where(rep64 == uniqRep64[j])]))) != 0): 
-            print('shit')
+    for j in range(len(uniqRep1)):
+        
+        # recover box replication spatial positions via the perscription described in 
+        # section 4.5 of the Creating Lightcones in HACC doc
+        xReps1 = -((uniqRep1[j] >> 20) - 1) * 2
+        yReps1 = -(((uniqRep1[j] >> 10) & 0x3ff) - 1) * 2
+        zReps1 = -((uniqRep1[j] & 0x3ff) - 1) * 2
+        this_rot1 = np.squeeze(rot1[np.where(rep1 == uniqRep1[j])[0]])
+        if(np.sum(abs(np.diff(this_rot1))) != 0): 
+            print('Particles in lightcone output {} in the same box replication have different'\
+                  'rotations... you seriously messed something up badly'.format(lcDir1))
             return
 
-        xReps256 = -((uniqRep256[j] >> 20) - 1) * 256
-        yReps256 = -(((uniqRep256[j] >> 10) & 0x3ff) - 1) * 256
-        zReps256 = -((uniqRep256[j] & 0x3ff) - 1) * 256
-        rot2 = rot256[np.where(rep256 == uniqRep256[j])][0]
-        if(np.sum(abs(np.diff(rot256[np.where(rep256 == uniqRep256[j])]))) != 0): 
-            print('shit')
+        xReps2 = -((uniqRep2[j] >> 20) - 1) * 2
+        yReps2 = -(((uniqRep2[j] >> 10) & 0x3ff) - 1) * 2
+        zReps2 = -((uniqRep2[j] & 0x3ff) - 1) * 2
+        this_rot2 = np.squeeze(rot2[np.where(rep2 == uniqRep2[j])[0]])
+        if(np.sum(abs(np.diff(this_rot2))) != 0): 
+            print('Particles in lightcone output {} in the same box replication have different'\
+                  'rotations... you seriously messed something up badly'.format(lcDir2))
             return
 
-        plotBox(xReps64, yReps64, zReps64, 256, 256, 256, ax1, colors[rot1])
-        plotBox(xReps256, yReps256, zReps256, 256, 256, 256, ax2, colors[rot2])
+        # plot
+        plotBox(xReps1, yReps1, zReps1, 2, 2, 2, ax1, colors[this_rot1[0]])
+        plotBox(xReps2, yReps2, zReps2, 2, 2, 2, ax2, colors[this_rot2[0]])
 
     ax1.set_xlabel('x')
     ax1.set_ylabel('y')
@@ -1311,6 +1328,18 @@ def compareReps(lcDir1, lcDir2, step, plotMode='show', outDir='.'):
     ax2.set_xlabel('x')
     ax2.set_ylabel('y')
     ax2.set_zlabel('z')
+
+    # make legend of possible rotations 
+    ax1.plot([0,0], [0,0], '-', lw=10, color=colors[0], label='no rotations')
+    ax1.plot([0,0], [0,0], '-', lw=10, color=colors[1], label='x <--> y')
+    ax1.plot([0,0], [0,0], '-', lw=10, color=colors[2], label='y <--> z')
+    ax1.plot([0,0], [0,0], '-', lw=10, color=colors[3], label='x <--> y and\ny <--> z')
+    ax1.plot([0,0], [0,0], '-', lw=10, color=colors[4], label='z <--> x')
+    ax1.plot([0,0], [0,0], '-', lw=10, color=colors[5], label='x <--> y and\nz <--> x')
+    ax1.legend(bbox_to_anchor=(2, 0.8))
+
+    ax1.set_title('lcDir1')
+    ax2.set_title('lcDir2')
     
     if(plotMode == 'show'):
         plt.show()
