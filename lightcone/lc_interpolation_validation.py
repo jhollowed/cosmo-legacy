@@ -121,9 +121,7 @@ def search_sorted(array, values, sorter=None):
     slct_start = start == array.size
     start[slct_start] = 0;
     
-    if(sorter is not None):
-        start = sorter[start]
-    
+    start = sorter[start]
     slct_match = np.atleast_1d(array[start]==values)
     start[slct_match==0]=-1
     return start
