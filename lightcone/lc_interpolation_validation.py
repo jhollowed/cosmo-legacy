@@ -114,7 +114,7 @@ def search_sorted(array, values, sorter=None):
                    order. This is typically the result of an argsort
     '''
     
-    if sorter == None:
+    if sorter is None:
         sorter = np.argsort(array)
     
     start = np.atleast_1d(np.searchsorted(array,values,side='left',sorter=sorter))
@@ -306,7 +306,7 @@ def lightconeHistograms(lcDir1, lcDir2, step, rL, mode='particles',
     colors = plt.rcParams['axes.prop_cycle'].by_key()['color']
     bins = 300
     
-    f = plt.figure(0) 
+    f = plt.figure(plt.gcf().number+1) 
     ax =  f.add_subplot(311)
     ax.hist(posDiff, bins, color=colors[0], log=True)
     ax.set_ylim(ymin=1)
@@ -333,7 +333,8 @@ def lightconeHistograms(lcDir1, lcDir2, step, rL, mode='particles',
 
 
 def saveLightconePathData(epath, ipath, spath, outpath, rL, diffRange='max', 
-                          mode='particles', snapshotSubdirs = False, fragmentsOnly=False):
+                          mode='particles', solverMode = 'forward', 
+                          snapshotSubdirs = False, fragmentsOnly=False):
     '''
     This function loads lightcone output data, and inspects the 
     difference in position resulting from the extrapolation and interpolation
@@ -376,6 +377,10 @@ def saveLightconePathData(epath, ipath, spath, outpath, rL, diffRange='max',
                  by matching on it's 'id'. If mode=="halos", then find the object
                  in each snapshot by matching it's 'tree_node_index' and 
                  'desc_node_index'.
+    :param solverMode: Wether the lightcone solver used to generate the output under 
+                       validation was run in the standard forward mode (solverMode = 
+                       'forward'), or the reversed mode, with extrapolation/interpolation
+                       occuring backward in time (solverMode = 'backward')
     :param snapshotSubdirs: If true, assume that the snapshot data is grouped into
                             subdirectories of the format "STEPXXX". Otherwise, 
                             assume one flat directory with the the step number
@@ -392,6 +397,8 @@ def saveLightconePathData(epath, ipath, spath, outpath, rL, diffRange='max',
     
     if mode not in ['particles', 'halos']:
         raise Exception('Unknown mode {}. Options are \'particles\' or \'halos\'.'.format(mode))
+    if solverMode not in ['forward', 'backward']:
+        raise Exception('Unknown solver mode {}. Options are \'forward\' or \'backward\'.'.format(solverMode))
     if diffRange not in ['min', 'med', 'max']:
         raise Exception('Unknown diffRange {}. Options are \'min\', \'med\', or \'max\'.'
                         .format(diffRange))
@@ -584,13 +591,9 @@ def saveLightconePathData(epath, ipath, spath, outpath, rL, diffRange='max',
     sz0 = np.squeeze(gio.gio_read(sfile0, sz))
     if(mode == 'halos'):
         # if halo mode is specified, read the descedent node index, 
-        # fof tag, and mass. Sign flip and mask the fof tag to recover
-        # the true tag without any fragment bits
+        # fof tag
         sdid0 = np.squeeze(gio.gio_read(sfile0, 'desc_node_index'))
         stag0 = np.squeeze(gio.gio_read(sfile0, 'fof_halo_tag'))
-        #stag0_mask = stag0 < 0
-        #stag0[stag0_mask] = (-1*stag0[stag0_mask]) & 0xFFFFFFFFFFFF
-        smass0 = np.squeeze(gio.gio_read(sfile0, 'fof_halo_mass'))
 
     if(snapshotSubdirs): 
         sfile1 = sorted(glob.glob('{}/STEP432/*'.format(spath)))[0]
@@ -629,7 +632,6 @@ def saveLightconePathData(epath, ipath, spath, outpath, rL, diffRange='max',
     if(mode == 'halos'):
         sdid3 = np.squeeze(gio.gio_read(sfile3, 'desc_node_index'))  
         stag3 = np.squeeze(gio.gio_read(sfile3, 'fof_halo_tag'))
-        smass3 = np.squeeze(gio.gio_read(sfile3, 'fof_halo_mass'))
     
     if(snapshotSubdirs): 
         sfile4 = sorted(glob.glob('{}/STEP464/*'.format(spath)))[0]
@@ -642,7 +644,6 @@ def saveLightconePathData(epath, ipath, spath, outpath, rL, diffRange='max',
     if(mode == 'halos'):
         sdid4 = np.squeeze(gio.gio_read(sfile4, 'desc_node_index'))  
         stag4 = np.squeeze(gio.gio_read(sfile4, 'fof_halo_tag'))
-        smass4 = np.squeeze(gio.gio_read(sfile4, 'fof_halo_mass'))
 
     # loop through the ten particles selected for plotting, get their surrounding
     # snapshot data, and save the data as .npy files. The results can be plotting 
@@ -804,15 +805,27 @@ def saveLightconePathData(epath, ipath, spath, outpath, rL, diffRange='max',
 
         elif(mode == 'particles'):
             # approximated particle paths for steps 442-453 
-            interpolx = np.array([sxi2, this_ix])
-            interpoly = np.array([syi2, this_iy])
-            interpolz = np.array([szi2, this_iz])
-            interpola = np.array([sai2, this_ia])
+            if(solverMode == 'backward'):
+                interpolx = np.array([this_ix, sxi3])
+                interpoly = np.array([this_iy, syi3])
+                interpolz = np.array([this_iz, szi3])
+                interpola = np.array([this_ia, sai3])
 
-            extrapx = np.array([sxi2, this_ex])
-            extrapy = np.array([syi2, this_ey])
-            extrapz = np.array([szi2, this_ez])
-            extrapa = np.array([sai2, this_ea])
+                extrapx = np.array([this_ex, sxi3])
+                extrapy = np.array([this_ey, syi3])
+                extrapz = np.array([this_ez, szi3])
+                extrapa = np.array([this_ea, sai3])
+            
+            elif(solverMode == 'forward'):
+                interpolx = np.array([sxi2, this_ix])
+                interpoly = np.array([syi2, this_iy])
+                interpolz = np.array([szi2, this_iz])
+                interpola = np.array([sai2, this_ia])
+
+                extrapx = np.array([sxi2, this_ex])
+                extrapy = np.array([syi2, this_ey])
+                extrapz = np.array([szi2, this_ez])
+                extrapa = np.array([sai2, this_ea])
 
        
         # done! save particle path data    
@@ -979,7 +992,8 @@ def plotLightconePaths(dataPath, diffRange = 'max', plotMode='show', outDir='.')
 
 
 def findDuplicates(lcDir, steps, lcSuffix, outDir, mode='particles', 
-                   mergerTreeDir=None, mergerTreeSubdirs=False):
+                   mergerTreeDir=None, mergerTreeSubdirs=False, 
+                   initialVolumeOnly = False, rL=256):
     '''
     This function finds particle/object duplicates across timesteps in lightcone 
     output. Specifically, it finds particles that do not satisfy the following:
@@ -998,7 +1012,7 @@ def findDuplicates(lcDir, steps, lcSuffix, outDir, mode='particles',
                   duplicates. It is assumed that this directory follows the naming 
                   and structure convention given in fig 6 of the Creating Lightcones 
                   in HACC notes (with one subdirectory per snapshot).
-    :param steps: an array of two lightcone outputs, by snapshot number, between 
+    :param steps: an array of at least two lightcone outputs, by snapshot number, between 
                   which to check for duplicate particles/objects. If mode == 'halos',
                   this array needs to contain three steps, the two that bound the 
                   lightcone timestep of interest, and the snapshot step following the
@@ -1021,6 +1035,14 @@ def findDuplicates(lcDir, steps, lcSuffix, outDir, mode='particles',
                               assume one flat directory with the the step number
                               "XXX" in the filenames somewhere, as "*.XXX.*" where
                               * is a wildcard
+    :param initialVolumeOnly: Whether or not to omit all simulation box replications in the
+                              duplication check. If False, objects will be matched by both 
+                              their id and their replication identifier. If not, only the id
+                              will be used for the matchup, andall other box replications will
+                              be omitted. Turn this option on to debug the validation test 
+                              itself (the number of deuplications found in the initial volume
+                              should of course be the same in either case)
+    :param rL: The simulation box length in Mpc/h. This value only used if initialVolumeOnly==`True
     :return: None
     '''
 
@@ -1051,13 +1073,44 @@ def findDuplicates(lcDir, steps, lcSuffix, outDir, mode='particles',
             break
         except ValueError:
             continue
+    
+    # create output hdf5 file
+    print('\nCreating output hdf5 for {} step {}'.format(lcSuffix, steps[0]))
+    outfile = h5.File('{}/duplicates_{}_{}.hdf5'.format(outDir, lcSuffix, steps[0]), 'w')
+
+    # if the timestep passed is 487 - 499, write out immediately, since there
+    # cannot possible be duplicates
+    if(steps[0] == 487):
+        
+        file1 = sorted(glob.glob('{}/{}{}/*'.format(lcDir, prefix, steps[0])))[0]
+        ids1 = np.squeeze(gio.gio_read(file1, 'id'))
+        total1 = len(ids1)
+
+        print('repeat fraction is 0.0')
+        print('writing out {}'.format('{}/duplicates_{}_{}.hdf5'.format(outDir, lcSuffix, steps[0])))
+        outfile.create_dataset('repeat_frac', data=np.array([]))
+        outfile.create_dataset('total_count_step{}'.format(steps[0]), data=np.array([total1]))
+        outfile.create_dataset('total_count_step{}'.format(steps[1]), data=np.array([0]))
+        outfile.create_dataset('id_step{}'.format(steps[0]), data = np.array([]))
+        outfile.create_dataset('id_step{}'.format(steps[1]), data = np.array([]))
+        outfile.create_dataset('replication_step{}'.format(steps[0]), np.array([]))
+        outfile.create_dataset('replication_step{}'.format(steps[1]), data = np.array([]))
+        outfile.create_dataset('x_step{}'.format(steps[0]), data = np.array([]))
+        outfile.create_dataset('x_step{}'.format(steps[1]), data = np.array([]))
+        outfile.create_dataset('y_step{}'.format(steps[0]), data = np.array([]))
+        outfile.create_dataset('y_step{}'.format(steps[1]), data = np.array([]))
+        outfile.create_dataset('z_step{}'.format(steps[0]), data = np.array([]))
+        outfile.create_dataset('z_step{}'.format(steps[1]), data = np.array([]))
+        outfile.create_dataset('a_step{}'.format(steps[0]), data = np.array([]))
+        outfile.create_dataset('a_step{}'.format(steps[1]), data = np.array([]))
+        return
+
 
     # sort the subdirectory contents and take the first item, since that
     # should always be the GIO header file
     print('reading data')
     file1 = sorted(glob.glob('{}/{}{}/*'.format(lcDir, prefix, steps[0])))[0]
     file2 = sorted(glob.glob('{}/{}{}/*'.format(lcDir, prefix, steps[1])))[0]
-    outfile = h5.File('{}/duplicates_{}.hdf5'.format(outDir, lcSuffix), 'w')
 
     if(mode == 'particles'): 
         # read particle data
@@ -1070,6 +1123,8 @@ def findDuplicates(lcDir, steps, lcSuffix, outDir, mode='particles',
         # read halo data
         ids1 = np.squeeze(gio.gio_read(file1, 'id'))
         repl1 = np.squeeze(gio.gio_read(file1, 'replication'))
+        ids2 = np.squeeze(gio.gio_read(file2, 'id'))
+        repl2 = np.squeeze(gio.gio_read(file2, 'replication'))
         
         # open merger tree files to do matchup
         if(mergerTreeSubdirs):
@@ -1084,27 +1139,76 @@ def findDuplicates(lcDir, steps, lcSuffix, outDir, mode='particles',
         mt_tree_indices2 = np.squeeze(gio.gio_read(mt_file2, 'tree_node_index'))
         mt_ids2 = np.squeeze(gio.gio_read(mt_file2, 'fof_halo_tag'))
         
-        # find location of each lightcone object in merger tree
-        mt_loc = search_sorted(mt_ids1, ids1)
-        if(np.sum(mt_loc==-1) != 0): 
-            raise Exception('output in lightcone not found in merger trees, maybe passed'\
-                            ' the wrong files?')
+        # find location of each lightcone object in earlier step in merger tree
+        lc1_to_mt1 = search_sorted(mt_ids1, ids1)
+        if(np.sum(lc1_to_mt1==-1) != 0): 
+            raise Exception('output in lightcone file {} not found in merger trees, '\
+                            'maybe passed the wrong files?'.format(file1))
         
-        # match to lower redshift step
-        desc_matches = mt_desc_indices1[mt_loc]
-        mt_matches = search_sorted(mt_tree_indices2, desc_matches)
+        # get descendent node indices of every halo in earlier lc step
+        desc_ids1 = mt_desc_indices1[lc1_to_mt1]
         
-        # mask out halos which did not have a descendant 
-        mt_matches_mask = np_matches != -1
-        mt_matches = mt_matches[mt_matches_mask]
+        # find location of each lightcone object in later step in merger tree
+        lc2_to_mt2 = search_sorted(mt_ids2, ids2)
+        if(np.sum(lc2_to_mt2==-1) != 0): 
+            raise Exception('output in lightcone file {} not found in merger trees, '\
+                            'maybe passed the wrong files?'.format(file2))
+        
+        # get tree node indices of every halo in later lc step
+        tree_ids2 = mt_tree_indices2[lc2_to_mt2]
+        
+        # ok got everything we need. We want to compare the desc node indices
+        # at lc step 1 with the tree node indices at lc step 2 (step 2 is later)
+        ids1 = desc_ids1
+        ids2 = tree_ids2
+         
+    if(initialVolumeOnly):
+        # get rid of everything not in the initial volume (don't
+        # consider objects found in replicated boxes, so matchup
+        # is simplified)
+        print('Removing objects outside of initial simulation volume')
+        x1 = np.squeeze(gio.gio_read(file1, 'x'))
+        y1 = np.squeeze(gio.gio_read(file1, 'y'))
+        z1 = np.squeeze(gio.gio_read(file1, 'z'))
+        x2 = np.squeeze(gio.gio_read(file2, 'x'))
+        y2 = np.squeeze(gio.gio_read(file2, 'y'))
+        z2 = np.squeeze(gio.gio_read(file2, 'z'))
+        
+        initVolMask1 = np.logical_and.reduce((abs(x1) < rL, 
+                                              abs(y1) < rL, 
+                                              abs(z1) < rL))
+         
+        initVolMask2 = np.logical_and.reduce((abs(x2) < rL, 
+                                              abs(y2) < rL, 
+                                              abs(z2) < rL))
 
-        # ok got everything we need
-        ids1 = ids1[mt_matches_mask]
-        repl1 = repl1[mt_matches_mask]
-        ids2 = mt_ids2[mt_matches]
-        repl2 = np.squeeze(gio.gio_read(file2, 'replication'))[mt_matches]
+        # get rid of any particles that do not originate from the inital
+        # volume, but had their positions enter the volume through the
+        # lightcone position extrapolation
+        boxesFound1 = np.unique(repl1[initVolMask1], return_counts=True)
+        initVol1 = boxesFound1[0][np.argmax(boxesFound1[-1])]
+        boxMask1 = repl1 == initVol1
         
+        print('initial volume at output {}: {}'.format(steps[0], initVol1))
+        
+        ids1 = ids1[boxMask1]
+        repl1 = repl1[boxMask1]
+        
+        boxesFound2 = np.unique(repl2[initVolMask2], return_counts=True)
+        initVol2 = boxesFound2[0][np.argmax(boxesFound2[-1])]
+        boxMask2 = repl2 == initVol2
+        print('initial volume at output {}: {}'.format(steps[1], initVol2))
+        
+        ids2 = ids2[boxMask2]
+        repl2 = repl2[boxMask2]
     
+    else:
+        boxMask1 = np.ones(len(repl1), dtype=bool)
+        boxMask2 = np.ones(len(repl2), dtype=bool)
+    
+    total1 = len(ids1)
+    total2 = len(ids2)
+
     # do matchup
     print('matching')
     idMatches = search_sorted(ids1, ids2)
@@ -1118,41 +1222,53 @@ def findDuplicates(lcDir, steps, lcSuffix, outDir, mode='particles',
     
     matchesMask2 = idMatches != -1
     matchesMask1 = idMatches[matchesMask2]
-   
+    
     print('found {} duplicates'.format(np.sum(matchesMask2)))
-
+    
+    # get data for all duplicate objects
     dup_ids1 = ids1[matchesMask1]
-    x1 = np.squeeze(gio.gio_read(file1, 'x')[matchesMask1])
-    y1 = np.squeeze(gio.gio_read(file1, 'y')[matchesMask1])
-    z1 = np.squeeze(gio.gio_read(file1, 'z')[matchesMask1])
-    repl1 = np.squeeze(gio.gio_read(file1, 'replication')[matchesMask1])
+    repl1 = repl1[matchesMask1]
+    x1 = np.squeeze(gio.gio_read(file1, 'x')[boxMask1][matchesMask1])
+    y1 = np.squeeze(gio.gio_read(file1, 'y')[boxMask1][matchesMask1])
+    z1 = np.squeeze(gio.gio_read(file1, 'z')[boxMask1][matchesMask1])
+    a1 = np.squeeze(gio.gio_read(file1, 'a')[boxMask1][matchesMask1])
     
     dup_ids2 = ids2[matchesMask2]
-    x2 = np.squeeze(gio.gio_read(file2, 'x')[matchesMask2])
-    y2 = np.squeeze(gio.gio_read(file2, 'y')[matchesMask2])
-    z2 = np.squeeze(gio.gio_read(file2, 'z')[matchesMask2])
-    repl2 = np.squeeze(gio.gio_read(file2, 'replication')[matchesMask2])
+    repl2 = repl2[matchesMask2]
+    x2 = np.squeeze(gio.gio_read(file2, 'x')[boxMask2][matchesMask2])
+    y2 = np.squeeze(gio.gio_read(file2, 'y')[boxMask2][matchesMask2])
+    z2 = np.squeeze(gio.gio_read(file2, 'z')[boxMask2][matchesMask2])
+    a2 = np.squeeze(gio.gio_read(file2, 'a')[boxMask2][matchesMask2])
 
     if( np.sum(abs(dup_ids1 - dup_ids2)) != 0 and np.sum(abs(repl1 - repl2)) != 0 ): 
         raise Exception('non-duplicates marked as duplicates')
     
-    repeat_frac = float(len(dup_ids2)) / len(ids2) 
+    repeat_frac = float(len(dup_ids1)) / len(ids1) 
     print('repeat fraction is {}'.format(repeat_frac))
 
-    print('writing out {}'.format('{}/duplicates_{}.hdf5'.format(outDir, lcSuffix)))
+    print('writing out {}'.format('{}/duplicates_{}_{}.hdf5'.format(outDir, lcSuffix, steps[0])))
     outfile.create_dataset('repeat_frac', data=np.array([repeat_frac]))
-    outfile.create_dataset('id', data = np.hstack([dup_ids2, dup_ids1]))
-    outfile.create_dataset('replication', data = np.hstack([repl2, repl1]))
-    outfile.create_dataset('x', data = np.hstack([x2, x1]))
-    outfile.create_dataset('y', data = np.hstack([y2, y1]))
-    outfile.create_dataset('z', data = np.hstack([z2, z1]))
+    outfile.create_dataset('total_count_step{}'.format(steps[0]), data=np.array([total1]))
+    outfile.create_dataset('total_count_step{}'.format(steps[1]), data=np.array([total2]))
+    outfile.create_dataset('id_step{}'.format(steps[0]), data = dup_ids1)
+    outfile.create_dataset('id_step{}'.format(steps[1]), data = dup_ids2)
+    outfile.create_dataset('replication_step{}'.format(steps[0]), data = repl1)
+    outfile.create_dataset('replication_step{}'.format(steps[1]), data = repl2)
+    outfile.create_dataset('x_step{}'.format(steps[0]), data = x1)
+    outfile.create_dataset('x_step{}'.format(steps[1]), data = x2)
+    outfile.create_dataset('y_step{}'.format(steps[0]), data = y1)
+    outfile.create_dataset('y_step{}'.format(steps[1]), data = y2)
+    outfile.create_dataset('z_step{}'.format(steps[0]), data = z1)
+    outfile.create_dataset('z_step{}'.format(steps[1]), data = z2)
+    outfile.create_dataset('a_step{}'.format(steps[0]), data = a1)
+    outfile.create_dataset('a_step{}'.format(steps[1]), data = a2)
 
 
 #############################################################################################
 #############################################################################################
 
 
-def compareDuplicates(duplicatePath, steps, lcSuffix, plotMode='show', outDir='.'):
+def compareDuplicates(duplicatePath, steps, lcSuffix, compType='scatter', plotMode='show', outDir='.'):
     '''
     This function visualizes the output of the validation function, 
     findDuplicates(). That function finds all particle duplicates between
@@ -1170,9 +1286,12 @@ def compareDuplicates(duplicatePath, steps, lcSuffix, plotMode='show', outDir='.
     Params:
     :param deplicatePath: the output directory of two previous runs of 
                           findDuplicates().
-    :param steps: an array of two lightcone outputs, by snapshot number, between 
-                  which a corresponding run of finDuplicates() checked for duplicate 
-                  particles/objects.
+    :param steps: an array of at least two lightcone outputs, by snapshot number, between 
+                  which a corresponding run(s) of finDuplicates() checked for duplicate 
+                  particles/objects. If len(steps) == 2, the comparison plot will be made
+                  as a 3d scatter of all duplicate particle positions (compType='scatter'). 
+                  If len(steps) > 2, the comparison plot will be made as a histogram of 
+                  duplicate counts vs redshift (compType='hist').
     :param lcSuffix: An identifier string that will be assumed as a filename suffix
                      for the input hdf5 files. This should be array of length 2, with
                      each element agreeing with the lcSuffix input for a run of 
@@ -1187,62 +1306,143 @@ def compareDuplicates(duplicatePath, steps, lcSuffix, plotMode='show', outDir='.
     if plotMode not in ['show', 'save']:
         raise Exception('Unknown plotMode {}. Options are \'show\' or \'save\'.'.format(plotMode))
     if(len(lcSuffix) != 2):
-        raise Exception('Input array lcSuffix should be of legnth 2. See function docstrings')
-    if(len(steps) != 2):
-        raise Exception('Only two step numbers should be passed in the \'steps\' arg')
+        raise Exception('Input array \'lcSuffix\' should be of length 2. See function docstrings')
+    if(len(steps)%2 != 0):
+        raise Exception('Length of input array \'steps\' should be divisible by 2. See function docstrings')
 
-    # open files
-    dupl1 = h5.File('{}/duplicates_{}.hdf5'.format(duplicatePath, lcSuffix[0]), 'r')
-    dupl2 = h5.File('{}/duplicates_{}.hdf5'.format(duplicatePath, lcSuffix[1]), 'r')
+    # ---------- scatter plot (single timestep) comparison ----------
+    # ---------------------------------------------------------------
+    if(len(steps) == 2):
+        
+        # open files
+        dupl1 = h5.File('{}/duplicates_{}_{}.hdf5'.format(duplicatePath, lcSuffix[0], steps[0]), 'r')
+        dupl2 = h5.File('{}/duplicates_{}_{}.hdf5'.format(duplicatePath, lcSuffix[1], steps[0]), 'r')
 
-    print('Duplicate fraction for {} output: {}'.format(lcSuffix[0], dupl1['repeat_frac'][:][0]))
-    print('Duplicate fraction for {} output: {}'.format(lcSuffix[1], dupl2['repeat_frac'][:][0]))
+        print('Duplicate fraction for {} output: {}'.format(lcSuffix[0], dupl1['repeat_frac'][:][0]))
+        print('Duplicate fraction for {} output: {}'.format(lcSuffix[1], dupl2['repeat_frac'][:][0]))
+        
+        # setup plotting
+        f = plt.figure(plt.gcf().number+1, figsize=(12, 6))
+        axe = f.add_subplot(121, projection='3d')
+        axi = f.add_subplot(122, projection='3d')
+        title = f.suptitle('step {} - step {}'.format(steps[0], steps[-1]))
+        axi.set_title('{}\nDuplicate fraction: {:.4f}%'.format(lcSuffix[0], dupl1['repeat_frac'][:][0]*100))
+        axe.set_title('{}\nDuplicate fraction: {:.4f}%'.format(lcSuffix[1], dupl2['repeat_frac'][:][0]*100))
+
+        # find intersection and symmetric difference of the two outputs
+        maski = np.in1d(dupl1['id_step{}'.format(steps[0])], dupl2['id_step{}'.format(steps[0])])
+        maske = np.in1d(dupl2['id_step{}'.format(steps[0])], dupl1['id_step{}'.format(steps[0])])
+
+        # downsample extrapolated output for faster plotting
+        if(len(maske) > 1000):
+            maske_nokeep = np.random.choice(np.where(~maske)[0], 
+                                            int(len(np.where(~maske)[0])*0.9), replace=False)
+            maske[maske_nokeep] = 1
+            e_downsample_idx = np.random.choice(
+                               np.linspace(0, len(dupl2['id_step{}'.format(steps[0])][:])-1, 
+                                           len(dupl2['id_step{}'.format(steps[0])][:]), dtype=int), 
+                               int(len(dupl2['id_step{}'.format(steps[0])][:])*0.1), 
+                               replace=False)
+
+            e_downsample = np.zeros(len(dupl2['id_step{}'.format(steps[0])][:]), dtype = bool)
+            e_downsample[e_downsample_idx] = 1
+        
+        else:
+            e_downsample = np.ones(len(dupl2['id_step{}'.format(steps[0])][:]), dtype=bool)
+        
+        # do plotting. The extrapolation is downsampled, while the interpolated output
+        # is not, since the extrapolated output should have far mroe duplicate objects
+        
+        axe.plot(dupl2['x_step{}'.format(steps[0])][e_downsample], 
+                 dupl2['y_step{}'.format(steps[0])][e_downsample], 
+                 dupl2['z_step{}'.format(steps[0])][e_downsample], 
+                '.g', ms=1, label='shared duplicates')
+
+        axe.plot(dupl2['x_step{}'.format(steps[0])][~maske], 
+                 dupl2['y_step{}'.format(steps[0])][~maske], 
+                 dupl2['z_step{}'.format(steps[0])][~maske], 
+                 '+m', mew=1, label='unique duplicates')
+        
+        axe.set_xlabel('x (Mpc/h)')
+        axe.set_ylabel('y (Mpc/h)')
+        axe.set_zlabel('y (Mpc/h)')
+        axe.legend(bbox_to_anchor=(0.1, 0.1))
+
+        axi.plot(dupl1['x_step{}'.format(steps[0])], 
+                 dupl1['y_step{}'.format(steps[0])], 
+                 dupl1['z_step{}'.format(steps[0])], 
+                 '.b', ms=1, label='shared duplicates')
+
+        axi.plot(dupl1['x_step{}'.format(steps[0])][~maski], 
+                dupl1['y_step{}'.format(steps[0])][~maski], 
+                dupl1['z_step{}'.format(steps[0])][~maski], 
+                 '+r', mew=1, label='unique duplicates')
+        
+        axi.set_xlabel('x (Mpc/h)')
+        axi.set_ylabel('y (Mpc/h)')
+        axi.set_zlabel('y (Mpc/h)')
+        axi.legend(bbox_to_anchor=(0.1, 0.1))
     
-    # setup plotting
-    f = plt.figure(1, figsize=(12, 6))
-    axe = f.add_subplot(121, projection='3d')
-    axi = f.add_subplot(122, projection='3d')
-    title = f.suptitle('step {} - step {}'.format(steps[0], steps[1]))
-    axi.set_title('{}\nDuplicate fraction: {:.3E}'.format(lcSuffix[0], dupl1['repeat_frac'][:][0]))
-    axe.set_title('{}\nDuplicate fraction: {:.3E}'.format(lcSuffix[1], dupl2['repeat_frac'][:][0]))
-
-    # find intersection and symmetric difference of the two outputs
-    maski = np.in1d(dupl1['id'], dupl2['id'])
-    maske = np.in1d(dupl2['id'], dupl1['id'])
-
-    # downsample extrapolated output for faster plotting
-    if(len(maske) > 1000):
-        maske_nokeep = np.random.choice(np.where(~maske)[0], 
-                                        int(len(np.where(~maske)[0])*0.9), replace=False)
-        maske[maske_nokeep] = 1
-        e_downsample_idx = np.random.choice(np.linspace(0, len(dupl2['id'][:])-1, 
-                                            len(dupl2['id'][:]), dtype=int), 
-                                            int(len(dupl2['id'][:])*0.1), replace=False)
-        e_downsample = np.zeros(len(dupl2['id'][:]), dtype = bool)
-        e_downsample[e_downsample_idx] = 1
+    # ---------- histogram (multi-timestep) comparison ----------
+    # -----------------------------------------------------------
     else:
-        e_downsample = np.ones(len(dupl2['id'][:]), dtype=bool)
-    
-    # do plotting. The extrapolation is downsampled, while the interpolated output
-    # is not, since the extrapolated output should have far mroe duplicate objects
-    axe.plot(dupl2['x'][e_downsample], dupl2['y'][e_downsample], dupl2['z'][e_downsample], 
-            '.g', ms=1, label='shared duplicates')
-    axe.plot(dupl2['x'][~maske], dupl2['y'][~maske], dupl2['z'][~maske], 
-             '+m', mew=1, label='unique duplicates')
-    axe.set_xlabel('x (Mpc/h)')
-    axe.set_ylabel('y (Mpc/h)')
-    axe.set_zlabel('y (Mpc/h)')
-    axe.legend(bbox_to_anchor=(0.1, 0.1))
+        
+        # setup plotting
+        colors = plt.cm.plasma(np.linspace(0.1, 0.9, 6))
+        f = plt.figure(plt.gcf().number+1)
+        ax = f.add_axes((0.1, 0.25, 0.8, 0.65))
+        ax.set_title('step {} - step {}'.format(steps[0], steps[-1]))
+        ax.set_ylabel('cdf')
+        ax.set_xlabel('redshift')
 
-    axi.plot(dupl1['x'], dupl1['y'], dupl1['z'], 
-             '.b', ms=1, label='shared duplicates')
-    axi.plot(dupl1['x'][~maski], dupl1['y'][~maski], dupl1['z'][~maski], 
-             '+r', mew=1, label='unique duplicates')
-    axi.set_xlabel('x (Mpc/h)')
-    axi.set_ylabel('y (Mpc/h)')
-    axi.set_zlabel('y (Mpc/h)')
-    axi.legend(bbox_to_anchor=(0.1, 0.1))
+        # add second set of x-axis labels
+        ax2 = f.add_axes((0.1, 0.1, 0.8, 0.0))
+        ax2.yaxis.set_visible(False)
+        ax2.set_xlabel('step')
 
+        dupNum1 = np.zeros(len(steps))
+        dupNum2 = np.zeros(len(steps))
+        total1 = np.zeros(len(steps))
+        total2 = np.zeros(len(steps))
+        
+        # loop over all input steps
+        steps = sorted(steps)
+        for k in range(len(steps)-1):
+
+            if(steps[k] == 487):
+                dupl1 = h5.File('{}/duplicates_{}_{}.hdf5'.format(duplicatePath, lcSuffix[0], steps[k]), 'r')
+                total1[k] = dupl1['total_count_step{}'.format(steps[k])][:][0]
+                dupNum1[k] = np.cumsum(total1[::-1])[-1] * 1e-7
+                dupNum2[k] = np.cumsum(total2[::-1])[-1] * 1e-7
+                continue
+            
+            dupl1 = h5.File('{}/duplicates_{}_{}.hdf5'.format(duplicatePath, lcSuffix[0], steps[k]), 'r')
+            dupl2 = h5.File('{}/duplicates_{}_{}.hdf5'.format(duplicatePath, lcSuffix[1], steps[k]), 'r')
+            total1[k] = dupl1['total_count_step{}'.format(steps[k])][:][0]
+            total2[k] = dupl2['total_count_step{}'.format(steps[k])][:][0]
+            a1 = dupl1['a_step{}'.format(steps[k])][:]
+            a2 = dupl2['a_step{}'.format(steps[k])][:]
+            dupNum1[k] = len(a1)
+            dupNum2[k] = len(a2)
+
+        a = np.linspace(1/(200+1), 1, 500)
+        step_zs = (1/a[steps]) - 1
+        
+        ax.plot(step_zs[::-1], 
+                 np.cumsum(dupNum1[::-1]) / np.cumsum(total1[::-1])[-1], '-s', color=colors[1], lw=1.2, ms=5)
+        ax.plot(step_zs[::-1], 
+                 np.cumsum(dupNum2[::-1]) / np.cumsum(total2[::-1])[-1], '-s', color=colors[-2], lw=1.2, ms=5)
+        
+        ax.set_yscale('log', nonposy='clip')
+        ax.set_ylim([0.0000001,1.0])
+        ax.set_xlim([min(step_zs), max(step_zs)])
+        ax.set_xticks(step_zs)
+        ax.grid()
+        
+        ax2.set_xlim([min(step_zs), max(step_zs)])
+        ax2.set_xticks(step_zs)
+        ax2.set_xticklabels(steps)
+        
     if(plotMode == 'show'):
         plt.show()
     else:
@@ -1253,7 +1453,7 @@ def compareDuplicates(duplicatePath, steps, lcSuffix, plotMode='show', outDir='.
 #############################################################################################
 
 
-def compareReps(lcDir1, lcDir2, step, plotMode='show', outDir='.'):
+def compareReps(lcDir1, lcDir2, step, skyArea='octant', plotMode='show', outDir='.'):
     '''
     This function compares the simulation box replication rotations
     between two lightcones. The intended reason for running this validation
@@ -1276,6 +1476,8 @@ def compareReps(lcDir1, lcDir2, step, plotMode='show', outDir='.'):
                  will generally plot box replications at different 
                  spatial positions (those that overlap the shell of the
                  lightcone at the step)
+    :param skyArea: Whether the input lightcone fills on octant (skyArea = 'octant')
+                    of the sky, or the full sky (skyArea = 'full')
     :param plotMode: The plotting mode. Options are 'show' or 'save'. If 'show', the
                      figures will be opened upon function completion. If 'save', they
                      will be saved as .png files to the current directory, unless otherwise
@@ -1285,13 +1487,15 @@ def compareReps(lcDir1, lcDir2, step, plotMode='show', outDir='.'):
     '''
     if plotMode not in ['show', 'save']:
         raise Exception('Unknown plotMode {}. Options are \'show\' or \'save\'.'.format(plotMode))
+    if skyArea not in ['octant', 'full']:
+        raise Exception('Unknown skyArea arg {}. Options are \'octant\' or \'full\'.'.format(skyArea))
     
     # do these imports here, since there are other functions in this file that
     # are intended to run on systems where gio may not be available
     import genericio as gio
    
     # setup plottong
-    f = plt.figure(2)
+    f = plt.figure(plt.gcf().number+1)
     ax1 = f.add_subplot(221, projection='3d')
     ax2 = f.add_subplot(223, projection='3d')
     
@@ -1314,6 +1518,13 @@ def compareReps(lcDir1, lcDir2, step, plotMode='show', outDir='.'):
     rep1 = gio.gio_read(file1, 'replication')
     rot2 = gio.gio_read(file2, 'rotation')
     rep2 = gio.gio_read(file2, 'replication')
+    
+    if(skyArea == 'octant'):
+        LCReplicants1 = (len(np.unique(rep1)) ** (1/3)) - 1
+        LCReplicants2 = (len(np.unique(rep2)) ** (1/3)) - 1
+    elif(skyArea == 'full'):
+        LCReplicants1 = ((len(np.unique(rep1)) ** (1/3)) - 2) / 2
+        LCReplicants2 = ((len(np.unique(rep2)) ** (1/3)) - 2) / 2 
 
     # find all box replications
     uniqRep1 = sorted(np.unique(rep1))
@@ -1327,18 +1538,18 @@ def compareReps(lcDir1, lcDir2, step, plotMode='show', outDir='.'):
         
         # recover box replication spatial positions via the perscription described in 
         # section 4.5 of the Creating Lightcones in HACC doc
-        xReps1 = -((uniqRep1[j] >> 20) - 1) * 2
-        yReps1 = -(((uniqRep1[j] >> 10) & 0x3ff) - 1) * 2
-        zReps1 = -((uniqRep1[j] & 0x3ff) - 1) * 2
+        xReps1 = LCReplicants1 - (uniqRep1[j] >> 20)
+        yReps1 = LCReplicants1 - ((uniqRep1[j] >> 10) & 0x3ff)
+        zReps1 = LCReplicants1 - (uniqRep1[j] & 0x3ff)
         this_rot1 = np.squeeze(rot1[np.where(rep1 == uniqRep1[j])[0]])
         if(np.sum(abs(np.diff(this_rot1))) != 0): 
             print('Particles in lightcone output {} in the same box replication have different'\
                   'rotations... you seriously messed something up badly'.format(lcDir1))
             return
 
-        xReps2 = -((uniqRep2[j] >> 20) - 1) * 2
-        yReps2 = -(((uniqRep2[j] >> 10) & 0x3ff) - 1) * 2
-        zReps2 = -((uniqRep2[j] & 0x3ff) - 1) * 2
+        xReps2 = LCReplicants2 - (uniqRep2[j] >> 20)
+        yReps2 = LCReplicants2 - ((uniqRep2[j] >> 10) & 0x3ff)
+        zReps2 = LCReplicants2 - (uniqRep2[j] & 0x3ff)
         this_rot2 = np.squeeze(rot2[np.where(rep2 == uniqRep2[j])[0]])
         if(np.sum(abs(np.diff(this_rot2))) != 0): 
             print('Particles in lightcone output {} in the same box replication have different'\
@@ -1346,8 +1557,8 @@ def compareReps(lcDir1, lcDir2, step, plotMode='show', outDir='.'):
             return
 
         # plot
-        plotBox(xReps1, yReps1, zReps1, 2, 2, 2, ax1, colors[this_rot1[0]])
-        plotBox(xReps2, yReps2, zReps2, 2, 2, 2, ax2, colors[this_rot2[0]])
+        plotBox(xReps1, yReps1, zReps1, 1, 1, 1, ax1, colors[this_rot1[0]])
+        plotBox(xReps2, yReps2, zReps2, 1, 1, 1, ax2, colors[this_rot2[0]])
 
     ax1.set_xlabel('x')
     ax1.set_ylabel('y')
@@ -1448,7 +1659,7 @@ def comvDist_vs_z(lcDirs, steps, lcNames=['second order corrections w/ weighting
     # set up plotting
     config(cmap=plt.cm.plasma, numColors=3)
     colors = plt.rcParams['axes.prop_cycle'].by_key()['color']
-    f = plt.figure(3)
+    f = plt.figure(plt.gcf().number+1)
     
     if(twoPanel):
         ax1 = f.add_subplot(211)
@@ -1522,7 +1733,7 @@ def comvDist_vs_z(lcDirs, steps, lcNames=['second order corrections w/ weighting
         else:
             ax2.legend(loc="upper right")
             ax2.grid(True)
-
+    
     if(plotMode == 'show'):
         plt.show()
     else:
