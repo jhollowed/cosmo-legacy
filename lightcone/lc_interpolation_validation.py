@@ -4,7 +4,6 @@ import glob
 import h5py as h5
 import numpy as np
 from astropy.cosmology import FlatLambdaCDM
-
 import matplotlib as mpl
 from cycler import cycler
 from matplotlib import rcParams
@@ -12,6 +11,7 @@ import matplotlib.pyplot as plt
 import matplotlib.ticker as plticker
 from mpl_toolkits.mplot3d import Axes3D
 from matplotlib.ticker import FormatStrFormatter
+from matplotlib.colors import LogNorm
 
 '''
 This file contains functions for inspecting and visualizing lightcone output
@@ -254,8 +254,7 @@ def lightconeHistograms(lcDir1, lcDir2, step, rL, mode='particles',
     # make sure that worked...
     if(len(np.unique(irot)) > 1 or len(np.unique(erot)) > 1):
         raise Exception('particles found in replicated boxes >:(')
-
-
+    
     # find unique objects to begin matching 
     print('finding unique')
     iunique = np.unique(iid, return_counts=True)
@@ -991,7 +990,7 @@ def plotLightconePaths(dataPath, diffRange = 'max', plotMode='show', outDir='.')
 #############################################################################################
 
 
-def findDuplicates(lcDir, steps, lcSuffix, outDir, mode='particles', 
+def findDuplicates(lcDir, steps, lcSuffix, outDir, mode='particles', solverMode='forward', 
                    mergerTreeDir=None, mergerTreeSubdirs=False, 
                    initialVolumeOnly = False, rL=256):
     '''
@@ -1027,6 +1026,10 @@ def findDuplicates(lcDir, steps, lcSuffix, outDir, mode='particles',
     :param mode: whether to perform the object match-up on particles or
                  halos. If mode=="halos", then match on descendant merger 
                  tree indices rather than id
+    :param solverMode: Wether the lightcone solver used to generate the output under 
+                       validation was run in the standard forward mode (solverMode = 
+                       'forward'), or the reversed mode, with extrapolation/interpolation
+                       occuring backward in time (solverMode = 'backward')
     :param mergerTreeDir: If mode=='halos', then this argument must be passed as the path
                    to the top-level directory of the merger tree snapshots that were 
                    used to run the lightcone
@@ -1049,7 +1052,7 @@ def findDuplicates(lcDir, steps, lcSuffix, outDir, mode='particles',
     if(len(steps) != 2 and mode == 'particles'):
         raise Exception('Exactly two step numbers should be passed in the \'steps\' arg if '\
                         'mode==\'particles\'')
-    if(len(steps) != 3 and mode == 'halos'):
+    if(len(steps) != 3 and steps[-1] != 499 and mode == 'halos'):
         raise Exception('Exactly three step numbers should be passed in the \'steps\' arg if '\
                         'mode==\'halos\'')
     if mode not in ['particles', 'halos']:
@@ -1079,7 +1082,7 @@ def findDuplicates(lcDir, steps, lcSuffix, outDir, mode='particles',
     outfile = h5.File('{}/duplicates_{}_{}.hdf5'.format(outDir, lcSuffix, steps[0]), 'w')
 
     # if the timestep passed is 487 - 499, write out immediately, since there
-    # cannot possible be duplicates
+    # cannot possibly be duplicates
     if(steps[0] == 487):
         
         file1 = sorted(glob.glob('{}/{}{}/*'.format(lcDir, prefix, steps[0])))[0]
@@ -1101,6 +1104,12 @@ def findDuplicates(lcDir, steps, lcSuffix, outDir, mode='particles',
         outfile.create_dataset('y_step{}'.format(steps[1]), data = np.array([]))
         outfile.create_dataset('z_step{}'.format(steps[0]), data = np.array([]))
         outfile.create_dataset('z_step{}'.format(steps[1]), data = np.array([]))
+        outfile.create_dataset('vx_step{}'.format(steps[0]), data = np.array([]))
+        outfile.create_dataset('vx_step{}'.format(steps[1]), data = np.array([]))
+        outfile.create_dataset('vy_step{}'.format(steps[0]), data = np.array([]))
+        outfile.create_dataset('vy_step{}'.format(steps[1]), data = np.array([]))
+        outfile.create_dataset('vz_step{}'.format(steps[0]), data = np.array([]))
+        outfile.create_dataset('vz_step{}'.format(steps[1]), data = np.array([]))
         outfile.create_dataset('a_step{}'.format(steps[0]), data = np.array([]))
         outfile.create_dataset('a_step{}'.format(steps[1]), data = np.array([]))
         return
@@ -1128,17 +1137,32 @@ def findDuplicates(lcDir, steps, lcSuffix, outDir, mode='particles',
         
         # open merger tree files to do matchup
         if(mergerTreeSubdirs):
-            mt_file1 = sorted(glob.glob('{}/STEP{}/*'.format(mergerTreeDir, steps[1])))[0]
-            mt_file2 = sorted(glob.glob('{}/STEP{}/*'.format(mergerTreeDir, steps[2])))[0]
+            if(solverMode == 'backward'):
+                mt_file1 = sorted(glob.glob('{}/STEP{}/*'.format(mergerTreeDir, steps[1])))[0]
+                mt_file2 = sorted(glob.glob('{}/STEP{}/*'.format(mergerTreeDir, steps[2])))[0]
+            else:    
+                mt_file1 = sorted(glob.glob('{}/STEP{}/*'.format(mergerTreeDir, steps[0])))[0]
+                mt_file2 = sorted(glob.glob('{}/STEP{}/*'.format(mergerTreeDir, steps[1])))[0]
         else:
-            mt_file1 = sorted(glob.glob('{}/*.{}.*'.format(mergerTreeDir, steps[1])))[0]
-            mt_file2 = sorted(glob.glob('{}/*.{}.*'.format(mergerTreeDir, steps[2])))[0]
+            if(solverMode == 'backward'):
+                mt_file1 = sorted(glob.glob('{}/*.{}.*'.format(mergerTreeDir, steps[1])))[0]
+                mt_file2 = sorted(glob.glob('{}/*.{}.*'.format(mergerTreeDir, steps[2])))[0]
+            else:
+                mt_file1 = sorted(glob.glob('{}/*.{}.*'.format(mergerTreeDir, steps[0])))[0]
+                mt_file2 = sorted(glob.glob('{}/*.{}.*'.format(mergerTreeDir, steps[1])))[0]
 
+        
         mt_ids1 = np.squeeze(gio.gio_read(mt_file1, 'fof_halo_tag'))
         mt_desc_indices1 = np.squeeze(gio.gio_read(mt_file1, 'desc_node_index'))
         mt_tree_indices2 = np.squeeze(gio.gio_read(mt_file2, 'tree_node_index'))
         mt_ids2 = np.squeeze(gio.gio_read(mt_file2, 'fof_halo_tag'))
-        
+        if(solverMode == 'forward'):
+            # if we ran the halos forward, then we must have been extrapolating, 
+            # in which case we must have been using an fof catalog as input, so let's
+            # mask the merger tree tags to recover the fof tags there
+            mt_ids1 = (np.sign(mt_ids1)) * mt_ids1 & 0xffffffffffff
+            mt_ids2 = (np.sign(mt_ids2)) * mt_ids2 & 0xffffffffffff
+
         # find location of each lightcone object in earlier step in merger tree
         lc1_to_mt1 = search_sorted(mt_ids1, ids1)
         if(np.sum(lc1_to_mt1==-1) != 0): 
@@ -1226,19 +1250,25 @@ def findDuplicates(lcDir, steps, lcSuffix, outDir, mode='particles',
     print('found {} duplicates'.format(np.sum(matchesMask2)))
     
     # get data for all duplicate objects
-    dup_ids1 = ids1[matchesMask1]
     repl1 = repl1[matchesMask1]
     x1 = np.squeeze(gio.gio_read(file1, 'x')[boxMask1][matchesMask1])
     y1 = np.squeeze(gio.gio_read(file1, 'y')[boxMask1][matchesMask1])
     z1 = np.squeeze(gio.gio_read(file1, 'z')[boxMask1][matchesMask1])
+    vx1 = np.squeeze(gio.gio_read(file1, 'vx')[boxMask1][matchesMask1])
+    vy1 = np.squeeze(gio.gio_read(file1, 'vy')[boxMask1][matchesMask1])
+    vz1 = np.squeeze(gio.gio_read(file1, 'vz')[boxMask1][matchesMask1])
     a1 = np.squeeze(gio.gio_read(file1, 'a')[boxMask1][matchesMask1])
+    dup_ids1 = np.squeeze(gio.gio_read(file1, 'id')[boxMask1][matchesMask1])
     
-    dup_ids2 = ids2[matchesMask2]
     repl2 = repl2[matchesMask2]
     x2 = np.squeeze(gio.gio_read(file2, 'x')[boxMask2][matchesMask2])
     y2 = np.squeeze(gio.gio_read(file2, 'y')[boxMask2][matchesMask2])
     z2 = np.squeeze(gio.gio_read(file2, 'z')[boxMask2][matchesMask2])
+    vx2 = np.squeeze(gio.gio_read(file2, 'vx')[boxMask2][matchesMask2])
+    vy2 = np.squeeze(gio.gio_read(file2, 'vy')[boxMask2][matchesMask2])
+    vz2 = np.squeeze(gio.gio_read(file2, 'vz')[boxMask2][matchesMask2])
     a2 = np.squeeze(gio.gio_read(file2, 'a')[boxMask2][matchesMask2])
+    dup_ids2 = np.squeeze(gio.gio_read(file2, 'id')[boxMask2][matchesMask2])
 
     if( np.sum(abs(dup_ids1 - dup_ids2)) != 0 and np.sum(abs(repl1 - repl2)) != 0 ): 
         raise Exception('non-duplicates marked as duplicates')
@@ -1260,6 +1290,12 @@ def findDuplicates(lcDir, steps, lcSuffix, outDir, mode='particles',
     outfile.create_dataset('y_step{}'.format(steps[1]), data = y2)
     outfile.create_dataset('z_step{}'.format(steps[0]), data = z1)
     outfile.create_dataset('z_step{}'.format(steps[1]), data = z2)
+    outfile.create_dataset('vx_step{}'.format(steps[0]), data = vx1)
+    outfile.create_dataset('vx_step{}'.format(steps[1]), data = vx2)
+    outfile.create_dataset('vy_step{}'.format(steps[0]), data = vy1)
+    outfile.create_dataset('vy_step{}'.format(steps[1]), data = vy2)
+    outfile.create_dataset('vz_step{}'.format(steps[0]), data = vz1)
+    outfile.create_dataset('vz_step{}'.format(steps[1]), data = vz2)
     outfile.create_dataset('a_step{}'.format(steps[0]), data = a1)
     outfile.create_dataset('a_step{}'.format(steps[1]), data = a2)
 
@@ -1589,7 +1625,7 @@ def compareReps(lcDir1, lcDir2, step, skyArea='octant', plotMode='show', outDir=
 #############################################################################################
 
 
-def comvDist_vs_z(lcDirs, steps, lcNames=['second order corrections w/ weighting', 'uncorrected'], 
+def comvDist_vs_z(lcDirs, steps, lcNames=['uncorrected', 'second order corrections w/ weighting'], 
                   twoPanel=True, cosmology='alphaQ', plotMode='show', outDir='.'):
     '''
     This function computes and plots the error in the comoving-distance 
@@ -1693,6 +1729,7 @@ def comvDist_vs_z(lcDirs, steps, lcNames=['second order corrections w/ weighting
             y = gio.gio_read(lc, 'y')
             z = gio.gio_read(lc, 'z')
             a = gio.gio_read(lc, 'a')
+            
             mask = np.random.choice(np.arange(len(x)),10000)
             mask = mask[np.argsort(np.ndarray.flatten(a[mask]))]
             mask = np.ndarray.flatten(mask)
@@ -1711,6 +1748,7 @@ def comvDist_vs_z(lcDirs, steps, lcNames=['second order corrections w/ weighting
         # plot comv dist vs scale factor
         if(twoPanel):
             ax1.plot(a_all[n], r_all[n], color=colors[2*n], lw=1, label=lcNames[n])
+            
             # plot the truth only once, even though it had to be computed for each 
             # lightcone output 
             if(n == 0):
@@ -1738,3 +1776,358 @@ def comvDist_vs_z(lcDirs, steps, lcNames=['second order corrections w/ weighting
         plt.show()
     else:
         f.savefig('{}/lc_comvDist_v_redshift_{}-{}'.format(outDir, steps[0], steps[-1]))
+
+
+#############################################################################################
+#############################################################################################
+
+
+def N_z(lcDirs, steps, lcNames=['interpolated + solver improvements', 'uncorrected'], 
+        plotMode='show', outDir='.'):
+    '''
+    This function computes and plots the redshift distribution of at least one set of 
+    lightcone output.
+
+    Params:
+    :param steps: A list of steps to include in the generated plot
+    :param lcDirs: A list of directories containing lightcone output. 
+                   It is assumed that these directories follow the 
+                   naming and structure convention given in fig 6 of 
+                   the Creating Lightcones in HACC notes (with one 
+                   subdirectory per snapshot). 
+    :param lcNames: A list of strings to represent the lightcone outputs
+                   given in lcDirs. This is for plotting comparisons, 
+                   to fill in the legend labels. The length of this array 
+                   should of course match that of lcDirs
+    :param plotMode: The plotting mode. Options are 'show' or 'save'. If 'show', the
+                     figures will be opened upon function completion. If 'save', they
+                     will be saved as .png files to the current directory, unless otherwise
+                     specified in the 'outDir' arg
+    :param outDir: where to save figures, if plotMode == 'save'
+    :return: None
+    '''
+    if plotMode not in ['show', 'save']:
+        raise Exception('Unknown plotMode {}. Options are \'show\' or \'save\'.'.format(plotMode))
+    
+    # do these imports here, since there are other functions in this file that
+    # are intended to run on systems where gio may not be available
+    import genericio as gio
+
+    # get lc subdirectory prefix of each input lightcone
+    # (prefix could be 'lc' or 'lcGals', etc.). 
+    prefix = ['']*len(lcDirs)
+    for j in range(len(prefix)):
+        subdirs = glob.glob('{}/*'.format(lcDirs[j]))
+        for i in range(len(subdirs[0].split('/')[-1])):
+            try:
+                (int(subdirs[0].split('/')[-1][i]))
+                prefix[j] = subdirs[0].split('/')[-1][0:i]
+                break
+            except ValueError:
+                continue
+    
+    # get step redshifts
+    a = np.linspace(1./(200.+1.), 1., 500)
+    z = 1./a-1.
+    zs = z[steps]
+    bins = np.linspace(min(zs), max(zs), 100)
+    
+    # set up plotting
+    config(cmap=plt.cm.plasma, numColors=4)
+    colors = plt.rcParams['axes.prop_cycle'].by_key()['color']
+    f = plt.figure(plt.gcf().number+1)
+    
+    ax2 = f.add_subplot(111)
+    ax2.set_title('z = 0 -> {:.2f}'.format(max(zs)))
+
+    # define arrays to be plotted after looping through all step data.
+    # these will end up being arrays of array objects (NOT multidimensional
+    # arrays, as the different lc outputs given by lcDirs probably have
+    # different particle/object counts)
+    a_all = [np.array([])]*len(lcDirs)
+
+    # start looping through arrays
+    for n in range(len(lcDirs)):
+        lcDir = lcDirs[n]
+        print('working on lc at {}'.format(lcDir))
+        
+        for step in steps:
+            print('working on step {}'.format(step))
+            
+            # sort all files in this directory to get the gio header file
+            lc = sorted(glob.glob('{0}/{1}{2}/*'.format(lcDir, prefix[n], step)))[0]
+            
+            # read and subsample
+            a = gio.gio_read(lc, 'a')
+            a_all[n] = np.hstack([a_all[n], np.squeeze(a)])
+    
+        # plot N(z)
+        ax2.hist( (1/a_all[n]) - 1, bins=bins, color=colors[n*2], lw=1.3, alpha=0.8, 
+                 label=lcNames[n], histtype='step')
+        ax2.set_yscale('log', nonposy='clip')
+        ax2.set_xlabel('z', fontsize=16)
+        ax2.set_ylabel('N(z)', fontsize=16)
+
+    ax2.legend(loc="upper left")
+    ax2.grid(True)
+    
+    if(plotMode == 'show'):
+        plt.show()
+    else:
+        f.savefig('{}/N(z)_{}-{}'.format(outDir, steps[0], steps[-1]))
+
+
+#############################################################################################
+#############################################################################################
+
+
+def find_pairwise_separation(lcDir, lcName, saveDest, steps, fofDir, fofSubdirs=True, 
+                             solverMode='forward', cosmology = 'alphaQ'):
+    '''
+    This function computes the pairwise distance - pairwise mass difference 
+    phase space of all halo pairs in a lightcone output set. This is intended 
+    to be run to check for duplicates in halo lightcones, as erroneous halo duplicates 
+    should appear as an anomalous population in this distribution, with very small separation
+    in spatial and mass space.
+
+    Params:
+    :param lcDir: A directory containing lightcone output. 
+                  It is assumed that this directory follows the 
+                  naming and structure convention given in fig 6 of 
+                  the Creating Lightcones in HACC notes (with one 
+                  subdirectory per snapshot).
+    :param lcName: the suffix to use to identify the output file names
+    :param saveDest: where to save the output numpy files
+    :param steps: A list of steps to include in the halo pairing. Should include
+                  at least two steps, since duplicate objects appear across lightcone
+                  snapshot runs.
+    :param fofDir: path to top-level directory of fof snapshot data from the simulation 
+                   that was used to generate the data at lcDir.
+    :param fofSubdirs: If true, assume that the snapshot data is grouped into
+                       subdirectories of the format "STEPXXX". Otherwise, 
+                       assume one flat directory with the the step number
+                       "XXX" in the filenames somewhere, as "*.XXX.*" where
+                       * is a wildcard
+    :param solverMode: Wether the lightcone solver used to generate the output under 
+                       validation was run in the standard forward mode (solverMode = 
+                       'forward'), or the reversed mode, with extrapolation/interpolation
+                       occuring backward in time (solverMode = 'backward').
+    :param cosmology: simulation cosmology to use to compute NFW profiles (to get radii 
+                      from masses)
+    :return: None
+    '''
+
+    if solverMode not in ['forward', 'backward']:
+        raise Exception('Unknown solver mode {}. Options are \'forward\' or \'backward\'.'.format(solverMode))
+    
+    steps = sorted(steps)
+
+    # do these imports here, since there are other functions in this file that
+    # are intended to run on systems where gio may not be available
+    import genericio as gio
+    from halotools.empirical_models import NFWProfile
+    
+    # define cosmology
+    if(cosmology=='alphaQ'):
+        cosmo = FlatLambdaCDM(H0=71, Om0=0.26479, Ob0=0.044792699861138666, Tcmb0 = 0, Neff = 0)
+    else:
+        raise Exception('Unknown cosmology, {}. Available is: alphaQ'.format(cosmology))
+
+    # get lc subdirectory prefix of the input halo lightcone
+    # (prefix could be 'lc' or 'lcGals', etc.). 
+    prefix = ''
+    subdirs = glob.glob('{}/*'.format(lcDir))
+    for i in range(len(subdirs[0].split('/')[-1])):
+        try:
+            (int(subdirs[0].split('/')[-1][i]))
+            prefix = subdirs[0].split('/')[-1][0:i]
+            break
+        except ValueError:
+            continue
+     
+    # start calculation
+    print('working on lc at {}'.format(lcDir))
+    
+    x_all = np.array([])
+    z_all = np.array([])
+    y_all = np.array([])
+    ids_all = np.array([])
+    mass_all = np.array([])
+    r200_all = np.array([])
+    
+    for j in range(len(steps)):
+
+        step = steps[j]
+        print('working on step {}'.format(step))
+        if(step == 499): continue
+        
+        # sort all files in this directory to get the gio header file
+        lc = sorted(glob.glob('{0}/{1}{2}/*'.format(lcDir, prefix, step)))[0]
+        
+        # read and subsample
+        print('reading and subsampling')
+        x = gio.gio_read(lc, 'x')
+        y = gio.gio_read(lc, 'y')
+        z = gio.gio_read(lc, 'z')
+        a = gio.gio_read(lc, 'a')
+        ids = gio.gio_read(lc, 'id')
+     
+        # Plot only duplicated halos
+        dupl_file = h5.File('/home/hollowed/lc_halos_validation/duplData/duplicates_{}_{}.hdf5'.format(lcName, steps[0])) 
+        subsamp = np.in1d(ids, dupl_file['id_step{}'.format(step)][:])
+        ordering = search_sorted(np.squeeze(dupl_file['id_step{}'.format(step)][:]), np.squeeze(ids[subsamp]))
+        mmask = np.squeeze(gio.gio_read(lc, 'replication')[subsamp]) != np.squeeze(dupl_file['replication_step{}'.format(step)][:][ordering])
+
+        #subsamp = np.random.choice(np.arange(len(x), dtype=int),
+        #                           int(len(x)*0.001), replace=False)
+
+        #x_all = np.hstack([x_all, np.squeeze(x[subsamp])])
+        #y_all = np.hstack([y_all, np.squeeze(y[subsamp])])
+        #z_all = np.hstack([z_all, np.squeeze(z[subsamp])])
+        x_all = np.hstack([x_all, np.squeeze(x[subsamp])[mmask]])
+        y_all = np.hstack([y_all, np.squeeze(y[subsamp])[mmask]])
+        z_all = np.hstack([z_all, np.squeeze(z[subsamp])[mmask]])
+        ids_all = np.hstack([ids_all, np.squeeze(ids[subsamp])[mmask]])
+
+        # read tags from lc and fof catalog
+        print('matching to fof catalog')
+        if(fofSubdirs):
+            if(solverMode == 'backward'):
+                fof = sorted(glob.glob('{}/STEP{}/*fofproperties'.format(fofDir, steps[j+1])))[0]
+            else:
+                fof = sorted(glob.glob('{}/STEP{}/*fofproperties'.format(fofDir, step)))[0]
+        else:
+            if(solverMode == 'backward'):
+                fof = sorted(glob.glob('{}/*.{}*fofproperties'.format(fofDir, steps[j+1])))[0]
+            else:
+                fof = sorted(glob.glob('{}/*.{}*fofproperties'.format(fofDir, step)))[0]
+        
+        fof_tags = np.squeeze(gio.gio_read(fof, 'fof_halo_tag'))
+        #lc_tags = np.squeeze(gio.gio_read(lc, 'id'))[subsamp]
+        lc_tags = np.squeeze(gio.gio_read(lc, 'id')[subsamp])[mmask]
+        
+        # mask lightcone fof tags to get rid of fragment signs and bits (has no effect 
+        # for lightcones that already output standard fof tags)
+        lc_tags = (np.sign(lc_tags) * lc_tags) & 0xffffffffffff
+        
+        # match to fof catalog and get masses
+        lc_to_fof = search_sorted(fof_tags, lc_tags)
+        if(np.sum(lc_to_fof == -1) != 0): 
+            raise Exception('output in lightcone file {} not found in fof catalog, '\
+                            'maybe passed the wrong files?'.format(lcDir))
+        
+        fof_mass = np.squeeze(gio.gio_read(fof, 'fof_halo_mass'))[lc_to_fof]
+        mass_all = np.hstack([mass_all, fof_mass])
+
+        # make nfw profile obj and find radii
+        print('computing halo radii\n')
+        nfw = NFWProfile(cosmology = cosmo, mdef = '200c')
+        r200_all = np.hstack([r200_all, np.squeeze(nfw.halo_mass_to_halo_radius(fof_mass))])
+
+    print('Done gathering data from all steps. \nFinding separations in space and mass, and'\
+           ' maximum pair masses and radii\n\n')
+    # find pariwise separations
+    x_all = x_all[np.newaxis]
+    y_all = y_all[np.newaxis]
+    z_all = z_all[np.newaxis]
+    mass_all = mass_all[np.newaxis]
+    r200_all = r200_all[np.newaxis]
+    xdiff = abs(x_all.T - x_all)
+    ydiff = abs(y_all.T - y_all)
+    zdiff = abs(z_all.T - z_all)
+    
+    # find pairwise mass difference
+    massDiff = abs(mass_all.T - mass_all)
+
+    # find mean radius and mass of each pair
+    r200Mean = (r200_all.T + r200_all) / 2
+    massMean = (mass_all.T + mass_all) / 2
+
+    # take only upper traingle of above matrices to avoid double counting pairs
+    # set the triangle offset to 1 ('k' arg) to remove the diagonal as well, which
+    # will be pairs of identical halos
+    triangleMask = np.triu_indices(np.shape(xdiff)[0], k=1)
+    xdiff = xdiff[triangleMask]
+    ydiff = ydiff[triangleMask]
+    zdiff = zdiff[triangleMask]
+    massDiff_all = massDiff[triangleMask]
+    r200Mean_all = r200Mean[triangleMask]
+    massMean_all = massMean[triangleMask]
+
+    # get separation magnitude
+    posDiff_all = np.sqrt(xdiff**2 + ydiff**2 + zdiff**2)
+   
+    pdb.set_trace()
+
+    # done! save results to files
+    print('Done. Saving to files at {}'.format(saveDest))
+    np.save('{}/halo_pairMaxRadii_{}.npy'.format(saveDest, lcName), r200Mean_all)
+    np.save('{}/halo_sep_{}.npy'.format(saveDest, lcName), posDiff_all)
+    np.save('{}/halo_pairMaxMass_{}.npy'.format(saveDest, lcName), massMean_all)
+    np.save('{}/halo_mass_diff_{}.npy'.format(saveDest, lcName), massDiff_all)
+    
+        
+#############################################################################################
+#############################################################################################
+
+
+def plot_pairwise_separation(loadDest, lcName, steps, plotMode='save', outDir='.'):
+    '''
+    This function plots the pairwise distance - pairwise mass difference 
+    phase space of all halo pairs in at least one lightcone output set. This is intended 
+    to be run to check for duplicates in halo lightcones, as erroneous halo duplicates 
+    should appear as an anomalous population in this distribution, with very small separation
+    in spatial and mass space.
+
+    Params:
+    :param loadDest: where to load the numpy files output from find_pairwise_separation()
+    :param lcName: the file name suffix that was used to save the data to be plotted, from a 
+                   corresponding run of find_pairwise_separation()
+    :param steps: A list of steps that were used in creating the data output by a corresponding 
+                  run of find_pairwise_separation() 
+    :param lcNames: A list of strings to represent the lightcone outputs given in lcDirs in 
+                    a corresponding run of find_pairwise_separation. 
+    :param plotMode: The plotting mode. Options are 'show' or 'save'. If 'show', the
+                     figures will be opened upon function completion. If 'save', they
+                     will be saved as .png files to the current directory, unless otherwise
+                     specified in the 'outDir' arg
+    :param outDir: where to save figures, if plotMode == 'save'
+    :return: None
+    '''
+    
+    # load data
+    print('loading output of find_pairwise_separation at {}'.format(loadDest))
+    posDiff_all = np.load('{}/halo_sep_{}.npy'.format(loadDest, lcName))
+    r200Mean_all = np.load('{}/halo_pairMaxRadii_{}.npy'.format(loadDest, lcName))
+    massDiff_all = np.load('{}/halo_mass_diff_{}.npy'.format(loadDest, lcName))
+    massMean_all = np.load('{}/halo_pairMaxMass_{}.npy'.format(loadDest, lcName))
+
+    # calculate quantities to bin (we want deltaM/M vs log10(1 + d/r200) )
+    xData = massDiff_all / massMean_all
+    yData = np.log10(1 + (posDiff_all) / r200Mean_all )
+    
+    # get step redshifts
+    a = np.linspace(1./(200.+1.), 1., 500)
+    z = 1./a-1.
+    zs = z[steps]
+    
+    # set up plotting
+    f = plt.figure(plt.gcf().number+1)
+    
+    ax = f.add_subplot(111)
+    ax.set_title('z = 0 -> {:.2f} ({})'.format(max(zs), lcName))
+    ax.set_xlabel('dM/M', fontsize=14)
+    ax.set_ylabel('log10(1 + d/r200)', fontsize=14)
+ 
+    # plot the pairwise phase space distribution
+    hist = ax.hist2d(xData, yData, bins=200, cmap = plt.cm.plasma, norm=LogNorm())
+
+    ax.grid()
+    plt.colorbar(hist[3], ax=ax)
+
+    if(plotMode == 'show'):
+        plt.show()
+    else:
+        f.savefig('{}/pairwiseSep_{}-{}'.format(outDir, steps[0], steps[-1]))
+
+
