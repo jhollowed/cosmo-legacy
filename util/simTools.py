@@ -4,8 +4,7 @@ COSMO-HEP 2017
 
 Providing a set of tools for quick cosmological calculations
 '''
-
-
+import pdb
 import numpy as np
 from astropy.cosmology import WMAP7
 
@@ -61,7 +60,7 @@ class StepZ:
     
     def get_step(self,z):
         a = 1./(z+1.)
-        return (a-self.a_in)/self.a_del
+        return np.ceil( (a-self.a_in)/self.a_del).astype(int)
 
     def get_a(self,step):
         return 1./(self.get_z(step)+1.)

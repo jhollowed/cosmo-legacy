@@ -127,6 +127,20 @@ def search_sorted(array, values, sorter=None):
     return start
 
 
+def unit_vector(vector):
+    '''
+    Normalizes an input vector.
+    '''
+    return vector / np.linalg.norm(vector)
+
+def angle_between(v1, v2):
+    '''
+    Returns the angle in radians between vectors 'v1' and 'v2'
+    '''
+    v1_u = unit_vector(v1)
+    v2_u = unit_vector(v2)
+    return np.arccos(np.clip(np.dot(v1_u, v2_u), -1.0, 1.0))
+
 #############################################################################################
 
 
@@ -2131,3 +2145,171 @@ def plot_pairwise_separation(loadDest, lcName, steps, plotMode='save', outDir='.
         f.savefig('{}/pairwiseSep_{}-{}'.format(outDir, steps[0], steps[-1]))
 
 
+#############################################################################################
+#############################################################################################
+
+
+def inspect_velocity_smoothing(lcDir, snapshotDir, steps, saveDest, lcName='out', sfrac=1.0):
+    '''
+    This function computes and saves the velocity difference of each object in a 
+    lightcone output catalog, with repect to it's matching object in the simulation 
+    snapshot data. This test is intended to check for the severity of velocity
+    smoothing in the lightcone code (since we what is output from the interpolated
+    lightcone routine is approximated linear velocities). The result is written out
+    to numpy files.
+
+    Params:
+    :param lcDir: top-level directory of a lightcone output catalog, containing per
+                  step subdirectories, as given in Fig.7 of the Creating Lightcone in 
+                  HACC document
+    :param snapshotDir: top-level directory of simulation snapshot outputs, assumed to
+                        contain per-step subdirectories in the form of 'STEPXXX'
+    :param steps: A list of output steps to include in the analysis
+    :param sfrac: the lightcone object subsampling fraction
+    :param lcName: the suffix to use to identify the output file names
+    :param saveDest: where to save the output numpy files
+    :return: None
+    '''
+
+    # do these imports here, since there are other functions in this file that
+    # are intended to run on systems where gio may not be available
+    import genericio as gio
+    from halotools.empirical_models import NFWProfile
+    
+    steps = sorted(steps)
+
+    # get lc subdirectory prefix of the input halo lightcone
+    # (prefix could be 'lc' or 'lcGals', etc.). 
+    prefix = ''
+    subdirs = glob.glob('{}/*'.format(lcDir))
+    for i in range(len(subdirs[0].split('/')[-1])):
+        try:
+            (int(subdirs[0].split('/')[-1][i]))
+            prefix = subdirs[0].split('/')[-1][0:i]
+            break
+        except ValueError:
+            continue
+     
+    # start calculation
+    print('working on lc at {}'.format(lcDir))
+    
+    vx_all = np.array([])
+    vz_all = np.array([])
+    vy_all = np.array([])
+    ids_all = np.array([])
+    
+    for j in range(len(steps)):
+
+        step = steps[j]
+        print('working on step {}'.format(step))
+        if(step == 499): continue
+        
+        # sort all files in this directory to get the gio header file
+        lc = sorted(glob.glob('{0}/{1}{2}/*'.format(lcDir, prefix, step)))[0]
+        
+        # read lc and subsample
+        print('reading and subsampling')
+        vx = np.squeeze(gio.gio_read(lc, 'vx'))
+        vy = np.squeeze(gio.gio_read(lc, 'vy'))
+        vz = np.squeeze(gio.gio_read(lc, 'vz'))
+        ids = np.squeeze(gio.gio_read(lc, 'id'))
+     
+        subsamp = np.random.choice(np.arange(len(vx), dtype=int),
+                                   int(len(vx)*sfrac), replace=False)
+
+        vx_all = np.hstack([vx_all, vx[subsamp]])
+        vy_all = np.hstack([vy_all, vy[subsamp]])
+        vz_all = np.hstack([vz_all, vz[subsamp]])
+        ids_all = np.hstack([ids_all, ids[subsamp]])
+
+        # read from snapshot catalog
+        print('matching to snapshots')
+        snapshot = sorted(glob.glob('{}/STEP{}/*'.format(snapshotDir, step)))[0]
+        
+        snapshot_ids = np.squeeze(gio.gio_read(snapshot, 'id'))
+        
+        # match lc to snapshots and get corresponding velocities
+        lc_to_snapshot = search_sorted(snapshot_ids, ids[subsamp])
+        
+        if(np.sum(lc_to_snapshot == -1) != 0): 
+            raise Exception('output in lightcone file {} not found in snapshot, '\
+                            'maybe passed the wrong files?'.format(lcDir))
+        
+        snapshot_vx = np.squeeze(gio.gio_read(snapshot, 'vx'))[lc_to_snapshot]
+        snapshot_vy = np.squeeze(gio.gio_read(snapshot, 'vy'))[lc_to_snapshot]
+        snapshot_vz = np.squeeze(gio.gio_read(snapshot, 'vz'))[lc_to_snapshot]
+
+    print('Done gathering data from all steps')
+    print('Finding separations in velocity magnitude and direction\n')
+    
+    # find velocity mag and direction separations
+    v_diff = (np.sqrt(vx**2 + vy**2 + vz**2) -  
+              np.sqrt(snapshot_vx**2 + snapshot_vy**2 + snapshot_vz**2))
+    v_ang = np.array([angle_between([vx[i], vy[i], vz[i]], 
+                                     [snapshot_vx[i], snapshot_vy[i], snapshot_vz[i]]) 
+                       for i in range(len(vx))])
+                       
+    # done! save results to files
+    print('Done. Saving to files at {}'.format(saveDest))
+    np.save('{}/lc_v_mag_diff_{}.npy'.format(saveDest, lcName), v_diff)
+    np.save('{}/lc_v_ang_diff_{}.npy'.format(saveDest, lcName), v_ang)
+
+
+#############################################################################################
+#############################################################################################
+
+
+def plot_velocity_smoothing(loadDest, steps, plotMode='show', outDir='.', absVals=False, 
+                            lcName='out'):
+    '''
+    This function plots the output of inspect_velocity_smoothing() as a 2d histogram, 
+    with one dimension being the velocity megnitude separation of all lightcone objects,
+    and the other being the velocity direction angualr separation. 
+
+    :param loadDest: Directory containing data output from inspect_velocity_smoothing
+    :param steps: a list of lightcone steps that were included in a corresponding run of 
+                  inspect_velocity_smoothing()
+    :param plotMode: The plotting mode. Options are 'show' or 'save'. If 'show', the
+                     figures will be opened upon function completion. If 'save', they
+                     will be saved as .png files to the current directory, unless otherwise
+                     specified in the 'outDir' arg
+    :param outDir: where to save figures, if plotMode == 'save'
+    :param absVals: whether or not to plot the absolute value of the velocity differences
+    :param lcName: The identifying name at the end of the file naems output by
+                   a corresponding run of inspect_velocity_smoothing()
+    '''
+    # load data
+    print('loading output of inspect_velocity_smoothing() at {}'.format(loadDest))
+    vMag_diff = np.load('{}/lc_v_mag_diff_{}.npy'.format(loadDest, lcName))
+    vAng_diff = np.load('{}/lc_v_ang_diff_{}.npy'.format(loadDest, lcName))
+
+    # take absolute value fo quantites
+    if(absVals):
+        vMag_diff = np.abs(vMag_diff)
+        vAng_diff = np.abs(vAng_diff)
+    
+    # get step redshifts
+    a = np.linspace(1./(200.+1.), 1., 500)
+    z = 1./a-1.
+    zs = z[steps]
+    
+    # set up plotting
+    f = plt.figure(plt.gcf().number+1)
+    
+    ax = f.add_subplot(111)
+    ax.set_title('steps {} -> {}\nz = 0 -> {:.2f} ({})'.format(max(steps), min(steps), 
+                                                               max(zs), lcName))
+    ax.set_xlabel(r'$|v_{\mathrm{lc}}| - |v_{\mathrm{snapshot}}|$', fontsize=14)
+    ax.set_ylabel(r'$\mathrm{cos}^{-1}(\hat{v}_{\mathrm{lc}}\cdot\hat{v}_{\mathrm{snapshot}})$',
+                  fontsize=14)
+ 
+    # plot the phase space distribution
+    hist = ax.hist2d(vMag_diff, vAng_diff, bins=100, cmap = plt.cm.plasma, norm=LogNorm())
+
+    ax.grid()
+    plt.colorbar(hist[3], ax=ax)
+
+    if(plotMode == 'show'):
+        plt.show()
+    else:
+        f.savefig('{}/velocitySep_{}-{}'.format(outDir, max(steps), min(steps)))

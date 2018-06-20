@@ -22,7 +22,7 @@ def makePlot(outDir, downsFrac = 0.01):
 
     steps = [int(s.split('Cutout')[-1]) for s in subdirs]
     steps = sorted(steps)
-    dt = np.dtype('<f')
+    dt = np.dtype('>f')
     x = np.array([])
     y = np.array([])
     z = np.array([])
@@ -31,7 +31,9 @@ def makePlot(outDir, downsFrac = 0.01):
     phi = np.array([])
     thetaRot = np.array([])
     phiRot = np.array([])
+
     conv = (np.pi / 180)
+    arcsec = 3600
 
     f = plt.figure(0)
     ax1 = plt.subplot2grid((3,2), (0,0), colspan=2, rowspan=2, projection='3d')
@@ -47,8 +49,6 @@ def makePlot(outDir, downsFrac = 0.01):
         af = "{0}/{1}{2}/a.{2}.bin".format(outDir, prefix, step)
         tf = "{0}/{1}{2}/theta.{2}.bin".format(outDir, prefix, step)
         pf = "{0}/{1}{2}/phi.{2}.bin".format(outDir, prefix, step)
-        tRotf = "{0}/{1}{2}/thetaRot.{2}.bin".format(outDir, prefix, step)
-        pRotf = "{0}/{1}{2}/phiRot.{2}.bin".format(outDir, prefix, step) 
 
         if(len(np.fromfile(xf, dtype=dt)) == 0):
             continue
@@ -58,15 +58,22 @@ def makePlot(outDir, downsFrac = 0.01):
         y = np.hstack([y, np.fromfile(yf, dtype=dt)[downs]])
         z = np.hstack([z, np.fromfile(zf, dtype=dt)[downs]])
         a = np.hstack([a, np.fromfile(af, dtype=dt)[downs]])
-        theta = np.hstack([theta, np.fromfile(tf, dtype=dt)[downs]/3600])
-        phi = np.hstack([phi, np.fromfile(pf, dtype=dt)[downs]/3600])
-        thetaRot = np.hstack([thetaRot, np.fromfile(tRotf, dtype=dt)[downs]/3600])
-        phiRot = np.hstack([phiRot, np.fromfile(pRotf, dtype=dt)[downs]/3600])
+        thetaRot = np.hstack([thetaRot, np.fromfile(tf, dtype=dt)[downs] / arcsec])
+        phiRot = np.hstack([phiRot, np.fromfile(pf, dtype=dt)[downs] / arcsec])
 
+    # We only have the raw (unrotated) carteisan comoving positions, and the 
+    # cluster-centric (rotated) angular coordinates, so for the full plot, we need
+    # the rotated 3d positions, and the raw angular coordinates
+
+    # Get rotated positions
     r = np.sqrt(x**2 + y**2 + z**2)
     xRot = r*np.sin(thetaRot*conv)*np.cos(phiRot*conv)
     yRot = r*np.sin(thetaRot*conv)*np.sin(phiRot*conv)
     zRot = r*np.cos(thetaRot*conv)
+
+    # Get raw angular coords 
+    theta = np.hstack([theta, np.arccos(z/r) * 1/conv])
+    phi = np.hstack([phi, np.arctan(y/x) * 1/conv])
     
     thetaSpan = np.max(theta) - np.min(theta) 
     phiSpan = np.max(phi) - np.min(phi)
@@ -76,7 +83,9 @@ def makePlot(outDir, downsFrac = 0.01):
     s1 = ax1.scatter(x, y, z, c=((1/a)-1), s=2, cmap='plasma')
     ax1.scatter(xRot, yRot, zRot, c=((1/a)-1), s=2, cmap='plasma')
     f.colorbar(s1)
-    
+   
+    pdb.set_trace()
+
     ax2.scatter(phi, theta, c=((1/a)-1), s=1, cmap='plasma')
     ax3.scatter(phiRot, thetaRot, c=((1/a)-1), s=1, cmap='plasma')
     ax1.set_xlabel('x')

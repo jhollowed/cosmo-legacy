@@ -67,7 +67,7 @@ def comparisonTests(lcDir_interp, lcDir_extrap, snapshotDir, fofDir, figDir, dup
 
     allSteps = [401, 411, 421, 432, 442, 453, 464, 475, 487, 499]
     
-    if(1):
+    if(0):
         print('\n\n ==== Finding duplicates validation test =====')
         if(pmode == 'halos'):
             for k in range(len(allSteps)-2):
@@ -105,17 +105,18 @@ def comparisonTests(lcDir_interp, lcDir_extrap, snapshotDir, fofDir, figDir, dup
         print('\n\n ==== Compare Replications validation test =====')
         vt.compareReps(lcDir_interp, lcDir_extrap, step=442, plotMode=plotMode, outDir=figDir)
 
-        # ----------------------------------------------------------------------
-        
-        print('\n\n ==== Comv Dist vs z validation test =====')
-        vt.comvDist_vs_z([lcDir_extrap, lcDir_interp], steps=[487, 475, 464, 453, 442], plotMode=plotMode,
-                         outDir = figDir)
 
         # ----------------------------------------------------------------------
         print('\n\n ==== N(z) validation test =====')
         plotMode='show'
         vt.N_z([lcDir_interp, lcDir_extrap], steps=[487, 475, 464, 453, 442 , 432, 421, 411, 401], 
                          plotMode=plotMode, outDir = figDir)
+    
+    # ----------------------------------------------------------------------
+    
+    print('\n\n ==== Comv Dist vs z validation test =====')
+    vt.comvDist_vs_z([lcDir_extrap, lcDir_interp], steps=[487, 475, 464, 453, 442], plotMode=plotMode,
+                     outDir = figDir)
         
         # ----------------------------------------------------------------------
        
@@ -157,8 +158,10 @@ def allTests(lcDir_interp, lcDir_extrap, snapshotDir, figDir, trajectoryDataDir,
    
 def particles():
 
-    allTests(lcDir_interp='/projects/DarkUniverse_esp/jphollowed/outerRim/lightcone_downsampled_octant_new', 
-             lcDir_extrap='/projects/DarkUniverse_esp/jphollowed/outerRim/lightcone_downsampled_octant', 
+    #allTests(lcDir_interp='/projects/DarkUniverse_esp/jphollowed/outerRim/lightcone_downsampled_octant_new', 
+    #         lcDir_extrap='/projects/DarkUniverse_esp/jphollowed/outerRim/lightcone_downsampled_octant', 
+    allTests(lcDir_interp='/projects/DarkUniverse_esp/jphollowed/alphaQ/lightcone_full_octant', 
+             lcDir_extrap='/projects/DarkUniverse_esp/jphollowed/alphaQ/lightcone_downsampled_octant_extrap', 
              snapshotDir='/projects/DarkUniverse_esp/heitmann/OuterRim/M000/L360/HACC001/analysis/Particles', 
              figDir='/home/hollowed/lc_validation/', 
              trajectoryDataDir='/home/hollowed/lc_validation/trajData', 
@@ -166,7 +169,7 @@ def particles():
              duplicateDataDir='/home/hollowed/lc_validation/duplData' ,
              pmode='particles', 
              snapSubdirs=True, 
-             plotMode='save',
+             plotMode='show',
              smode='forward',
              cmap=None)
 
