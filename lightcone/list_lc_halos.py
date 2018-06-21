@@ -10,7 +10,7 @@ import numpy as np
 import genericio as gio
 import lc_interpolation_validation as iv
 
-def list_halos(lcDir, soDir, outDir, maxStep, minStep, massCut=1e14, numFiles=1):
+def list_halos(lcDir, soDir, outDir, maxStep, minStep, massCut=1e14, outFrac=0.01, numFiles=1):
 
     '''
     This function generates a list of halo identifiers, and positions, in a text 
@@ -46,6 +46,7 @@ def list_halos(lcDir, soDir, outDir, maxStep, minStep, massCut=1e14, numFiles=1)
     :param maxStep: The largest (lowest redshift) lightcone shell to read in
     :param minStep: The smallest (highest redshift) lightcone shell to read in
     :param massCut: The minimum halo mass to write out to the text files
+    :param outFrac: The fraction of the identified halos to actually output
     :param numFiles: How many text files to write. That is, if 30 halos are found in
                      the lightcone at lcDir, between minStep and maxStep, and numFiles=3,
                      then three text files will be written out, each containing 10 of the 
@@ -67,7 +68,7 @@ def list_halos(lcDir, soDir, outDir, maxStep, minStep, massCut=1e14, numFiles=1)
     write_z = np.array([])
 
     # loop over lightcone shells
-    for i in range(len(steps)):
+    for i in range(len(steps)-1):
         
         step = steps[i]
         if(step == 499): continue
@@ -133,9 +134,17 @@ def list_halos(lcDir, soDir, outDir, maxStep, minStep, massCut=1e14, numFiles=1)
         write_x = np.hstack([write_x, lc_x]) 
         write_y = np.hstack([write_y, lc_y]) 
         write_z = np.hstack([write_z, lc_z]) 
+    
+    # Do downsampling according to outFrac arg
+    print('\nDownsampling {0}% of {1} total halos'.format(outFrac*100, len(write_ids)))
+    dsampling = np.random.choice(np.arange(len(write_ids)), int(len(write_ids)*outFrac), replace=False)
+    write_ids = write_ids[dsampling]
+    write_x = write_x[dsampling]
+    write_y = write_y[dsampling]
+    write_z = write_z[dsampling]
 
     # Now do writing to text file(s)
-    print('\nDone, found {0} total halos to write across {1} text files'
+    print('\nDone, obtained {0} total halos to write across {1} text files'
           .format(len(write_ids), numFiles))
     write_masks = np.array_split(np.arange(len(write_ids)), numFiles)
     for j in range(numFiles):
@@ -154,7 +163,7 @@ def list_halos(lcDir, soDir, outDir, maxStep, minStep, massCut=1e14, numFiles=1)
 # =================================================================================================
 
 
-def list_alphaQ_halos(maxStep=487, minStep=247, massCut=1e14, numFiles=1):
+def list_alphaQ_halos(maxStep=487, minStep=247, massCut=1e14, outFrac=0.01, numFiles=1):
     
     '''
     This function runs list_halos with data paths predefined for AlphaQ.
@@ -164,4 +173,4 @@ def list_alphaQ_halos(maxStep=487, minStep=247, massCut=1e14, numFiles=1):
     list_halos(lcDir='/projects/DarkUniverse_esp/jphollowed/alphaQ/lightcone_halos',
                soDir='/projects/DarkUniverse_esp/heitmann/OuterRim/M000/L360/HACC001/analysis/Halos/M200',
                outDir='/home/hollowed/cutout_run_dirs/alphaQ/cutout_alphaQ_full',
-               maxStep=maxStep, minStep=minStep, massCut=massCut, numFiles=numFiles)
+               maxStep=maxStep, minStep=minStep, massCut=massCut, outFrac=outFrac, numFiles=numFiles)
