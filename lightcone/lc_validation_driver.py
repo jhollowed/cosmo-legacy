@@ -65,7 +65,9 @@ def comparisonTests(lcDir_interp, lcDir_extrap, snapshotDir, fofDir, figDir, dup
                     pmode, snapSubdirs, plotMode, smode, cmap):
 
 
-    allSteps = [401, 411, 421, 432, 442, 453, 464, 475, 487, 499]
+    #allSteps = [401, 411, 421, 432, 442, 453, 464, 475, 487, 499]
+    allSteps = [180, 184, 189, 198, 203, 208, 213, 219, 224]
+
     
     if(0):
         print('\n\n ==== Finding duplicates validation test =====')
@@ -99,23 +101,22 @@ def comparisonTests(lcDir_interp, lcDir_extrap, snapshotDir, fofDir, figDir, dup
         vt.compareDuplicates(duplicateDataDir, steps=allSteps, 
                              lcSuffix=['interp', 'extrap'],
                              plotMode=plotMode, outDir=figDir)
-            
-        # ----------------------------------------------------------------------
-        
-        print('\n\n ==== Compare Replications validation test =====')
-        vt.compareReps(lcDir_interp, lcDir_extrap, step=442, plotMode=plotMode, outDir=figDir)
-
 
         # ----------------------------------------------------------------------
         print('\n\n ==== N(z) validation test =====')
         plotMode='show'
-        vt.N_z([lcDir_interp, lcDir_extrap], steps=[487, 475, 464, 453, 442 , 432, 421, 411, 401], 
+        vt.N_z([lcDir_interp], steps=allSteps[::-1], 
                          plotMode=plotMode, outDir = figDir)
+        
+    # ----------------------------------------------------------------------
     
+    print('\n\n ==== Compare Replications validation test =====')
+    vt.compareReps(lcDir_interp, lcDir_extrap, step=213, plotMode=plotMode, outDir=figDir)
+
     # ----------------------------------------------------------------------
     
     print('\n\n ==== Comv Dist vs z validation test =====')
-    vt.comvDist_vs_z([lcDir_extrap, lcDir_interp], steps=[487, 475, 464, 453, 442], plotMode=plotMode,
+    vt.comvDist_vs_z([lcDir_extrap], steps=allSteps[::-1], plotMode=plotMode,
                      outDir = figDir)
         
         # ----------------------------------------------------------------------

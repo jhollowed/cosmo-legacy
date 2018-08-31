@@ -66,6 +66,7 @@ def list_halos(lcDir, soDir, outDir, maxStep, minStep, massCut=1e14, outFrac=0.0
     write_x = np.array([])
     write_y = np.array([])
     write_z = np.array([])
+    total=0
 
     # loop over lightcone shells
     for i in range(len(steps)-1):
@@ -90,15 +91,15 @@ def list_halos(lcDir, soDir, outDir, maxStep, minStep, massCut=1e14, outFrac=0.0
         #sod_file = '{1}/STEP{0}/m000-{0}.sodproperties'.format(step, soDir)
         #sod_file = '{1}/b0168/STEP{0}/m000-{0}.fofproperties'.format(step, soDir.split('/M200')[0])
 
-        # matching issues... lets just use these fo masses for now
+        # matching issues... lets just use these fof masses for now
 
-        sod_file = '/projects/SkySurvey/rangel/lc_test_data/b0168/STEP{0}/m000-{0}.fofproperties'.format(steps[i+1])
+        sod_file = '/projects/SkySurvey/rangel/OR/analysis/MergerTrees/HaloCatalog/03_31_2018.OR.{}.fofproperties'.format(steps[i+1])
         sod_tags = np.squeeze(gio.gio_read(sod_file, 'fof_halo_tag'))
         #sod_mass = np.squeeze(gio.gio_read(sod_file, 'sod_halo_mass'))
         sod_mass = np.squeeze(gio.gio_read(sod_file, 'fof_halo_mass'))
 
         # Now we match to get the halo masses, with the matching done in the
-        # folloing order:
+        # following order:
         # lc masked fof_halo_tag > sod fof_halo_tag
         # sod fof_halo_tag > sod_halo_mass
 
@@ -130,11 +131,15 @@ def list_halos(lcDir, soDir, outDir, maxStep, minStep, massCut=1e14, outFrac=0.0
         print('Found {0} halos ({1:.5f}% of all) above mass cut of {2}'
               .format(np.sum(mass_mask), (np.sum(mass_mask)/float(len(mass_mask)))*100, massCut))
         print('Appending halo data to write-out arrays')
+        total += np.sum(mass_mask)
+        print('TOTAL: {}'.format(total))
+        continue
         write_ids = np.hstack([write_ids, lc_ids]) 
         write_x = np.hstack([write_x, lc_x]) 
         write_y = np.hstack([write_y, lc_y]) 
         write_z = np.hstack([write_z, lc_z]) 
-    
+   
+    return 
     # Do downsampling according to outFrac arg
     print('\nDownsampling {0}% of {1} total halos'.format(outFrac*100, len(write_ids)))
     dsampling = np.random.choice(np.arange(len(write_ids)), int(len(write_ids)*outFrac), replace=False)
@@ -163,7 +168,7 @@ def list_halos(lcDir, soDir, outDir, maxStep, minStep, massCut=1e14, outFrac=0.0
 # =================================================================================================
 
 
-def list_alphaQ_halos(maxStep=487, minStep=247, massCut=1e14, outFrac=0.01, numFiles=1):
+def list_alphaQ_halos(maxStep=499, minStep=247, massCut=1e14, outFrac=0.01, numFiles=1):
     
     '''
     This function runs list_halos with data paths predefined for AlphaQ.
@@ -174,3 +179,19 @@ def list_alphaQ_halos(maxStep=487, minStep=247, massCut=1e14, outFrac=0.01, numF
                soDir='/projects/DarkUniverse_esp/heitmann/OuterRim/M000/L360/HACC001/analysis/Halos/M200',
                outDir='/home/hollowed/cutout_run_dirs/alphaQ/cutout_alphaQ_full',
                maxStep=maxStep, minStep=minStep, massCut=massCut, outFrac=outFrac, numFiles=numFiles)
+
+
+def list_outerRim_halos(maxStep=499, minStep=121, massCut=1e14, outFrac=0.01, numFiles=1):
+    
+    '''
+    This function runs list_halos with data paths predefined for OuterRim.
+    Function parameters are as given in the docstrings above for list_halos
+    '''
+
+    list_halos(lcDir='/projects/DarkUniverse_esp/jphollowed/outerRim/lightcone_halos_octant',
+               soDir='/projects/DarkUniverse_esp/heitmann/OuterRim/M000/L4000/HACC000/analysis/Halos/M200',
+               outDir='/home/hollowed/cutout_run_dirs/outerRim/cutout_outerRim_downs',
+               maxStep=maxStep, minStep=minStep, massCut=massCut, outFrac=outFrac, numFiles=numFiles)
+
+if(__name__ == '__main__'):
+    list_outerRim_halos()

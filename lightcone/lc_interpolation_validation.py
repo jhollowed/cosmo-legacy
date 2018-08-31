@@ -302,15 +302,39 @@ def lightconeHistograms(lcDir1, lcDir2, step, rL, mode='particles',
     ydiff = np.squeeze(iy[iMask] - ey[eMask])
     zdiff = np.squeeze(iz[iMask] - ez[eMask])
     posDiff = np.linalg.norm(np.array([xdiff, ydiff, zdiff]).T, axis=1) 
+    if(relativeError):
+        ipos = np.linalg.norm(np.array([np.squeeze(ix[iMask]), 
+                                        np.squeeze(iy[iMask]), 
+                                        np.squeeze(iz[iMask])]).T, axis=1)
+        zeroMask = pos_iv != 0
+        posDiff = posDiff[zeroMask] / ipos[zeroMask]
+        mean_posDiff = np.mean(posDiff)
+        std_posDiff = np.mean(posDiff)
+        print('Relative positional difference is {} +- {}'.format(mean_posDiff, std_posDiff))
     
     print('diffing velocities')
     vxdiff = np.squeeze(ivx[iMask] - evx[eMask])
     vydiff = np.squeeze(ivy[iMask] - evy[eMask])
     vzdiff = np.squeeze(ivz[iMask] - evz[eMask])
     mag_vDiff = np.linalg.norm(np.array([vxdiff, vydiff, vzdiff]).T, axis=1)
-    
+    if(relativeError):
+        mag_iv = np.linalg.norm(np.array([np.squeeze(ivx[iMask]), 
+                                          np.squeeze(ivy[iMask]), 
+                                          np.squeeze(ivz[iMask])]).T, axis=1)
+        zeroMask = mag_iv != 0
+        mag_vDiff = mag_vDiff[zeroMask] / mag_iv[zeroMask]
+        mean_vDiff = np.mean(mag_vDiff)
+        std_vDiff = np.mean(mag_vDiff)
+        print('Relative velocity difference is {} +- {}'.format(mean_vDiff, std_vDiff))
+
     print('diffing redshift')
     redshiftDiff = np.abs(((1/ia)-1)[iMask] - ((1/ea)-1)[eMask])
+    if(relativeError):
+        iredshift = ((1/ia)-1)[iMask]
+        redshiftDiff = redshiftDiff / iredshift
+        mean_redshiftDiff = np.mean(posDiff)
+        std_redshiftDiff = np.mean(posDiff)
+        print('Relative redshift difference is {} +- {}'.format(mean_redshiftDiff, std_redshiftDiff))
  
     # plot position, velocity, and redshift differences between interpolated
     # and extrapolated output as historgrams
@@ -326,7 +350,7 @@ def lightconeHistograms(lcDir1, lcDir2, step, rL, mode='particles',
     ax.set_xlabel(r'$\left|\vec{r}_\mathrm{extrap} - \vec{r}_\mathrm{interp}\right|\>\>\mathrm{(Mpc/h)}$', fontsize=18)
     
     ax2 =  f.add_subplot(312)
-    ax2.hist(mag_vDiff, bins, color=colors[1], log=True)
+    ax2.hist(mag_vDiff / mag_v1, bins, color=colors[1], log=True)
     ax2.set_ylim(ymin=1)
     ax2.set_xlabel(r'$\left|\vec{v}_\mathrm{extrap} - \vec{v}_\mathrm{interp}\right| \>\>\mathrm{(km/s)}$', fontsize=18)
     
@@ -345,8 +369,8 @@ def lightconeHistograms(lcDir1, lcDir2, step, rL, mode='particles',
 #############################################################################################
 
 
-def saveLightconePathData(epath, ipath, spath, outpath, rL, diffRange='max', 
-                          mode='particles', solverMode = 'forward', 
+def saveLightconePathData(epath, ipath, spath, outpath, rL, lcStep=442, diffRange='max', 
+                          mode='particles', fullParticles = False, solverMode = 'forward', 
                           snapshotSubdirs = False, fragmentsOnly=False):
     '''
     This function loads lightcone output data, and inspects the 
@@ -361,10 +385,12 @@ def saveLightconePathData(epath, ipath, spath, outpath, rL, diffRange='max',
     lightcone, and merger trees need to be used), and the approximated path
     given by the lightcone solver.
     
-    For consistency, the time window used to inspect the objects paths is
+    For consistency, the time window used by default to inspect the objects paths is
     always steps 421 - 464, with step 442 being the one to read lightcone data
-    from. It is assumed that the lightcone output directories follow the 
-    naming and structure convention given in fig 6 of the Creating Lightcones
+    from. If the lightcone step to inspect is specified as otherwise, then the time 
+    window visualized will pad that lightcone step with up to two snapshot tiemstep 
+    outputs on either side. It is assumed that the lightcone output directories follow 
+    the naming and structure convention given in fig 6 of the Creating Lightcones
     in HACC notes. The strcture of the snapshot data directory can be given by
     the user in the snapshotSubdirectories parameter.
     
@@ -383,6 +409,7 @@ def saveLightconePathData(epath, ipath, spath, outpath, rL, diffRange='max',
     :param outpath: where to write out the path data (npy files)
     :param rL: the box width of the simulation from which the lightcones at epath
                and ipath were generated
+    :param lcStep: the lightcone step output to use as the approximate trajectory data
     :param diffRange: whether to use the 'max', 'med'(median) or 'min' diffVals
                and ipath were generated, in comoving Mpc/h
     :param mode: whether to perform the snapshot object match-up on particles or
@@ -390,6 +417,9 @@ def saveLightconePathData(epath, ipath, spath, outpath, rL, diffRange='max',
                  by matching on it's 'id'. If mode=="halos", then find the object
                  in each snapshot by matching it's 'tree_node_index' and 
                  'desc_node_index'.
+    :param fullParticles: whether or not the input lightcones were run on full particle snapshots
+                          (dont attempt to run this test if this arg is True, but the snapshot files
+                           are enormous)
     :param solverMode: Wether the lightcone solver used to generate the output under 
                        validation was run in the standard forward mode (solverMode = 
                        'forward'), or the reversed mode, with extrapolation/interpolation
@@ -417,6 +447,31 @@ def saveLightconePathData(epath, ipath, spath, outpath, rL, diffRange='max',
                         .format(diffRange))
     
     subdirs = glob.glob('{}/*'.format(ipath))
+
+    # get time window to save (attempt to pad input lightcone step with two snapshot timesteps
+    # on either side)
+    if(snapshotSubdirs):
+        snapshot_step_dirs = np.array(glob.glob('{}/STEP*'.format(spath)))
+        steps_avail = np.array(sorted([int(s.split('STEP')[-1]) for s in snapshot_step_dirs]))
+    else:
+        snapshot_files = np.array(glob.glob('{}/*.mpicosmo.*'.format(spath)))
+        snapshot_files = snapshot_files[[not '#' in ss for ss in snapshot_files]]
+        if(not fullParticles):
+            snapshot_files = snapshot_files[[not 'full' in ss for ss in snapshot_files]]
+        else:
+            snapshot_files = snapshot_files[['full' in ss for ss in snapshot_files]]
+        steps_avail = np.array(sorted([int(s.split('.')[-1]) for s in snapshot_files]))
+    
+    # remove corrupt outerRim steps
+    bad_idx = list(steps_avail).index(304)
+    steps_avail = np.delete(steps_avail, bad_idx)
+
+    lcStep_idx = list(steps_avail).index(lcStep)
+    if(lcStep_idx < 2 or lcStep_idx > len(steps_avail)-2): 
+        raise Exception('specified lightcone step must have two snapshot timesteps available before and after it')
+    traj_steps = steps_avail[lcStep_idx + np.array([-2, -1, 0, 1, 2])]
+
+    print('time window will be {}'.format(traj_steps))
     
     # get lc subdirectory prefix (could be 'lc' or 'lcGals', etc.). 
     # prefix of subdirs in epath and ipath assumed to be the same.
@@ -428,17 +483,17 @@ def saveLightconePathData(epath, ipath, spath, outpath, rL, diffRange='max',
         except ValueError:
             continue
 
-    # get file names in 442 subdir for interpolated and extrapolated lc data
+    # get file names in step subdir for interpolated and extrapolated lc data
     # (sort them to grab only the unhashed file header)
-    ifile = sorted(glob.glob('{}/{}442/*'.format(ipath, prefix)))[0]
-    efile = sorted(glob.glob('{}/{}442/*'.format(epath, prefix)))[0]
+    ifile = sorted(glob.glob('{}/{}{}/*'.format(ipath, prefix, lcStep)))[0]
+    efile = sorted(glob.glob('{}/{}{}/*'.format(epath, prefix, lcStep)))[0]
    
     # set id types to read based on the mode
     if(mode == 'particles'):
         idName = 'id'
     elif(mode == 'halos'):
         idName = 'tree_node_index'
-        
+  
     # read data
     print("Reading interpolation files")
     iid = gio.gio_read(ifile, 'id')
@@ -595,9 +650,18 @@ def saveLightconePathData(epath, ipath, spath, outpath, rL, diffRange='max',
     # reading the un-hashed header file
 
     if(snapshotSubdirs): 
-        sfile0 = sorted(glob.glob('{}/STEP421/*'.format(spath)))[0]
+        sfiles0 = np.array(glob.glob('{}/STEP{}/*mpicosmo*'.format(spath, traj_steps[0])))
+        # dont want haloparticles files or anything else like that
+        sfiles0 = sfiles0[[not 'halo' in ss for ss in sfiles0]]
     else:
-        sfile0 = sorted(glob.glob('{}/*.421*'.format(spath)))[0]
+        sfiles0 = np.array(glob.glob('{}/*.{}*'.format(spath, traj_steps[0])))
+        sfiles0 = sfiles0[[not 'halo' in ss for ss in sfiles0]]
+    if(not fullParticles): 
+        sfiles0 = sfiles0[[not 'full' in ss for ss in sfiles0]]
+    else:
+        sfiles0 = sfiles0[['full' in ss for ss in sfiles0]]
+    sfile0 = sorted(sfiles0)[0]
+    print('reading snapshot at {}'.format(sfile0))
     sid0 = np.squeeze(gio.gio_read(sfile0, idName))
     sx0 = np.squeeze(gio.gio_read(sfile0, sx))
     sy0 = np.squeeze(gio.gio_read(sfile0, sy))
@@ -609,9 +673,17 @@ def saveLightconePathData(epath, ipath, spath, outpath, rL, diffRange='max',
         stag0 = np.squeeze(gio.gio_read(sfile0, 'fof_halo_tag'))
 
     if(snapshotSubdirs): 
-        sfile1 = sorted(glob.glob('{}/STEP432/*'.format(spath)))[0]
+        sfiles1 = np.array(glob.glob('{}/STEP{}/*mpicosmo*'.format(spath, traj_steps[1])))
+        sfiles1 = sfiles1[[not 'halo' in ss for ss in sfiles1]]
     else:
-        sfile1 = sorted(glob.glob('{}/*.432*'.format(spath)))[0]
+        sfiles1 = np.array(glob.glob('{}/*mpicosmo*.{}*'.format(spath, traj_steps[1])))
+        sfiles1 = sfiles1[[not 'halo' in ss for ss in sfiles1]]
+    if(not fullParticles): 
+        sfiles1 = sfiles1[[not 'full' in ss for ss in sfiles1]]
+    else:
+        sfiles1 = sfiles1[['full' in ss for ss in sfiles1]]
+    sfile1 = sorted(sfiles1)[0]
+    print('reading snapshot at {}'.format(sfile1))
     sid1 = np.squeeze(gio.gio_read(sfile1, idName))
     sx1 = np.squeeze(gio.gio_read(sfile1, sx))
     sy1 = np.squeeze(gio.gio_read(sfile1, sy))
@@ -622,9 +694,17 @@ def saveLightconePathData(epath, ipath, spath, outpath, rL, diffRange='max',
         smass1 = np.squeeze(gio.gio_read(sfile1, 'fof_halo_mass'))
     
     if(snapshotSubdirs): 
-        sfile2 = sorted(glob.glob('{}/STEP442/*'.format(spath)))[0]
+        sfiles2 = np.array(glob.glob('{}/STEP{}/*mpicosmo*'.format(spath, traj_steps[2])))
+        sfiles2 = sfiles2[[not 'halo' in ss for ss in sfiles2]]
     else:
-        sfile2 = sorted(glob.glob('{}/*.442*'.format(spath)))[0]
+        sfiles2 = np.array(glob.glob('{}/*mpicosmo*.{}*'.format(spath, traj_steps[2])))
+        sfiles2 = sfiles2[[not 'halo' in ss for ss in sfiles2]]
+    if(not fullParticles): 
+        sfiles2 = sfiles2[[not 'full' in ss for ss in sfiles2]]
+    else:
+        sfiles2 = sfiles2[['full' in ss for ss in sfiles2]]
+    sfile2 = sorted(sfiles2)[0]
+    print('reading snapshot at {}'.format(sfile2))
     sid2 = np.squeeze(gio.gio_read(sfile2, idName))
     sx2 = np.squeeze(gio.gio_read(sfile2, sx))
     sy2 = np.squeeze(gio.gio_read(sfile2, sy))
@@ -635,9 +715,17 @@ def saveLightconePathData(epath, ipath, spath, outpath, rL, diffRange='max',
         smass2 = np.squeeze(gio.gio_read(sfile2, 'fof_halo_mass'))
     
     if(snapshotSubdirs): 
-        sfile3 = sorted(glob.glob('{}/STEP453/*'.format(spath)))[0]
+        sfiles3 = np.array(glob.glob('{}/STEP{}/*mpicosmo*'.format(spath, traj_steps[3])))
+        sfiles3 = sfiles3[[not 'halo' in ss for ss in sfiles3]]
     else:
-        sfile3 = sorted(glob.glob('{}/*.453*'.format(spath)))[0]
+        sfiles3 = np.array(glob.glob('{}/*mpicosmo*.{}*'.format(spath, traj_steps[3])))
+        sfiles3 = sfiles3[[not 'halo' in ss for ss in sfiles3]]
+    if(not fullParticles): 
+        sfiles3 = sfiles3[[not 'full' in ss for ss in sfiles3]]
+    else:
+        sfiles3 = sfiles3[['full' in ss for ss in sfiles3]]
+    sfile3 = sorted(sfiles3)[0]
+    print('reading snapshot at {}'.format(sfile3))
     sid3 = np.squeeze(gio.gio_read(sfile3, idName))
     sx3 = np.squeeze(gio.gio_read(sfile3, sx))
     sy3 = np.squeeze(gio.gio_read(sfile3, sy))
@@ -647,9 +735,17 @@ def saveLightconePathData(epath, ipath, spath, outpath, rL, diffRange='max',
         stag3 = np.squeeze(gio.gio_read(sfile3, 'fof_halo_tag'))
     
     if(snapshotSubdirs): 
-        sfile4 = sorted(glob.glob('{}/STEP464/*'.format(spath)))[0]
+        sfiles4 = np.array(glob.glob('{}/STEP{}/*mpicosmo*'.format(spath, traj_steps[4])))
+        sfiles4 = sfiles4[[not 'halo' in ss for ss in sfiles4]]
     else:
-        sfile4 = sorted(glob.glob('{}/*.464*'.format(spath)))[0]
+        sfiles4 = np.array(glob.glob('{}/*mpicosmo*.{}*'.format(spath, traj_steps[4])))
+        sfiles4 = sfiles4[[not 'halo' in ss for ss in sfiles4]]
+    if(not fullParticles): 
+        sfiles4 = sfiles4[[not 'full' in ss for ss in sfiles4]]
+    else:
+        sfiles4 = sfiles4[['full' in ss for ss in sfiles4]]
+    sfile4 = sorted(sfiles4)[0]
+    print('reading snapshot at {}'.format(sfile4))
     sid4 = np.squeeze(gio.gio_read(sfile4, idName))
     sx4 = np.squeeze(gio.gio_read(sfile4, sx))
     sy4 = np.squeeze(gio.gio_read(sfile4, sy))
@@ -1987,7 +2083,8 @@ def find_pairwise_separation(lcDir, lcName, saveDest, steps, fofDir, fofSubdirs=
         ids = gio.gio_read(lc, 'id')
      
         # Plot only duplicated halos
-        dupl_file = h5.File('/home/hollowed/lc_halos_validation/duplData/duplicates_{}_{}.hdf5'.format(lcName, steps[0])) 
+        dupl_file = h5.File('/home/hollowed/lc_halos_validation/duplData/duplicates_{}_{}.hdf5'.format(lcName, 
+                                                                                                       steps[0])) 
         subsamp = np.in1d(ids, dupl_file['id_step{}'.format(step)][:])
         ordering = search_sorted(np.squeeze(dupl_file['id_step{}'.format(step)][:]), np.squeeze(ids[subsamp]))
         mmask = np.squeeze(gio.gio_read(lc, 'replication')[subsamp]) != np.squeeze(dupl_file['replication_step{}'.format(step)][:][ordering])
@@ -2313,3 +2410,63 @@ def plot_velocity_smoothing(loadDest, steps, plotMode='show', outDir='.', absVal
         plt.show()
     else:
         f.savefig('{}/velocitySep_{}-{}'.format(outDir, max(steps), min(steps)))
+
+
+#############################################################################################
+#############################################################################################
+
+
+def plot_shell_density(lcDir, steps, saveDest, rL = 3000, reps = 2, sfrac=0.2):
+    
+    # do these imports here, since there are other functions in this file that
+    # are intended to run on systems where gio may not be available
+    import genericio as gio
+    
+    steps = sorted(steps)[::-1]
+
+    # get lc subdirectory prefix of the input halo lightcone
+    # (prefix could be 'lc' or 'lcGals', etc.). 
+    prefix = ''
+    subdirs = glob.glob('{}/*'.format(lcDir))
+    for i in range(len(subdirs[0].split('/')[-1])):
+        try:
+            (int(subdirs[0].split('/')[-1][i]))
+            prefix = subdirs[0].split('/')[-1][0:i]
+            break
+        except ValueError:
+            continue
+     
+    # start calculation
+    print('working on lc at {}'.format(lcDir))
+    
+    a = np.linspace(1/201.0, 1.0, 500)
+    z = 1/a-1
+    zs = z[steps]
+    lc_extent = rL*reps
+
+    for step in steps:
+        
+        if(step == 499): continue
+       
+        print('reading step {}'.format(step))
+        lc_file = sorted(glob.glob('{}/{}{}/*'.format(lcDir, prefix, step)))[0]
+        x = np.squeeze(gio.gio_read(lc_file, 'x'))
+        y = np.squeeze(gio.gio_read(lc_file, 'y'))
+        z = np.squeeze(gio.gio_read(lc_file, 'z'))
+        
+        downsMask = np.random.choice(np.arange(len(x)), int(len(x)*sfrac))
+
+        binsx = np.linspace(0, lc_extent, 60)
+        binsy = np.linspace(0, lc_extent, 60)
+        
+        plt.hist2d(x[downsMask], y[downsMask], bins = [binsx, binsy], cmap='plasma')
+        plt.plot([0, lc_extent], [0, 0], '-k', lw=1)
+        plt.plot([0, lc_extent], [lc_extent, lc_extent], '-k', lw=1)
+        plt.plot([0, 0], [0, lc_extent], '-k', lw=1)
+        plt.plot([lc_extent, lc_extent], [0, lc_extent], '-k', lw=1)
+        plt.plot([0, lc_extent], [lc_extent/reps, lc_extent/reps], '-k', lw=1)
+        plt.plot([lc_extent/reps, lc_extent/reps], [0, lc_extent], '-k', lw=1)
+        plt.xlim([-lc_extent*0.05, lc_extent + lc_extent*0.05])
+        plt.ylim([-lc_extent*0.05, lc_extent + lc_extent*0.05])
+        plt.savefig('{}.png'.format(step))
+        print('saved fig')
