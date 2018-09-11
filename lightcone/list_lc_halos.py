@@ -10,7 +10,7 @@ import numpy as np
 import genericio as gio
 import lc_interpolation_validation as iv
 
-def list_halos(lcDir, soDir, outDir, maxStep, minStep, massCut=1e14, outFrac=0.01, numFiles=1):
+def list_halos(lcDir, outDir, maxStep, minStep, fofDir=None, massCut=1e14, outFrac=0.01, numFiles=1):
 
     '''
     This function generates a list of halo identifiers, and positions, in a text 
@@ -29,22 +29,23 @@ def list_halos(lcDir, soDir, outDir, maxStep, minStep, massCut=1e14, outFrac=0.0
     but typically contains the fof halo tag, plus some other meta data. In this function
     The HALO_ID_N's are written as
     
-    {fof_halo_tag}_z{halo_redshift}_MSOD{sod_halo_mass}
+    {fof_halo_tag}_z{halo_redshift}_MFOF{fof_halo_mass}
     
     Params:
     :param lcDir: top-level directory of a halo lightcone, where the subdirectory 
                   structure is expected to match that described in section 4.5 (fig 7)
                   of the Creating Lightcones in HACC document (step-wise subdirectories 
-                  expected). The subdrectory prefix is assumed to be 'lcHalos'
-                  Furthermore, It is expected that this lightcone was built using the
+                  expected). It is expected that this lightcone was built using the
                   interpolation lightcone driver, and thus the 'id' field is expected
-                  to contain merger tree indices.
-    :param soDir: top-level directory of a halo SOD catalog, matching the halos found in
-                  the merger trees at mtDir. Step-wise subdirectoires are expected with 
-                  the form 'STEPXXX'
+                  to contain merger tree fof tags (including fragment bits and sign).
     :para outDir: the output directory for the resultant text file
     :param maxStep: The largest (lowest redshift) lightcone shell to read in
     :param minStep: The smallest (highest redshift) lightcone shell to read in
+    :param fofDir: If this argument is None, then it is assumed that the input lightcone at 
+                   lcDir has a valid 'mass' column. If it doesn't, then this argument should
+                   point to a top-level directory of a halo FOF catalog from which to match
+                   id's and gather FOF masses. Step-wise subdirectoires are expected with 
+                   the form 'STEPXXX'
     :param massCut: The minimum halo mass to write out to the text files
     :param outFrac: The fraction of the identified halos to actually output
     :param numFiles: How many text files to write. That is, if 30 halos are found in
@@ -58,7 +59,8 @@ def list_halos(lcDir, soDir, outDir, maxStep, minStep, massCut=1e14, outFrac=0.0
     # get lightcone shells (step/snapshot numbers) matching those desired 
     # by minStep and maxStep
     lcHaloSubdirs = glob.glob('{}/*'.format(lcDir))
-    steps = np.array(sorted([int(s.split('Halos')[-1]) for s in lcHaloSubdirs]))
+    # step number is assumed to be the last three chars of the subirectory names
+    steps = np.array(sorted([int(s[-3:]) for s in lcHaloSubdirs]))
     steps = steps[np.logical_and(steps >= minStep, steps <= maxStep)]
   
     # arrays to hold halos in the lc found above the desired massCut (to be written out)
@@ -69,7 +71,7 @@ def list_halos(lcDir, soDir, outDir, maxStep, minStep, massCut=1e14, outFrac=0.0
     total=0
 
     # loop over lightcone shells
-    for i in range(len(steps)-1):
+    for i in range(len(steps)):
         
         step = steps[i]
         if(step == 499): continue
@@ -77,43 +79,52 @@ def list_halos(lcDir, soDir, outDir, maxStep, minStep, massCut=1e14, outFrac=0.0
         print('\n---------- working on step {} ----------'.format(step))
        
         print('reading lightcone')
-        lc_file = '{1}/lcHalos{0}/lc_intrp_halos.{0}'.format(step, lcDir)
+        # there should only be one unhashed gio file in this subdir
+        lc_file = sorted(glob.glob('{1}/*{0}/*'.format(step, lcDir)))[0]
         lc_tags = np.squeeze(gio.gio_read(lc_file, 'id'))
         lc_x = np.squeeze(gio.gio_read(lc_file, 'x'))
         lc_y = np.squeeze(gio.gio_read(lc_file, 'y'))
         lc_z = np.squeeze(gio.gio_read(lc_file, 'z'))
         lc_a = np.squeeze(gio.gio_read(lc_file, 'a'))
-        # get halo redshifts and mask halo fof tags
+        
+        # get halo redshifts and mask halo fof tags 
+        # (the halo lightcone module outputs merger tree fof tags, including fragment bits)
         lc_redshift = 1/lc_a - 1
         lc_tags = (lc_tags * np.sign(lc_tags)) & 0x0000ffffffffffff 
 
-        print('reading SO catalog')
-        #sod_file = '{1}/STEP{0}/m000-{0}.sodproperties'.format(step, soDir)
-        #sod_file = '{1}/b0168/STEP{0}/m000-{0}.fofproperties'.format(step, soDir.split('/M200')[0])
+        if(fofDir != None):
+            print('reading FOF catalog')
+            fof_file = '{1}/b0168/STEP{0}/m000-{0}.fofproperties'.format(step, soDir.split('/M200')[0])
 
-        # matching issues... lets just use these fof masses for now
+            fof_tags = np.squeeze(gio.gio_read(fof_file, 'fof_halo_tag'))
+            fof_mass = np.squeeze(gio.gio_read(fof_file, 'fof_halo_mass'))
+            fof_x = np.squeeze(gio.gio_read(fof_file, 'fof_halo_center_x'))
 
-        sod_file = '/projects/SkySurvey/rangel/OR/analysis/MergerTrees/HaloCatalog/03_31_2018.OR.{}.fofproperties'.format(steps[i+1])
-        sod_tags = np.squeeze(gio.gio_read(sod_file, 'fof_halo_tag'))
-        #sod_mass = np.squeeze(gio.gio_read(sod_file, 'sod_halo_mass'))
-        sod_mass = np.squeeze(gio.gio_read(sod_file, 'fof_halo_mass'))
+            print('sorting')
+            fof_sort = np.argsort(fof_tags)
+            fof_tags = fof_tags[fof_sort]
+            fof_mass = fof_mass[fof_sort]
+            fof_x = fof_x[fof_sort]
+            
+            # Now we match to get the halo masses, with the matching done in the
+            # following order:
+            # lc masked fof_halo_tag > fof fof_halo_tag
+            # fof fof_halo_tag > fof_halo_mass
 
-        # Now we match to get the halo masses, with the matching done in the
-        # following order:
-        # lc masked fof_halo_tag > sod fof_halo_tag
-        # sod fof_halo_tag > sod_halo_mass
+            print('matching lightcone to FOF catalog to retrieve mass')
+            lc_to_fof = iv.search_sorted(fof_tags, lc_tags, sorter=np.argsort(fof_tags))
 
-        print('matching lightcone to so catalog to retrieve mass')
-        lc_to_sod = iv.search_sorted(sod_tags, lc_tags)
+            # make sure that worked
+            if(np.sum(lc_to_fof == -1) != 0):
+                raise Exception('{0}% of lightcone halos not found in halo catalog. '\
+                                'Maybe passed wrong files?'
+                                .format(np.sum(lc_to_fof==-1)/float(len(lc_to_fof)) * 100))  
 
-        # make sure that worked
-        if(np.sum(lc_to_sod == -1) != 0):
-            raise Exception('{0}% of lightcone halos not found in SO catalog. '\
-                            'Maybe passed wrong files?'
-                            .format(np.sum(lc_to_sod==-1)/float(len(lc_to_sod)) * 100))  
-
-        lc_mass = sod_mass[lc_to_sod]
-
+            lc_mass = fof_mass[lc_to_fof]
+        
+        else:
+            lc_mass = np.squeeze(gio.gio_read(lc_file, 'mass'))
+       
         # do mass cutting
         mass_mask = lc_mass >= massCut
         lc_tags = lc_tags[mass_mask]
@@ -133,13 +144,12 @@ def list_halos(lcDir, soDir, outDir, maxStep, minStep, massCut=1e14, outFrac=0.0
         print('Appending halo data to write-out arrays')
         total += np.sum(mass_mask)
         print('TOTAL: {}'.format(total))
-        continue
+        
         write_ids = np.hstack([write_ids, lc_ids]) 
         write_x = np.hstack([write_x, lc_x]) 
         write_y = np.hstack([write_y, lc_y]) 
         write_z = np.hstack([write_z, lc_z]) 
    
-    return 
     # Do downsampling according to outFrac arg
     print('\nDownsampling {0}% of {1} total halos'.format(outFrac*100, len(write_ids)))
     dsampling = np.random.choice(np.arange(len(write_ids)), int(len(write_ids)*outFrac), replace=False)
@@ -188,10 +198,6 @@ def list_outerRim_halos(maxStep=499, minStep=121, massCut=1e14, outFrac=0.01, nu
     Function parameters are as given in the docstrings above for list_halos
     '''
 
-    list_halos(lcDir='/projects/DarkUniverse_esp/jphollowed/outerRim/lightcone_halos_octant',
-               soDir='/projects/DarkUniverse_esp/heitmann/OuterRim/M000/L4000/HACC000/analysis/Halos/M200',
+    list_halos(lcDir='/projects/DarkUniverse_esp/rangel/matchup/OuterRim',
                outDir='/home/hollowed/cutout_run_dirs/outerRim/cutout_outerRim_downs',
                maxStep=maxStep, minStep=minStep, massCut=massCut, outFrac=outFrac, numFiles=numFiles)
-
-if(__name__ == '__main__'):
-    list_outerRim_halos()

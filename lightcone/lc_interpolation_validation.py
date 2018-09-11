@@ -150,7 +150,7 @@ def angle_between(v1, v2):
 #
 #######################################
 
-def lightconeHistograms(lcDir1, lcDir2, step, rL, mode='particles', 
+def lightconeHistograms(lcDir1, lcDir2, step, rL, relativeError = True, mode='particles', 
                         plotMode='show', outDir='.'):
     '''
     This function plots the difference in particle/object position, velocity, and
@@ -302,11 +302,11 @@ def lightconeHistograms(lcDir1, lcDir2, step, rL, mode='particles',
     ydiff = np.squeeze(iy[iMask] - ey[eMask])
     zdiff = np.squeeze(iz[iMask] - ez[eMask])
     posDiff = np.linalg.norm(np.array([xdiff, ydiff, zdiff]).T, axis=1) 
-    if(relativeError):
+    if(relativeError and 0):
         ipos = np.linalg.norm(np.array([np.squeeze(ix[iMask]), 
                                         np.squeeze(iy[iMask]), 
                                         np.squeeze(iz[iMask])]).T, axis=1)
-        zeroMask = pos_iv != 0
+        zeroMask = ipos != 0
         posDiff = posDiff[zeroMask] / ipos[zeroMask]
         mean_posDiff = np.mean(posDiff)
         std_posDiff = np.mean(posDiff)
@@ -329,7 +329,7 @@ def lightconeHistograms(lcDir1, lcDir2, step, rL, mode='particles',
 
     print('diffing redshift')
     redshiftDiff = np.abs(((1/ia)-1)[iMask] - ((1/ea)-1)[eMask])
-    if(relativeError):
+    if(relativeError and 0):
         iredshift = ((1/ia)-1)[iMask]
         redshiftDiff = redshiftDiff / iredshift
         mean_redshiftDiff = np.mean(posDiff)
@@ -350,7 +350,7 @@ def lightconeHistograms(lcDir1, lcDir2, step, rL, mode='particles',
     ax.set_xlabel(r'$\left|\vec{r}_\mathrm{extrap} - \vec{r}_\mathrm{interp}\right|\>\>\mathrm{(Mpc/h)}$', fontsize=18)
     
     ax2 =  f.add_subplot(312)
-    ax2.hist(mag_vDiff / mag_v1, bins, color=colors[1], log=True)
+    ax2.hist(mag_vDiff, bins, color=colors[1], log=True)
     ax2.set_ylim(ymin=1)
     ax2.set_xlabel(r'$\left|\vec{v}_\mathrm{extrap} - \vec{v}_\mathrm{interp}\right| \>\>\mathrm{(km/s)}$', fontsize=18)
     
