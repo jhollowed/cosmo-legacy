@@ -10,7 +10,8 @@ import numpy as np
 import genericio as gio
 import lc_interpolation_validation as iv
 
-def list_halos(lcDir, outDir, maxStep, minStep, fofDir=None, massCut=1e14, outFrac=0.01, numFiles=1):
+def list_halos(lcDir, outDir, maxStep, minStep, haloCat=None, massDef = 'fof', 
+               massCut=1e14, outFrac=0.01, numFiles=1):
 
     '''
     This function generates a list of halo identifiers, and positions, in a text 
@@ -41,11 +42,16 @@ def list_halos(lcDir, outDir, maxStep, minStep, fofDir=None, massCut=1e14, outFr
     :para outDir: the output directory for the resultant text file
     :param maxStep: The largest (lowest redshift) lightcone shell to read in
     :param minStep: The smallest (highest redshift) lightcone shell to read in
-    :param fofDir: If this argument is None, then it is assumed that the input lightcone at 
-                   lcDir has a valid 'mass' column. If it doesn't, then this argument should
-                   point to a top-level directory of a halo FOF catalog from which to match
-                   id's and gather FOF masses. Step-wise subdirectoires are expected with 
-                   the form 'STEPXXX'
+    :param haloCat: If this argument is None, then it is assumed that the input lightcone at 
+                    lcDir has a valid 'mass' column. If it doesn't, then this argument should
+                    point to a top-level directory of a halo catalog from which to match
+                    id's and gather FOF/SO masses. Step-wise subdirectoires are expected with 
+                    the form 'STEPXXX'
+    :param massDef: should either be "fof", "sod", or None. If haloCat != None, then this arg 
+                    specifies whether to read FOF or SO masses from the matching halo catalog, 
+                    haloCat. If massDef = "sod", then also gather the r200 radii from haloCat.
+                    If haloCat == None, then all this arg does is label the lightcone-provided
+                    mass column as either an "fof" or "sod" mass in the output cutout meta data
     :param massCut: The minimum halo mass to write out to the text files
     :param outFrac: The fraction of the identified halos to actually output
     :param numFiles: How many text files to write. That is, if 30 halos are found in
@@ -92,26 +98,34 @@ def list_halos(lcDir, outDir, maxStep, minStep, fofDir=None, massCut=1e14, outFr
         lc_redshift = 1/lc_a - 1
         lc_tags = (lc_tags * np.sign(lc_tags)) & 0x0000ffffffffffff 
 
-        if(fofDir != None):
-            print('reading FOF catalog')
-            fof_file = '{1}/b0168/STEP{0}/m000-{0}.fofproperties'.format(step, soDir.split('/M200')[0])
+        if(haloCat != None):
+            
+            if(massDef = 'fof'):
+                cat_file = glob.glob('{1}/b0168/STEP{0}/*{0}*fofproperties'.format(step, haloCat))[0]
+            elif(massDef = 'sod'):
+                cat_file = glob.glob('{1}/M200/STEP{0}/*{0}*sodproperties'.format(step, haloCat))[0]
+            else:
+                raise Exception('Valid inputs for massDef are \'fof\', \'sod\'')
 
-            fof_tags = np.squeeze(gio.gio_read(fof_file, 'fof_halo_tag'))
-            fof_mass = np.squeeze(gio.gio_read(fof_file, 'fof_halo_mass'))
-            fof_x = np.squeeze(gio.gio_read(fof_file, 'fof_halo_center_x'))
+            print('reading halo catalog at {}'.format(cat_file.split('/')[]))
+            fof_tags = np.squeeze(gio.gio_read(cat_file, 'fof_halo_tag'))
+            halo_mass = np.squeeze(gio.gio_read(cat_file, '{}_halo_mass'.format(massDef))
+            if(massDef = 'sod'):
+                halo_radius = np.squeeze(gio.gio_read(cat_file, 'sod_halo_radius')
+            else:
+                halo_radius = np.zeros(len(halo_mass))
 
             print('sorting')
             fof_sort = np.argsort(fof_tags)
             fof_tags = fof_tags[fof_sort]
-            fof_mass = fof_mass[fof_sort]
-            fof_x = fof_x[fof_sort]
+            halo_mass = halo_mass[fof_sort]
             
             # Now we match to get the halo masses, with the matching done in the
             # following order:
             # lc masked fof_halo_tag > fof fof_halo_tag
             # fof fof_halo_tag > fof_halo_mass
 
-            print('matching lightcone to FOF catalog to retrieve mass')
+            print('matching lightcone to halo catalog to retrieve mass')
             lc_to_fof = iv.search_sorted(fof_tags, lc_tags, sorter=np.argsort(fof_tags))
 
             # make sure that worked
@@ -120,11 +134,15 @@ def list_halos(lcDir, outDir, maxStep, minStep, fofDir=None, massCut=1e14, outFr
                                 'Maybe passed wrong files?'
                                 .format(np.sum(lc_to_fof==-1)/float(len(lc_to_fof)) * 100))  
 
-            lc_mass = fof_mass[lc_to_fof]
+            lc_mass = halo_mass[lc_to_fof]
         
         else:
-            lc_mass = np.squeeze(gio.gio_read(lc_file, 'mass'))
-       
+            lc_mass = np.squeeze(gio.gio_read(lc_file, '{}_halo_mass'.format(massDef))
+            if(massDef = 'sod'):
+                lc_radius = np.squeeze(gio.gio_read(lc_file, 'sod_halo_radius'))
+            else:
+                lc_radius = None 
+                
         # do mass cutting
         mass_mask = lc_mass >= massCut
         lc_tags = lc_tags[mass_mask]
@@ -135,8 +153,12 @@ def list_halos(lcDir, outDir, maxStep, minStep, fofDir=None, massCut=1e14, outFr
         lc_z = lc_z[mass_mask]
 
         # make halo identifier strings (see docstrings at function header)
-        lc_ids = ['{0}_z{1}_MFOF{2}'.format(lc_tags[i], lc_redshift[i], lc_mass[i]) 
-                  for i in range(len(lc_tags))]
+        if(massDef ='fof'):
+        lc_ids = ['{0}__z_{1:.5f}__MFOF_{2}'.format(lc_tags[i], lc_redshift[i], lc_mass[i]) 
+                      for i in range(len(lc_tags))]
+        elif(massDef = 'sod'):
+        lc_ids = ['{0}__z_{1:.5f}__M200_{2}__R200_{3}'.format(lc_tags[i], lc_redshift[i], lc_mass[i]) 
+                      for i in range(len(lc_tags))]
 
         # add these halos to write-out arrays
         print('Found {0} halos ({1:.5f}% of all) above mass cut of {2}'
@@ -186,8 +208,9 @@ def list_alphaQ_halos(maxStep=499, minStep=247, massCut=1e14, outFrac=0.01, numF
     '''
 
     list_halos(lcDir='/projects/DarkUniverse_esp/jphollowed/alphaQ/lightcone_halos',
-               soDir='/projects/DarkUniverse_esp/heitmann/OuterRim/M000/L360/HACC001/analysis/Halos/M200',
+               haloCat='/projects/DarkUniverse_esp/heitmann/OuterRim/M000/L360/HACC001/analysis/Halos/M200',
                outDir='/home/hollowed/cutout_run_dirs/alphaQ/cutout_alphaQ_full',
+               massDef = 'sod',
                maxStep=maxStep, minStep=minStep, massCut=massCut, outFrac=outFrac, numFiles=numFiles)
 
 
@@ -200,4 +223,5 @@ def list_outerRim_halos(maxStep=499, minStep=121, massCut=1e14, outFrac=0.01, nu
 
     list_halos(lcDir='/projects/DarkUniverse_esp/rangel/matchup/OuterRim',
                outDir='/home/hollowed/cutout_run_dirs/outerRim/cutout_outerRim_downs',
+               haloCat = None, massDef = 'fof',
                maxStep=maxStep, minStep=minStep, massCut=massCut, outFrac=outFrac, numFiles=numFiles)

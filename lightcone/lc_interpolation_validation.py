@@ -4,6 +4,7 @@ import glob
 import h5py as h5
 import numpy as np
 from astropy.cosmology import FlatLambdaCDM
+from astropy.cosmology import WMAP7 as wmap7
 import matplotlib as mpl
 from cycler import cycler
 from matplotlib import rcParams
@@ -1886,6 +1887,136 @@ def comvDist_vs_z(lcDirs, steps, lcNames=['uncorrected', 'second order correctio
         plt.show()
     else:
         f.savefig('{}/lc_comvDist_v_redshift_{}-{}'.format(outDir, steps[0], steps[-1]))
+
+
+#############################################################################################
+#############################################################################################
+
+
+def N_M_z(lcDir, minStep, z_bins = 4, mass_bins = 100, minMass = 1e13, 
+          plotMode='show', outDir='.'):
+    '''
+    This function computes and plots the mass distribution of one lightcone output over a 
+    chosen redshift range, N(M|z). The lightcone should have a valid "mass" column (a halo lightcone).
+    The resulting plot is two vertical panels; one with the total distribution from z=0 to the 
+    redshift corresponding to minStep, and one with overlapping histograms per redshift bin (given by
+    z_bins over that range)
+
+    Params:
+    :param lcDir: A directory containing lightcone output. 
+                   It is assumed that these directories follow the 
+                   naming and structure convention given in fig 6 of 
+                   the Creating Lightcones in HACC notes (with one 
+                   subdirectory per snapshot). 
+    :param maxStep: the minimum lightcone step to include
+    :param z_bins: number of linear bins to use in redshift
+    :param mass_bins: number of log bins to use in mass
+    :param minMass: the minimum mass to include in the plot
+    :param plotMode: The plotting mode. Options are 'show' or 'save'. If 'show', the
+                     figures will be opened upon function completion. If 'save', they
+                     will be saved as .png files to the current directory, unless otherwise
+                     specified in the 'outDir' arg
+    :param outDir: where to save figures, if plotMode == 'save'
+    :return: None
+    '''
+    if plotMode not in ['show', 'save']:
+        raise Exception('Unknown plotMode {}. Options are \'show\' or \'save\'.'.format(plotMode))
+    
+    # do these imports here, since there are other functions in this file that
+    # are intended to run on systems where gio may not be available
+    import genericio as gio
+
+    # get lc subdirectory prefix of the input lightcone
+    # (prefix could be 'lc', 'lcGals', or 'STEP', etc.). 
+    print('working on lc at {}'.format(lcDir))
+    subdirs = glob.glob('{}/*'.format(lcDir))
+    for i in range(len(subdirs[0].split('/')[-1])):
+        try:
+            (int(subdirs[0].split('/')[-1][i]))
+            prefix = subdirs[0].split('/')[-1][0:i]
+            break
+        except ValueError:
+            continue    
+
+    # get available steps
+    stepsAvail = np.sort([int(s.split('/')[-1].split(prefix)[-1]) for s in subdirs])
+    stepsAvail = stepsAvail[stepsAvail >= minStep]
+
+    step_bins = np.array_split(stepsAvail, z_bins)
+    a = np.linspace(1/201.0, 1.0, 500)
+    z =1/a-1
+     
+    # set up plotting
+    config(cmap=plt.cm.plasma, numColors=z_bins)
+    colors = plt.rcParams['axes.prop_cycle'].by_key()['color']
+    f = plt.figure(plt.gcf().number+1)
+    
+    ax1 = f.add_subplot(211)
+    ax2 = f.add_subplot(212)
+    mass_bins = np.logspace(np.log10(minMass), 15.698970004336019, mass_bins)
+
+    # define arrays to be plotted after looping through all step data.
+    m_all = []
+    z_all = []
+
+    # start looping through arrays
+    for j in range(z_bins):
+
+        zbin = step_bins[j]
+        m_bin_all = []
+        z_bin_all = []
+        
+        for step in zbin:
+            print('working on step {}'.format(step))
+            
+            # sort all files in this directory to get the gio header file
+            lc = sorted(glob.glob('{0}/{1}{2}/*'.format(lcDir, prefix, step)))[0]
+            
+            # read and discard all objects below minMass
+            m = np.squeeze(gio.gio_read(lc, 'mass'))
+            m = m / wmap7.h
+            massSort = np.argsort(m)
+            m = m[massSort]
+            cutoff_idx = np.searchsorted(m, minMass)
+            m = m[cutoff_idx:]
+            m_bin_all = np.hstack([m_bin_all, m])
+            m_all = np.hstack([m_all, m])
+             
+        # plot N(M|z) for this bin
+        ax2.hist( m_bin_all, bins=mass_bins, color=colors[j], lw=1, alpha=0.4, 
+                label=r'${:.2f} \>\leq\> z \>\leq\> {:.2f}$'.format(z[zbin[-1]], z[zbin[0]]), zorder=10)
+        ax2.hist( m_bin_all, bins=mass_bins, color=colors[j], lw=2, histtype = 'step', zorder=1) 
+        ax2.set_yscale('log', nonposy='clip')
+        ax2.set_xscale('log', nonposy='clip')
+    
+    # plot N(M|z) for all
+    print('found {} total halos above mass {} Msun'.format(len(m_all), minMass))
+    print('found {} total halos above mass 1e14 Msun'.format(len(m_all[m_all > 1e14])))
+    print('found {} total halos above mass 1e15 Msun'.format(len(m_all[m_all > 1e15])))
+
+    ax1.hist( m_all, bins=mass_bins, color=colors[0], lw=1, alpha=0.6, 
+            label=r'${:.2f} \>\leq\> z \>\leq\> {:.2f}$'.format(0, z[min(stepsAvail)]))
+    ax1.set_yscale('log', nonposy='clip')
+    ax1.set_xscale('log', nonposy='clip')
+    ax1.set_xlabel(r'$M_\mathrm{FOF}$', fontsize=14)
+    ax1.set_ylabel(r'$N( \> M_\mathrm{{FOF}}  \>\> | \>\> z \>)$', fontsize=14)
+    
+    ax1.set_xlim([minMass, 5e15])
+    ax1.legend(loc="upper right")
+    ax1.grid(True)
+        
+    ax2.set_xlabel(r'$M_\mathrm{FOF}$', fontsize=14)
+    ax2.set_ylabel(r'$N( \> M_\mathrm{{FOF}}  \>\> | \>\> z \>)$', fontsize=14)
+    
+    ax2.set_xlim([minMass, 5e15])
+    ax2.legend(loc="upper right")
+    ax2.grid(True)
+    
+    if(plotMode == 'show'):
+        plt.show()
+    else:
+        plt.show()
+        f.savefig('{}/N(M|z)_{}-{}.png'.format(outDir, z[max(stepsAvail)], z[min(stepsAvail)]))
 
 
 #############################################################################################
