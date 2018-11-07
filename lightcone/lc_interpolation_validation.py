@@ -1156,7 +1156,7 @@ def findDuplicates(lcDir, steps, lcSuffix, outDir, mode='particles', solverMode=
                               be omitted. Turn this option on to debug the validation test 
                               itself (the number of deuplications found in the initial volume
                               should of course be the same in either case)
-    :param rL: The simulation box length in Mpc/h. This value only used if initialVolumeOnly==`True
+    :param rL: The simulation box length in Mpc/h. This value only used if initialVolumeOnly==True
     :return: None
     '''
 
@@ -1196,7 +1196,13 @@ def findDuplicates(lcDir, steps, lcSuffix, outDir, mode='particles', solverMode=
     # cannot possibly be duplicates
     if(steps[0] == 487):
         
-        file1 = sorted(glob.glob('{}/{}{}/*'.format(lcDir, prefix, steps[0])))[0]
+        # sort all files in this directory to get the gio header file
+        # in case this is a lightcone directory written with the lightcone lite driver, 
+        # remove any SubInput files
+        lc_files = np.array(glob.glob('{0}/{1}{2}/*lc*'.format(lcDir, prefix, steps[0])))
+        lc_files_mask = np.array(['SubInput' in f for f in lc_files])
+        file1 = sorted(lc_files[~lc_files_mask])[0]
+        
         ids1 = np.squeeze(gio.gio_read(file1, 'id'))
         total1 = len(ids1)
 
@@ -1229,8 +1235,13 @@ def findDuplicates(lcDir, steps, lcSuffix, outDir, mode='particles', solverMode=
     # sort the subdirectory contents and take the first item, since that
     # should always be the GIO header file
     print('reading data')
-    file1 = sorted(glob.glob('{}/{}{}/*'.format(lcDir, prefix, steps[0])))[0]
-    file2 = sorted(glob.glob('{}/{}{}/*'.format(lcDir, prefix, steps[1])))[0]
+    lc_files = np.array(glob.glob('{0}/{1}{2}/*lc*'.format(lcDir, prefix, steps[0])))
+    lc_files_mask = np.array(['SubInput' in f for f in lc_files])
+    file1 = sorted(lc_files[~lc_files_mask])[0]
+    
+    lc_files = np.array(glob.glob('{0}/{1}{2}/*lc*'.format(lcDir, prefix, steps[1])))
+    lc_files_mask = np.array(['SubInput' in f for f in lc_files])
+    file2 = sorted(lc_files[~lc_files_mask])[0]
 
     if(mode == 'particles'): 
         # read particle data
@@ -1415,7 +1426,7 @@ def findDuplicates(lcDir, steps, lcSuffix, outDir, mode='particles', solverMode=
 #############################################################################################
 
 
-def compareDuplicates(duplicatePath, steps, lcSuffix, compType='scatter', plotMode='show', outDir='.'):
+def visDuplicates(duplicatePath, steps, lcSuffix, plotMode='show', outDir='.'):
     '''
     This function visualizes the output of the validation function, 
     findDuplicates(). That function finds all particle duplicates between
@@ -1457,7 +1468,7 @@ def compareDuplicates(duplicatePath, steps, lcSuffix, compType='scatter', plotMo
     if(len(steps)%2 != 0):
         raise Exception('Length of input array \'steps\' should be divisible by 2. See function docstrings')
 
-    # ---------- scatter plot (single timestep) comparison ----------
+    # ---------- 3d scatter plot (single timestep) comparison ----------
     # ---------------------------------------------------------------
     if(len(steps) == 2):
         
@@ -1530,7 +1541,7 @@ def compareDuplicates(duplicatePath, steps, lcSuffix, compType='scatter', plotMo
         axi.set_zlabel('y (Mpc/h)')
         axi.legend(bbox_to_anchor=(0.1, 0.1))
     
-    # ---------- histogram (multi-timestep) comparison ----------
+    # ---------- line plot (multi-timestep) comparison ----------
     # -----------------------------------------------------------
     else:
         
@@ -1554,14 +1565,14 @@ def compareDuplicates(duplicatePath, steps, lcSuffix, compType='scatter', plotMo
         
         # loop over all input steps
         steps = sorted(steps)
-        for k in range(len(steps)-1):
+        for k in range(len(steps)):
 
             if(steps[k] == 487):
                 dupl1 = h5.File('{}/duplicates_{}_{}.hdf5'.format(duplicatePath, lcSuffix[0], steps[k]), 'r')
                 total1[k] = dupl1['total_count_step{}'.format(steps[k])][:][0]
                 dupNum1[k] = np.cumsum(total1[::-1])[-1] * 1e-7
                 dupNum2[k] = np.cumsum(total2[::-1])[-1] * 1e-7
-                continue
+                continue  
             
             dupl1 = h5.File('{}/duplicates_{}_{}.hdf5'.format(duplicatePath, lcSuffix[0], steps[k]), 'r')
             dupl2 = h5.File('{}/duplicates_{}_{}.hdf5'.format(duplicatePath, lcSuffix[1], steps[k]), 'r')
@@ -1575,13 +1586,15 @@ def compareDuplicates(duplicatePath, steps, lcSuffix, compType='scatter', plotMo
         a = np.linspace(1/(200+1), 1, 500)
         step_zs = (1/a[steps]) - 1
         
+        pdb.set_trace()
+
         ax.plot(step_zs[::-1], 
                  np.cumsum(dupNum1[::-1]) / np.cumsum(total1[::-1])[-1], '-s', color=colors[1], lw=1.2, ms=5)
         ax.plot(step_zs[::-1], 
                  np.cumsum(dupNum2[::-1]) / np.cumsum(total2[::-1])[-1], '-s', color=colors[-2], lw=1.2, ms=5)
         
         ax.set_yscale('log', nonposy='clip')
-        ax.set_ylim([0.0000001,1.0])
+        ax.set_ylim([ax.get_ylim()[0],1.0])
         ax.set_xlim([min(step_zs), max(step_zs)])
         ax.set_xticks(step_zs)
         ax.grid()
@@ -1737,7 +1750,8 @@ def compareReps(lcDir1, lcDir2, step, skyArea='octant', plotMode='show', outDir=
 
 
 def comvDist_vs_z(lcDirs, steps, lcNames=['uncorrected', 'second order corrections w/ weighting'], 
-                  twoPanel=True, cosmology='alphaQ', plotMode='show', outDir='.'):
+                  twoPanel=True, cosmology='alphaQ', plotMode='show', outDir='.', saveDataOnly=False, 
+                  writeDataDir ='.'):
     '''
     This function computes and plots the error in the comoving-distance 
     vs. redshift relation for lightcone outputs, using that returned by 
@@ -1770,6 +1784,8 @@ def comvDist_vs_z(lcDirs, steps, lcNames=['uncorrected', 'second order correctio
                      will be saved as .png files to the current directory, unless otherwise
                      specified in the 'outDir' arg
     :param outDir: where to save figures, if plotMode == 'save'
+    :param saveDataOnly: If true, output data to numpy file; do not plot
+    :param writeDataDir: where to write the output numpy file if saveDataOnly == True
     :return: None
     '''
     if plotMode not in ['show', 'save']:
@@ -1803,19 +1819,6 @@ def comvDist_vs_z(lcDirs, steps, lcNames=['uncorrected', 'second order correctio
     z = 1./a-1.
     zs = z[steps]
     
-    # set up plotting
-    config(cmap=plt.cm.plasma, numColors=3)
-    colors = plt.rcParams['axes.prop_cycle'].by_key()['color']
-    f = plt.figure(plt.gcf().number+1)
-    
-    if(twoPanel):
-        ax1 = f.add_subplot(211)
-        ax2 = f.add_subplot(212, sharex=ax1)
-        ax1.set_title('z = 0 -> {:.2f}'.format(max(zs)))
-    else:
-        ax2 = f.add_subplot(111)
-        ax2.set_title('z = 0 -> {:.2f}'.format(max(zs)))
-
     # define arrays to be plotted after looping through all step data.
     # these will end up being arrays of array objects (NOT multidimensional
     # arrays, as the different lc outputs given by lcDirs probably have
@@ -1833,7 +1836,11 @@ def comvDist_vs_z(lcDirs, steps, lcNames=['uncorrected', 'second order correctio
             print('working on step {}'.format(step))
             
             # sort all files in this directory to get the gio header file
-            lc = sorted(glob.glob('{0}/{1}{2}/*'.format(lcDir, prefix[n], step)))[0]
+            # in case this is a lightcone directory written with the lightcone lite driver, 
+            # remove any SubInput files
+            lc_files = np.array(glob.glob('{0}/{1}{2}/*lc*'.format(lcDir, prefix[n], step)))
+            lc_files_mask = np.array(['SubInput' in f for f in lc_files])
+            lc = sorted(lc_files[~lc_files_mask])[0]
             
             # read and subsample
             x = gio.gio_read(lc, 'x')
@@ -1855,7 +1862,27 @@ def comvDist_vs_z(lcDirs, steps, lcNames=['uncorrected', 'second order correctio
             a_all[n] = np.hstack([a_all[n], np.ndarray.flatten(a)[::-1]])
             r_all[n] = np.hstack([r_all[n], np.ndarray.flatten(r)[::-1]]) 
             r_true_all[n] = np.hstack([r_true_all[n], np.ndarray.flatten(r_true)[::-1]])
-    
+   
+        if(saveDataOnly):
+            print('writing data')
+            np.savez('{}/{}_{}_comv.npz'.format(writeDataDir, lcNames[n], step), 
+                      a = a_all[n], r = r_all[n], rtrue = r_true_all[n])
+            continue
+        
+        
+        # set up plotting
+        config(cmap=plt.cm.plasma, numColors=3)
+        colors = plt.rcParams['axes.prop_cycle'].by_key()['color']
+        f = plt.figure(plt.gcf().number+1)
+        
+        if(twoPanel):
+            ax1 = f.add_subplot(211)
+            ax2 = f.add_subplot(212, sharex=ax1)
+            ax1.set_title('z = 0 -> {:.2f}'.format(max(zs)))
+        else:
+            ax2 = f.add_subplot(111)
+            ax2.set_title('z = 0 -> {:.2f}'.format(max(zs)))
+        
         # plot comv dist vs scale factor
         if(twoPanel):
             ax1.plot(a_all[n], r_all[n], color=colors[2*n], lw=1, label=lcNames[n])
@@ -1883,6 +1910,8 @@ def comvDist_vs_z(lcDirs, steps, lcNames=['uncorrected', 'second order correctio
             ax2.legend(loc="upper right")
             ax2.grid(True)
     
+    if(saveDataOnly):
+        return
     if(plotMode == 'show'):
         plt.show()
     else:

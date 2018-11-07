@@ -53,7 +53,7 @@ def matchingTests(lcDir_interp, lcDir_extrap, snapshotDir, figDir, trajectoryDat
     # ----------------------------------------------------------------------
     
     print('\n\n ==== Plotting duplicates scatter validation test =====')
-    vt.compareDuplicates(duplicateDataDir, steps=[432, 442], lcSuffix=['interp', 'extrap'],
+    vt.visDuplicates(duplicateDataDir, steps=[432, 442], lcSuffix=['interp', 'extrap'],
                          plotMode=plotMode, outDir=figDir)
 
 
@@ -98,7 +98,7 @@ def comparisonTests(lcDir_interp, lcDir_extrap, snapshotDir, fofDir, figDir, dup
         # ----------------------------------------------------------------------
         
         print('\n\n ==== Plotting duplicates histogram validation test =====')
-        vt.compareDuplicates(duplicateDataDir, steps=allSteps, 
+        vt.visDuplicates(duplicateDataDir, steps=allSteps, 
                              lcSuffix=['interp', 'extrap'],
                              plotMode=plotMode, outDir=figDir)
 
