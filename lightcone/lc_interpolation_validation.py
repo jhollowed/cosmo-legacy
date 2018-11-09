@@ -1,6 +1,6 @@
-
 import pdb
 import glob
+import copy
 import h5py as h5
 import numpy as np
 from astropy.cosmology import FlatLambdaCDM
@@ -13,6 +13,7 @@ import matplotlib.ticker as plticker
 from mpl_toolkits.mplot3d import Axes3D
 from matplotlib.ticker import FormatStrFormatter
 from matplotlib.colors import LogNorm
+import seaborn as sns
 
 '''
 This file contains functions for inspecting and visualizing lightcone output
@@ -2576,8 +2577,43 @@ def plot_velocity_smoothing(loadDest, steps, plotMode='show', outDir='.', absVal
 #############################################################################################
 
 
-def plot_shell_density(lcDir, steps, saveDest, rL = 3000, reps = 2, sfrac=0.2):
-    
+def plot_shell_density(lcDir, steps, saveDest, dataLim = False, fullSky = False, 
+                       rL = 3000, reps = 2, obsPos = [0, 0, 0], bins=30, sfrac=0.2, 
+                       z_slices=1, cmap_str='plasma', smooth=None):
+    '''
+    This function visualized the density of lightcone shell(s) in projected 2d space 
+    (the x-y plane) as a 2d histogram. 
+
+    :param lcDir: top-level directory of a lightcone output catalog, containing per
+                  step subdirectories, as given in Fig.7 of the Creating Lightcone in 
+                  HACC document
+    :param steps: a list of lightcone shells to visualize listed by simulation step number.
+                  a unique plot will saved be created per shell
+    :param plotMode: The plotting mode. Options are 'show' or 'save'. If 'show', the
+                     figures will be opened upon function completion. If 'save', they
+                     will be saved as .png files to the current directory, unless otherwise
+                     specified in the 'outDir' arg
+    :param saveDest: where to save figures, if plotMode == 'save'
+    :param dataLim: whether or not to set the plot limits to that of the data. If False, the 
+                    rL and reps args will be used to define the plotting limits
+    :param fullSky: whether or not the input lightcone is a full sky or not (if False, input 
+                    lightcone is assumed to be an octant)
+    :param rL: the box length of the input simulation
+    :param reps: the total number of box repetitions contained in the input lightcone shells
+    :param obsPos: the position of the observer in the input lightcone (defaults to the origin)
+    :param bins: number of bins to use in the density histogram
+    :param sfrac: the fraction of particles to use in the density estimation (histogram binning)
+    :param z_slices: The number of divisions to make along the z-axis for the density estimation. 
+                     If z_slices=1, then one plot is created per shell. If z_slices=N, then N 
+                     plots are created per shell, which move through the z-axis in N evenly
+                     spaced slices from negative to positive z-values (z here does not mean 
+                     redshfit)
+    :param cmap_str: a string giving the matplotlib colormap to use in the 2d hist. Defaults 
+                     to "plasma"
+    :param smooth: a string giving the interpolation method to pass to imshow. If None, then 
+                   plot the 2d histogram without imshow (which is the default).
+    '''
+     
     # do these imports here, since there are other functions in this file that
     # are intended to run on systems where gio may not be available
     import genericio as gio
@@ -2603,6 +2639,12 @@ def plot_shell_density(lcDir, steps, saveDest, rL = 3000, reps = 2, sfrac=0.2):
     z = 1/a-1
     zs = z[steps]
     lc_extent = rL*reps
+    if(not dataLim):
+        binsx = np.linspace(0, lc_extent, bins)
+        binsy = np.linspace(0, lc_extent, bins)
+    cmap = copy.copy(mpl.cm.get_cmap(cmap_str))
+    cmap.set_bad(cmap.colors[0])
+    axfont = {'fontname':'ubuntu'}
 
     for step in steps:
         
@@ -2615,18 +2657,64 @@ def plot_shell_density(lcDir, steps, saveDest, rL = 3000, reps = 2, sfrac=0.2):
         z = np.squeeze(gio.gio_read(lc_file, 'z'))
         
         downsMask = np.random.choice(np.arange(len(x)), int(len(x)*sfrac))
+        x = x[downsMask] - obsPos[0]
+        y = y[downsMask] - obsPos[1]
+        z = z[downsMask] - obsPos[2]
+        if(dataLim):
+            x_range = [np.min(x) - abs(np.min(x))*0.1, 
+                       np.max(x) + np.max(x)*0.1]
+            y_range = [np.min(y) - abs(np.min(y))*0.1, 
+                       np.max(y) + np.max(y)*0.1]
+            binsx = np.linspace(x_range[0], x_range[1], bins) 
+            binsy = np.linspace(y_range[0], y_range[1], bins) 
 
-        binsx = np.linspace(0, lc_extent, 60)
-        binsy = np.linspace(0, lc_extent, 60)
+        sorter = np.argsort(z)
+        all_slices = np.array_split(z[sorter], z_slices)
+        x = x[sorter] 
+        y = y[sorter]
+        z = z[sorter]
         
-        plt.hist2d(x[downsMask], y[downsMask], bins = [binsx, binsy], cmap='plasma')
-        plt.plot([0, lc_extent], [0, 0], '-k', lw=1)
-        plt.plot([0, lc_extent], [lc_extent, lc_extent], '-k', lw=1)
-        plt.plot([0, 0], [0, lc_extent], '-k', lw=1)
-        plt.plot([lc_extent, lc_extent], [0, lc_extent], '-k', lw=1)
-        plt.plot([0, lc_extent], [lc_extent/reps, lc_extent/reps], '-k', lw=1)
-        plt.plot([lc_extent/reps, lc_extent/reps], [0, lc_extent], '-k', lw=1)
-        plt.xlim([-lc_extent*0.05, lc_extent + lc_extent*0.05])
-        plt.ylim([-lc_extent*0.05, lc_extent + lc_extent*0.05])
-        plt.savefig('{}.png'.format(step))
-        print('saved fig')
+        for n in range(z_slices): 
+            print('z slice {}'.format(n))
+            this_slice = all_slices[n]
+            sliceMask = np.logical_and(z >= np.min(this_slice), z <= np.max(this_slice))
+            
+            x_slice = x[sliceMask]
+            y_slice = y[sliceMask]
+            z_slice = z[sliceMask]
+
+            fig = plt.figure(step+n)
+            ax = fig.add_subplot(111, aspect='equal')
+            hist, xx, yy, pp = ax.hist2d(x_slice, y_slice, bins = [binsx, binsy], cmap=cmap, norm=LogNorm())
+            
+            if(smooth is not None):
+                ax.imshow(hist, origin='lower', interpolation=smooth, aspect='equal', 
+                          cmap=cmap, extent=[min(xx), max(xx), min(yy), max(yy)], norm=LogNorm())
+
+            majGridLoc = plticker.MultipleLocator(base=rL)
+            minGridLoc = plticker.MultipleLocator(base=100)
+            ax.xaxis.set_major_locator(majGridLoc)
+            ax.yaxis.set_major_locator(majGridLoc)
+            ax.xaxis.set_minor_locator(minGridLoc)
+            ax.yaxis.set_minor_locator(minGridLoc)
+            ax.grid(which='major', axis='both', linestyle='-', lw=1.5, color='white')
+            ax.xaxis.set_minor_formatter(FormatStrFormatter("%.2f"))
+            ax.yaxis.set_minor_formatter(FormatStrFormatter("%.2f"))
+            plt.setp(ax.get_xmajorticklabels(), visible=False)
+            plt.setp(ax.get_ymajorticklabels(), visible=False)
+            ax.set_xlabel('x (Mpc)', fontsize=12, **axfont)
+            ax.set_ylabel('y (Mpc)', fontsize=12, **axfont)
+
+            if(not dataLim and fullSky):
+                ax.set_xlim([-lc_extent - lc_extent*0.05, lc_extent + lc_extent*0.05])
+                ax.set_ylim([-lc_extent - lc_extent*0.05, lc_extent + lc_extent*0.05])
+            elif(not dataLim and not fullSky):
+                ax.set_xlim([-lc_extent*0.05, lc_extent + lc_extent*0.05])
+                ax.set_ylim([-lc_extent*0.05, lc_extent + lc_extent*0.05])
+            else:
+                ax.set_xlim(x_range)
+                ax.set_xlim(y_range)
+            
+            fig.savefig('{}/{}_slice-{}.png'.format(saveDest, step, n), box_inches='tight', dpi=300)
+            print('saved fig')
+            plt.close(fig)
