@@ -8,9 +8,31 @@ import matplotlib as mpl
 import seaborn as ss
 
 def downsample(arr, factor=0.01):
+    '''
+    Downsamaple an array
+
+    Params:
+    arr: numpy array
+    factor: retain this percentage of the values
+    '''
     return np.random.choice(arr, int(len(arr)*factor), replace=False)
 
-def makePlot(outDir, bins=50, showBeams=False, downsFrac = 0.10, cm='plasma'):
+
+def visCutout(outDir, bins=50, showBeams=False, downsFrac = 0.10, cm='plasma'):
+    '''
+    Visualize a lightcone cutout. At least two plots will be generated, each showing
+    the cutout in projected angular coordinates with respect to the observer (origin).
+    Optionally, a third 3d plot can be produced which shows the full cutout in comoving
+    cartesian coordinates.
+
+    Params:
+    :outDir: The top-level cutout output directory to read from
+    :bins: how many bins per-dimension to plot the projected density
+    :showBeams: if True, 3d plot of the cutout in comoving cartesian space is produced
+    :downsFrac: the particle downsampling fraction
+    :cm: the colormap to use (coresponding to density in the projected plots, and to 
+         redshift in the 3d plot if showBeams==True)
+    '''
 
     mpl.rcParams.update({'figure.autolayout': True})
     params = {'text.usetex': True, 'mathtext.fontset': 'stixsans'}
@@ -129,7 +151,82 @@ def makePlot(outDir, bins=50, showBeams=False, downsFrac = 0.10, cm='plasma'):
     ax3.invert_xaxis()
     ax2.set_aspect('equal')
     ax3.set_aspect('equal')
-    ax2.set_title(r'$\mathrm{Density}$')
-    ax3.set_title(r'$\mathrm{Convergence}$')
+    ax2.set_title(r'$\mathrm{Density (rotation applied)}$')
+    ax3.set_title(r'$\mathrm{Density (original position)}$')
     plt.tight_layout()
     plt.show()
+
+
+def plot_timing():
+    '''
+    Visualize the timing of a collection of cutout runs.
+    ... finish these docs
+    '''
+    
+    nodes = [32, 64, 128, 256, 512]
+    nodes = [32, 64]
+    halos = [16, 64, 256]
+    halos=[16]
+
+    steps = [487, 475, 464, 453, 442, 432, 421, 411, 401, 392, 382, 
+             373, 365, 355, 347, 338, 331, 323, 315, 307, 300, 293, 
+             286, 279, 272, 266, 259, 253, 247]
+
+    read_times = [0] * len(nodes)
+    redist_times = [0] * len(nodes)
+    comp_times = [0] * len(nodes)
+    write_times = [0] * len(nodes)
+
+    for k in range(len(halos)):
+        
+        for j in range(len(nodes)):
+
+            outputFile = '/home/hollowed/cutout_run_dirs/alphaQ/cutout_alphaQ_downs/N{}_R4_lc_halos_{}.txt_cutout_downs_depth_0.0-1.0.output'.format(nodes[j], halos[k])
+            output = open(outputFile)
+            lines = np.array(output.readlines())
+            readMask = np.array(["Read time:" in line for line in lines])
+            redistMask = np.array(["Redistribution time:" in line for line in lines])
+            compMask = np.array(["cutout computation time:" in line for line in lines])
+            writeMask = np.array(["write time:" in line for line in lines])
+
+            #pdb.set_trace()
+
+            read_times[j] = np.cumsum([float(s.split(': ')[-1].split(' s')[0]) for s in lines[readMask]])
+            redist_times[j] = np.cumsum([float(s.split(': ')[-1].split(' s')[0]) for s in lines[redistMask]])
+            comp_times[j] = np.cumsum([float(s.split(': ')[-1].split(' s')[0]) for s in lines[compMask]])
+            write_times[j] = np.cumsum([float(s.split(': ')[-1].split(' s')[0]) for s in lines[writeMask]])
+
+        f = plt.figure(k)
+        ax = f.add_subplot(111)
+        cmap = plt.cm.get_cmap('plasma')
+        plt.title('{} halos'.format(halos[k]))
+
+        ls = ['-', '--', '-.', ':']
+        lw = [2, 2, 1, 2, 2, 0.5]
+        col = list(cmap(np.linspace(0.2, 0.8, 6)))
+        #steps = np.arange(len(read_times[0]))
+
+        for j in range(len(nodes)):
+          
+            print(j)
+            ax.plot(steps[:len(read_times[j])], read_times[j], label = 'Read in time ({} nodes)'.format(nodes[j]), linestyle=ls[0], lw=lw[j], color=col[j])
+            ax.plot(steps[:len(redist_times[j])], redist_times[j], label = 'Redist. time ({} nodes)'.format(nodes[j]), linestyle=ls[1], lw=lw[j], color=col[j]) 
+            
+            ax.plot(
+                    np.linspace(max(steps[:len(comp_times[j])]), 
+                                min(steps[:len(comp_times[j])]), 
+                                len(steps[:len(comp_times[j])])*halos[k]), 
+                    comp_times[j], 
+                    label = 'comp time ({} nodes)'.format(nodes[j]), linestyle=ls[2], lw=lw[j], color=col[j])
+            
+            ax.plot(
+                    np.linspace(max(steps[:len(comp_times[j])]), 
+                                min(steps[:len(comp_times[j])]), 
+                                len(steps[:len(comp_times[j])])*halos[k]), 
+                    write_times[j], 
+                    label = 'Write time ({} nodes)'.format(nodes[j]), linestyle=ls[3], lw=lw[j], color=col[j])
+            ax.invert_xaxis()
+
+        plt.grid()
+        plt.legend()
+    plt.show()     

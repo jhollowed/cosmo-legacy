@@ -111,6 +111,7 @@ def list_halos(lcDir, outDir, maxStep, minStep, rL, corrLength, phiMax, haloCat=
     write_y = np.array([])
     write_z = np.array([])
     write_redshift = np.array([])
+    write_shells = np.array([])
     write_mass = np.array([])
     write_radius = np.array([])
     total=0
@@ -227,8 +228,9 @@ def list_halos(lcDir, outDir, maxStep, minStep, rL, corrLength, phiMax, haloCat=
         write_y = np.hstack([write_y, lc_y]) 
         write_z = np.hstack([write_z, lc_z]) 
         write_redshift = np.hstack([write_redshift, lc_redshift]) 
+        write_shells = np.hstack([write_shells, np.ones(np.sum(mass_mask), dtype=np.int32)*step])
         write_mass = np.hstack([write_mass, lc_mass]) 
-        write_radius = np.hstack([write_radius, lc_radius]) 
+        write_radius = np.hstack([write_radius, lc_radius])
    
     # Do downsampling according to outFrac arg
     if(len(write_ids)) > 0:
@@ -242,6 +244,7 @@ def list_halos(lcDir, outDir, maxStep, minStep, rL, corrLength, phiMax, haloCat=
         write_y = write_y[dsampling]
         write_z = write_z[dsampling]
         write_redshift = write_redshift[dsampling]
+        write_shells = write_shells[dsampling]
         write_mass = write_mass[dsampling]
         write_radius = write_radius[dsampling]
     
@@ -272,6 +275,7 @@ def list_halos(lcDir, outDir, maxStep, minStep, rL, corrLength, phiMax, haloCat=
     all_y = None
     all_z = None
     all_redshift = None
+    all_shell = None
     all_mass = None
     all_radius = None
     
@@ -282,6 +286,7 @@ def list_halos(lcDir, outDir, maxStep, minStep, rL, corrLength, phiMax, haloCat=
         all_y = np.empty(tot[0], dtype=np.float64)
         all_z = np.empty(tot[0], dtype=np.float64)
         all_redshift = np.empty(tot[0], dtype=np.float64)
+        all_shell = np.empty(tot[0], dtype=np.int32)
         all_mass = np.empty(tot[0], dtype=np.float64)
         all_radius = np.empty(tot[0], dtype=np.float64)
         #print('Counts is {}, dspls is {}'.format(counts, dspls))
@@ -293,6 +298,7 @@ def list_halos(lcDir, outDir, maxStep, minStep, rL, corrLength, phiMax, haloCat=
     recv_y = [all_y, counts, dspls, MPI.DOUBLE]
     recv_z = [all_z, counts, dspls, MPI.DOUBLE]
     recv_redshift = [all_redshift, counts, dspls, MPI.DOUBLE]
+    recv_shell = [all_shell, counts, dspls, MPI.INT]
     recv_mass = [all_mass, counts, dspls, MPI.DOUBLE]
     recv_radius = [all_radius, counts, dspls, MPI.DOUBLE]
 
@@ -302,6 +308,7 @@ def list_halos(lcDir, outDir, maxStep, minStep, rL, corrLength, phiMax, haloCat=
     comm.Gatherv([write_y, numhalos], recv_y, root=0)
     comm.Gatherv([write_z, numhalos], recv_z, root=0)
     comm.Gatherv([write_redshift, numhalos], recv_redshift, root=0)
+    comm.Gatherv([write_shell, numhalos], recv_shells, root=0)
     comm.Gatherv([write_mass, numhalos], recv_mass, root=0)
     comm.Gatherv([write_radius, numhalos], recv_radius, root=0)
     if(rank == 0):
@@ -316,7 +323,7 @@ def list_halos(lcDir, outDir, maxStep, minStep, rL, corrLength, phiMax, haloCat=
         print('Removing duplicate halos...')
         ask_unique = np.unique(all_ids, return_counts=True)
         unique_ids = ask_unique[0][ask_unique[1] == 1]
-        id_mask = [iid in unique_ids for iid in all_ids]
+        id_mask = np.array([iid in unique_ids for iid in all_ids])
 
         # remove halos within correlation length of any replication boundary
         print('Removing halos with broken local correlations...')
@@ -345,6 +352,7 @@ def list_halos(lcDir, outDir, maxStep, minStep, rL, corrLength, phiMax, haloCat=
         all_y = all_y[mask]
         all_z = all_z[mask]
         all_redshift = all_redshift[mask]
+        all_shell = all_shell[mask]
         all_mass = all_mass[mask]
         all_radius = all_radius[mask]
         print('Removed {} total halos ({} spatial rejections and {} duplicates)'.format(np.sum(~mask), 
@@ -360,7 +368,7 @@ def list_halos(lcDir, outDir, maxStep, minStep, rL, corrLength, phiMax, haloCat=
         
         write_masks = np.array_split(np.arange(len(all_ids), dtype='i'), numFiles)
         for j in range(numFiles):
-            
+            #READY TO WRITE SHELLS; NEED TO UPDATE OLD FILES 
             wm = write_masks[j]
             next_file = open("{0}/lcHaloList_mass{1:.2e}-{2:.2e}_steps{3}-{4}_{5}.txt"
                              .format(outDir, minMass, maxMass, minStep, maxStep, j), 'w')
@@ -369,14 +377,14 @@ def list_halos(lcDir, outDir, maxStep, minStep, rL, corrLength, phiMax, haloCat=
             
             for n in range(len(wm)):
                 if(massDef == 'sod'):
-                    next_file.write('{0} {1} {2} {3} {4} {5} {6}\n'.format(
+                    next_file.write('{0} {1} {2} {3} {4} {5} {6} {7}\n'.format(
                                                                all_ids[wm][n], all_redshift[wm][n], 
-                                                               all_mass[wm][n], all_radius[wm][n], 
+                                                               all_shell[wm][n], all_mass[wm][n], all_radius[wm][n], 
                                                                all_x[wm][n], all_y[wm][n], all_z[wm][n]))
                 elif(massDef == 'fof'):
-                    next_file.write('{0} {1} {2} {3} {4} {5}\n'.format(
+                    next_file.write('{0} {1} {2} {3} {4} {5} {6}\n'.format(
                                                                all_ids[wm][n], all_redshift[wm][n], 
-                                                               all_mass[wm][n], 
+                                                               all_shell[wm][n], all_mass[wm][n], 
                                                                all_x[wm][n], all_y[wm][n], all_z[wm][n]))
             next_file.close()
         print('Done')
