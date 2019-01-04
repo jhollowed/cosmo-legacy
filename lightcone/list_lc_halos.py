@@ -228,7 +228,7 @@ def list_halos(lcDir, outDir, maxStep, minStep, rL, corrLength, phiMax, haloCat=
         write_y = np.hstack([write_y, lc_y]) 
         write_z = np.hstack([write_z, lc_z]) 
         write_redshift = np.hstack([write_redshift, lc_redshift]) 
-        write_shells = np.hstack([write_shells, np.ones(np.sum(mass_mask), dtype=np.int32)*step])
+        write_shells = np.hstack([write_shells, np.ones(np.sum(mass_mask))*step]).astype(np.int32)
         write_mass = np.hstack([write_mass, lc_mass]) 
         write_radius = np.hstack([write_radius, lc_radius])
    
@@ -298,7 +298,7 @@ def list_halos(lcDir, outDir, maxStep, minStep, rL, corrLength, phiMax, haloCat=
     recv_y = [all_y, counts, dspls, MPI.DOUBLE]
     recv_z = [all_z, counts, dspls, MPI.DOUBLE]
     recv_redshift = [all_redshift, counts, dspls, MPI.DOUBLE]
-    recv_shell = [all_shell, counts, dspls, MPI.INT]
+    recv_shells = [all_shell, counts, dspls, MPI.INT]
     recv_mass = [all_mass, counts, dspls, MPI.DOUBLE]
     recv_radius = [all_radius, counts, dspls, MPI.DOUBLE]
 
@@ -308,7 +308,7 @@ def list_halos(lcDir, outDir, maxStep, minStep, rL, corrLength, phiMax, haloCat=
     comm.Gatherv([write_y, numhalos], recv_y, root=0)
     comm.Gatherv([write_z, numhalos], recv_z, root=0)
     comm.Gatherv([write_redshift, numhalos], recv_redshift, root=0)
-    comm.Gatherv([write_shell, numhalos], recv_shells, root=0)
+    comm.Gatherv([write_shells, numhalos], recv_shells, root=0)
     comm.Gatherv([write_mass, numhalos], recv_mass, root=0)
     comm.Gatherv([write_radius, numhalos], recv_radius, root=0)
     if(rank == 0):
@@ -368,7 +368,6 @@ def list_halos(lcDir, outDir, maxStep, minStep, rL, corrLength, phiMax, haloCat=
         
         write_masks = np.array_split(np.arange(len(all_ids), dtype='i'), numFiles)
         for j in range(numFiles):
-            #READY TO WRITE SHELLS; NEED TO UPDATE OLD FILES 
             wm = write_masks[j]
             next_file = open("{0}/lcHaloList_mass{1:.2e}-{2:.2e}_steps{3}-{4}_{5}.txt"
                              .format(outDir, minMass, maxMass, minStep, maxStep, j), 'w')
@@ -407,7 +406,7 @@ def vis_output_regions(maxStep, minStep, rL, corrLength, phiMax, plotZ=False, sl
     :param minStep: The minimum simulation snapshot step to include
     :param rL: The length of the box underlying the input lightcone in Mpc/h
     :param corrLength: The length scale within which to consider correlated 
-                       with a halo-- halos within this length of a replicated box
+                       with a halo, in Mpc/h-- halos within this length of a replicated box
                        boundary will experience correlation breaks in the density field
                        and will be rejected
     :param phiMax: the maximum angular scale that one may want to use on subsequent
@@ -524,7 +523,7 @@ def vis_output_regions(maxStep, minStep, rL, corrLength, phiMax, plotZ=False, sl
     
     ax.set_xlabel(r'$x\>[Mpc/h]$', fontsize=16)
     ax.set_ylabel(r'$y\>[Mpc/h]$', fontsize=16)
-    ax.set_title(r"Valid Cutout Regions" "\n" r"$\phi_\mathrm{max}=1000\mathrm{arcsec},\>l_\xi=L/10$")
+    ax.set_title(r"Valid Cutout Regions" "\n" r"$\phi_\mathrm{{max}}=1000\>\mathrm{{arcsec}},\>l_\xi={}\>\mathrm{{Mpc/h}}$".format(corrLength))
     plt.show()
 
 
