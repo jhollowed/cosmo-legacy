@@ -39,7 +39,8 @@ def visCutout(outDir, bins=50, showBeams=False, downsFrac = 0.10, cm='plasma'):
     mpl.rcParams.update(params)
     mpl.rcParams['text.latex.preamble']=[r"\usepackage{amsmath}"]
     
-    subdirs = glob.glob("{}/*".format(outDir))
+    subdirs = np.array(glob.glob("{}/*".format(outDir)))
+    subdirs = subdirs[np.array([s.split('.')[-1]!='csv' for s in subdirs])].tolist()
     
     for i in range(len(subdirs[0].split('/')[-1])):
         try:
@@ -77,6 +78,7 @@ def visCutout(outDir, bins=50, showBeams=False, downsFrac = 0.10, cm='plasma'):
     for i in range(len(steps)):
         
         step = steps[i]
+        if(step < 300): continue
         xf = "{0}/{1}{2}/x.{2}.bin".format(outDir, prefix, step)
         yf = "{0}/{1}{2}/y.{2}.bin".format(outDir, prefix, step)
         zf = "{0}/{1}{2}/z.{2}.bin".format(outDir, prefix, step)
@@ -89,6 +91,14 @@ def visCutout(outDir, bins=50, showBeams=False, downsFrac = 0.10, cm='plasma'):
             continue
         
         downs = downsample(np.arange(len(np.fromfile(xf, dtype=dt))), downsFrac)
+        
+        # for displaying each shell individually
+        #plt.Figure()
+        #bins=70
+        #plt.hist2d(np.fromfile(pf, dtype=dt), np.fromfile(tf, dtype=dt), bins, norm=mpl.colors.LogNorm(), cmap=cm)
+        #plt.title(step)
+        #plt.show()
+
         x = np.hstack([x, np.fromfile(xf, dtype=dt)[downs]])
         y = np.hstack([y, np.fromfile(yf, dtype=dt)[downs]])
         z = np.hstack([z, np.fromfile(zf, dtype=dt)[downs]])
@@ -134,7 +144,6 @@ def visCutout(outDir, bins=50, showBeams=False, downsFrac = 0.10, cm='plasma'):
         ax1.set_ylabel(r'$y\>\>\mathrm{[Mpc/h]}$', fontsize=14)
         #ax1.set_zlabel('z')
     
-    pdb.set_trace()
     ax2.hist2d(phi, theta, bins, norm=mpl.colors.LogNorm(), cmap=cm)
     ax3.hist2d(phiRot, thetaRot, bins, norm=mpl.colors.LogNorm(), cmap=cm)
     ax2.set_xlabel(r'$\boldsymbol{{\phi}}\>\>\mathrm{{[deg]}}$'+'\n'+\
