@@ -11,7 +11,7 @@ from mpi4py import MPI
 import genericio as gio
 #import lc_interpolation_validation as iv
 
-def list_halos(lcDir, outDir, maxStep, minStep, rL, corrLength, phiMax, haloCat=None, 
+def list_halos(lcDir, outDir, maxStep, minStep, rL, corrLength, phiMax, 
                massDef = 'fof', minMass=1e14, maxMass=1e18, outFrac=0.01, numFiles=1):
 
     '''
@@ -22,15 +22,15 @@ def list_halos(lcDir, outDir, maxStep, minStep, rL, corrLength, phiMax, haloCat=
     a text file with halos printed per-row, as such:
     
     output.txt:
-    tag1 redshift1 mass1 radius1 x1 y1 z1
-    tag2 redshift2 mass2 radius2 x2 y2 z2
-    tag3 redshift3 mass3 radius3 x3 y3 z3
+    tag1 redshift1 mass1 radius1 conc1 conc_err1 x1 y1 z1
+    tag2 redshift2 mass2 radius2 conc2 conc_err2 x2 y2 z2
+    tag3 redshift3 mass3 radius3 conc3 conc_err3 x3 y3 z3
     .
     .
     .
     
-    where the radius column will be omitted if the input arg massDef == "fof". The tags 
-    are of the form {fof_halo_tag}_{lc_replication_identifier}
+    where the radius and conc columns will be omitted if the input arg massDef == "fof". 
+    The tags are written in the form {fof_halo_tag}_{lc_replication_identifier}
 
     This function is written with MPI support; if run with mpirun or mpiexec, then the 
     lightcone shells found within the redshift range of interest will be distributed as 
@@ -42,7 +42,9 @@ def list_halos(lcDir, outDir, maxStep, minStep, rL, corrLength, phiMax, haloCat=
                   of the Creating Lightcones in HACC document (step-wise subdirectories 
                   expected). It is expected that this lightcone was built using the
                   interpolation lightcone driver, and thus the 'id' field is expected
-                  to contain merger tree fof tags (including fragment bits and sign).
+                  to contain merger tree fof tags (including fragment bits and sign). It is
+                  also assumed that this lightcone has been matched to either an fof or sod
+                  catalog.
     :para outDir: the output directory for the resultant text file
     :param maxStep: The largest (lowest redshift) lightcone shell to read in
     :param minStep: The smallest (highest redshift) lightcone shell to read in
@@ -55,17 +57,10 @@ def list_halos(lcDir, outDir, maxStep, minStep, rL, corrLength, phiMax, haloCat=
                    halo lightcone cutout runs given the halos output by this function, 
                    in arcseconds. Halos within that angular scale from the octant boundary
                    will be rejected
-    :param phiMax: The side length of the simulation underlying the input lightcone in Mpc/h
-    :param haloCat: If this argument is None, then it is assumed that the input lightcone at 
-                    lcDir has a valid 'mass' column. If it doesn't, then this argument should
-                    point to a top-level directory of a halo catalog from which to match
-                    id's and gather FOF/SO masses. Step-wise subdirectoires are expected with 
-                    the form 'STEPXXX'
-    :param massDef: should either be "fof", "sod", or None. If haloCat != None, then this arg 
-                    specifies whether to read FOF or SO masses from the matching halo catalog, 
-                    haloCat. If massDef = "sod", then also gather the r200 radii from haloCat.
-                    If haloCat == None, then all this arg does is label the lightcone-provided
-                    mass column as either an "fof" or "sod" mass in the output cutout meta data
+    :param massDef: should either be "fof", "sod". In either case the lightcone pointed to by
+                    'lcDir' is assumed to contain a mass column. If massDef='sod', then a radius,
+                    concentration, and concentration error is also assumed to be present in the
+                    lightcone
     :param minMass: The minimum halo mass to write out to the text files (defaults to 1e14)
     :param maxMass: The maximum halo mass to write out to the text files (defaults to 1e18, or 
                     no upper limit)
@@ -105,15 +100,17 @@ def list_halos(lcDir, outDir, maxStep, minStep, rL, corrLength, phiMax, haloCat=
     comm.Barrier()
   
     # arrays to hold halos in the lc found above the desired massCut (to be written out)
-    write_ids = np.array([])
-    write_reps = np.array([])
-    write_x = np.array([])
-    write_y = np.array([])
-    write_z = np.array([])
-    write_redshift = np.array([])
-    write_shells = np.array([])
-    write_mass = np.array([])
-    write_radius = np.array([])
+    write_ids = np.array([], dtype=np.int64)
+    write_reps = np.array([], dtype=np.int32)
+    write_x = np.array([], dtype=float)
+    write_y = np.array([], dtype=float)
+    write_z = np.array([], dtype=float)
+    write_redshift = np.array([], dtype=float)
+    write_shells = np.array([], dtype=np.int32)
+    write_mass = np.array([], dtype=float)
+    write_radius = np.array([], dtype=float)
+    write_conc = np.array([], dtype=float)
+    write_conc_err = np.array([], dtype=float)
     total=0
 
     # loop over lightcone shells
@@ -129,82 +126,45 @@ def list_halos(lcDir, outDir, maxStep, minStep, rL, corrLength, phiMax, haloCat=
         if(rank==0):
             print('reading lightcone')
             sys.stdout.flush()
+        
         # there should only be one unhashed gio file in this subdir
         lc_file = sorted(glob.glob('{1}/*{0}/*'.format(step, lcDir)))[0]
+        
+        # (the halo lightcone module outputs merger tree fof tags, including fragment bits)
         lc_tags = np.squeeze(gio.gio_read(lc_file, 'id'))
         lc_reps = np.squeeze(gio.gio_read(lc_file, 'replication')).astype(np.int32)
         lc_x = np.squeeze(gio.gio_read(lc_file, 'x'))
         lc_y = np.squeeze(gio.gio_read(lc_file, 'y'))
         lc_z = np.squeeze(gio.gio_read(lc_file, 'z'))
         lc_a = np.squeeze(gio.gio_read(lc_file, 'a'))
-        
-        # get halo redshifts and mask halo fof tags 
-        # (the halo lightcone module outputs merger tree fof tags, including fragment bits)
         lc_redshift = 1/lc_a - 1
-        lc_tags = (lc_tags * np.sign(lc_tags)) & 0x0000ffffffffffff 
-
-        if(haloCat != None):
-            
-            if(massDef == 'fof'):
-                cat_file = glob.glob('{1}/b0168/STEP{0}/*{0}*fofproperties'.format(step, haloCat))[0]
-            elif(massDef == 'sod'):
-                cat_file = glob.glob('{1}/M200/STEP{0}/*{0}*sodproperties'.format(step, haloCat))[0]
-            else:
-                raise Exception('Valid inputs for massDef are \'fof\', \'sod\'')
-
-            if(rank==0):
-                print('reading halo catalog at {}'.format(cat_file))
-                sys.stdout.flush()
-            fof_tags = np.squeeze(gio.gio_read(cat_file, 'fof_halo_tag'))
-            halo_mass = np.squeeze(gio.gio_read(cat_file, '{}_halo_mass'.format(massDef)))
-            if(massDef == 'sod'):
-                halo_radius = np.squeeze(gio.gio_read(cat_file, 'sod_halo_radius'))
-            else:
-                halo_radius = np.zeros(len(halo_mass))
-
-            if(rank==0):
-                print('sorting')
-                sys.stdout.flush()
-            fof_sort = np.argsort(fof_tags)
-            fof_tags = fof_tags[fof_sort]
-            halo_mass = halo_mass[fof_sort]
-            
-            # Now we match to get the halo masses, with the matching done in the
-            # following order:
-            # lc masked fof_halo_tag > fof fof_halo_tag
-            # fof fof_halo_tag > fof_halo_mass
-
-            if(rank==0):
-                print('matching lightcone to halo catalog to retrieve mass')
-                sys.stdout.flush()
-            lc_to_fof = None
-            # fix this if ever want to use catalog mathcing feature ^
-            #lc_to_fof = iv.search_sorted(fof_tags, lc_tags, sorter=np.argsort(fof_tags))
-
-            # make sure that worked
-            if(np.sum(lc_to_fof == -1) != 0):
-                raise Exception('{0}% of lightcone halos not found in halo catalog. '\
-                                'Maybe passed wrong files?'
-                                .format(np.sum(lc_to_fof==-1)/float(len(lc_to_fof)) * 100))  
-
-            lc_mass = halo_mass[lc_to_fof]
         
+        # get fof or sod properties from lightcone
+        lc_mass = np.squeeze(gio.gio_read(lc_file, '{}_mass'.format(massDef)))
+        if(massDef == 'sod'):
+            lc_radius = np.squeeze(gio.gio_read(lc_file, 'sod_radius'))
+            lc_conc = np.squeeze(gio.gio_read(lc_file, 'sod_cdelta'))
+            lc_conc_err = np.squeeze(gio.gio_read(lc_file, 'sod_cdelta_error'))
         else:
-            lc_mass = np.squeeze(gio.gio_read(lc_file, '{}_mass'.format(massDef)))
-            if(massDef == 'sod'):
-                lc_radius = np.squeeze(gio.gio_read(lc_file, 'sod_radius'))
-            else:
-                lc_radius = None 
+            lc_radius = None 
+            lc_conc = None 
+            lc_conc_err = None 
+
         if(rank == 0):
             print('read {} halos'.format(len(lc_mass)))
+       
+        # cut out id !!!!!!!!!!
+        mass_mask = lc_tags == 485079778313
         
         # do mass cutting
-        mass_mask = np.logical_and(lc_mass >= minMass, lc_mass < maxMass)
+        #mass_mask = np.logical_and(lc_mass >= minMass, lc_mass < maxMass)
         lc_tags = lc_tags[mass_mask]
         lc_reps = lc_reps[mass_mask]
         lc_redshift = lc_redshift[mass_mask]
         lc_mass = lc_mass[mass_mask]
         lc_radius = lc_radius[mass_mask]
+        lc_conc = lc_conc[mass_mask]
+        lc_conc_err = lc_conc_err[mass_mask]
         lc_x = lc_x[mass_mask]
         lc_y = lc_y[mass_mask]
         lc_z = lc_z[mass_mask]
@@ -223,33 +183,37 @@ def list_halos(lcDir, outDir, maxStep, minStep, rL, corrLength, phiMax, haloCat=
             sys.stdout.flush()
         
         write_ids = np.hstack([write_ids, lc_tags])
-        write_reps = np.hstack([write_reps, lc_reps]).astype(np.int32)
+        write_reps = np.hstack([write_reps, lc_reps])
         write_x = np.hstack([write_x, lc_x]) 
         write_y = np.hstack([write_y, lc_y]) 
         write_z = np.hstack([write_z, lc_z]) 
         write_redshift = np.hstack([write_redshift, lc_redshift]) 
-        write_shells = np.hstack([write_shells, np.ones(np.sum(mass_mask))*step]).astype(np.int32)
+        write_shells = np.hstack([write_shells, np.ones(np.sum(mass_mask))*step])
         write_mass = np.hstack([write_mass, lc_mass]) 
         write_radius = np.hstack([write_radius, lc_radius])
-   
+        write_conc = np.hstack([write_conc, lc_conc])
+        write_conc_err = np.hstack([write_conc_err, lc_conc_err])
+     
     # Do downsampling according to outFrac arg
     if(len(write_ids)) > 0:
-        if(rank==0):
-            print('\nDownsampling {0}% of {1} total halos'.format(outFrac*100, len(write_ids)))
-            sys.stdout.flush()
-        dsampling = np.random.choice(np.arange(len(write_ids)), int(len(write_ids)*outFrac), replace=False)
-        write_ids = write_ids[dsampling]
-        write_reps = write_reps[dsampling]
-        write_x = write_x[dsampling]
-        write_y = write_y[dsampling]
-        write_z = write_z[dsampling]
-        write_redshift = write_redshift[dsampling]
-        write_shells = write_shells[dsampling]
-        write_mass = write_mass[dsampling]
-        write_radius = write_radius[dsampling]
+        if(outFrac != 1):
+            if(rank==0):
+                print('\nDownsampling {0}% of {1} total halos'.format(outFrac*100, len(write_ids)))
+                sys.stdout.flush()
+            dsampling = np.random.choice(np.arange(len(write_ids)), int(len(write_ids)*outFrac), replace=False)
+            write_ids = write_ids[dsampling]
+            write_reps = write_reps[dsampling]
+            write_x = write_x[dsampling]
+            write_y = write_y[dsampling]
+            write_z = write_z[dsampling]
+            write_redshift = write_redshift[dsampling]
+            write_shells = write_shells[dsampling]
+            write_mass = write_mass[dsampling]
+            write_radius = write_radius[dsampling]
+            write_conc = write_conc[dsampling]
+            write_conc_err = write_conc_err[dsampling]
     
     comm.Barrier()
-    print('{} total halos found at rank {}'.format(len(write_ids), rank))
     sys.stdout.flush()
     comm.Barrier()
 
@@ -278,6 +242,8 @@ def list_halos(lcDir, outDir, maxStep, minStep, rL, corrLength, phiMax, haloCat=
     all_shell = None
     all_mass = None
     all_radius = None
+    all_conc = None
+    all_conc_err = None
     
     if(rank == 0):
         all_ids = np.empty(tot[0], dtype=np.int64)
@@ -289,6 +255,8 @@ def list_halos(lcDir, outDir, maxStep, minStep, rL, corrLength, phiMax, haloCat=
         all_shell = np.empty(tot[0], dtype=np.int32)
         all_mass = np.empty(tot[0], dtype=np.float64)
         all_radius = np.empty(tot[0], dtype=np.float64)
+        all_conc = np.empty(tot[0], dtype=np.float64)
+        all_conc_err = np.empty(tot[0], dtype=np.float64)
         #print('Counts is {}, dspls is {}'.format(counts, dspls))
         print('Preparing to gather...')
     
@@ -301,6 +269,8 @@ def list_halos(lcDir, outDir, maxStep, minStep, rL, corrLength, phiMax, haloCat=
     recv_shells = [all_shell, counts, dspls, MPI.INT]
     recv_mass = [all_mass, counts, dspls, MPI.DOUBLE]
     recv_radius = [all_radius, counts, dspls, MPI.DOUBLE]
+    recv_conc = [all_conc, counts, dspls, MPI.DOUBLE]
+    recv_conc_err = [all_conc_err, counts, dspls, MPI.DOUBLE]
 
     comm.Gatherv([write_ids, numhalos], recv_ids, root=0)
     comm.Gatherv([write_reps, numhalos], recv_reps, root=0)
@@ -311,11 +281,12 @@ def list_halos(lcDir, outDir, maxStep, minStep, rL, corrLength, phiMax, haloCat=
     comm.Gatherv([write_shells, numhalos], recv_shells, root=0)
     comm.Gatherv([write_mass, numhalos], recv_mass, root=0)
     comm.Gatherv([write_radius, numhalos], recv_radius, root=0)
+    comm.Gatherv([write_conc, numhalos], recv_conc, root=0)
+    comm.Gatherv([write_conc_err, numhalos], recv_conc_err, root=0)
     if(rank == 0):
         print('{} total halos gathered at rank 0'.format(len(all_ids)))
         sys.stdout.flush()
     
-
     # Now do writing to text file(s)
     if(rank==0):
 
@@ -355,6 +326,8 @@ def list_halos(lcDir, outDir, maxStep, minStep, rL, corrLength, phiMax, haloCat=
         all_shell = all_shell[mask]
         all_mass = all_mass[mask]
         all_radius = all_radius[mask]
+        all_conc = all_conc[mask]
+        all_conc_err = all_conc_err[mask]
         print('Removed {} total halos ({} spatial rejections and {} duplicates)'.format(np.sum(~mask), 
                np.sum(np.logical_and(~pos_mask, ~ang_mask)), np.sum(~id_mask)))
 
@@ -376,9 +349,10 @@ def list_halos(lcDir, outDir, maxStep, minStep, rL, corrLength, phiMax, haloCat=
             
             for n in range(len(wm)):
                 if(massDef == 'sod'):
-                    next_file.write('{0} {1} {2} {3} {4} {5} {6} {7}\n'.format(
+                    next_file.write('{0} {1} {2} {3} {4} {5} {6} {7} {8} {9}\n'.format(
                                                                all_ids[wm][n], all_redshift[wm][n], 
                                                                all_shell[wm][n], all_mass[wm][n], all_radius[wm][n], 
+                                                               all_conc[wm][n], all_conc_err[wm][n], 
                                                                all_x[wm][n], all_y[wm][n], all_z[wm][n]))
                 elif(massDef == 'fof'):
                     next_file.write('{0} {1} {2} {3} {4} {5} {6}\n'.format(
@@ -538,7 +512,6 @@ def list_alphaQ_halos(maxStep=499, minStep=247, minMass=10**13.5, maxMass=1e18, 
     '''
 
     list_halos(lcDir='/projects/DarkUniverse_esp/jphollowed/alphaQ/lightcone_halos',
-               haloCat='/projects/DarkUniverse_esp/heitmann/OuterRim/M000/L360/HACC001/analysis/Halos/M200',
                outDir='/home/hollowed/cutout_run_dirs/alphaQ/cutout_alphaQ_full',
                massDef = 'sod', rL = 256, corrLength=150, phiMax=1000, 
                maxStep=maxStep, minStep=minStep, minMass=minMass, maxMass=maxMass, 
@@ -552,9 +525,9 @@ def list_outerRim_halos(maxStep=499, minStep=121, minMass=10**13.5, maxMass=1e18
     Function parameters are as given in the docstrings above for list_halos
     '''
 
-    list_halos(lcDir='/projects/DarkUniverse_esp/jphollowed/outerRim/lightcone_halos_octant_matchup',
+    list_halos(lcDir='/projects/DarkUniverse_esp/jphollowed/outerRim/lightcone_halos_octant_matchup_sod',
                outDir='/home/hollowed/cutout_run_dirs/outerRim/cutout_outerRim_full',
-               haloCat = None, massDef = 'sod', rL=3000, corrLength=150, phiMax=1000, 
+               massDef = 'sod', rL=3000, corrLength=150, phiMax=1000, 
                maxStep=maxStep, minStep=minStep, minMass=minMass, maxMass=maxMass, 
                outFrac=outFrac, numFiles=numFiles)
 

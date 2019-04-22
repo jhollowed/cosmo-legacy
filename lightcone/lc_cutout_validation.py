@@ -5,9 +5,10 @@ import numpy as np
 import matplotlib.pyplot as plt
 from mpl_toolkits.mplot3d import Axes3D
 import matplotlib as mpl
-import seaborn as ss
+import scipy.stats as st
+from KDEpy import FFTKDE
 
-def downsample(arr, factor=0.01):
+def downsample(arr, factor=0.01, replace=False):
     '''
     Downsamaple an array
 
@@ -15,7 +16,7 @@ def downsample(arr, factor=0.01):
     arr: numpy array
     factor: retain this percentage of the values
     '''
-    return np.random.choice(arr, int(len(arr)*factor), replace=False)
+    return np.random.choice(arr, int(len(arr)*factor), replace=replace)
 
 
 def visCutout(outDir, bins=50, showBeams=False, downsFrac = 0.10, cm='plasma'):
@@ -52,6 +53,7 @@ def visCutout(outDir, bins=50, showBeams=False, downsFrac = 0.10, cm='plasma'):
 
     steps = [int(s.split('Cutout')[-1]) for s in subdirs]
     steps = sorted(steps)
+    print('found steps {}'.format(steps))
     dt = np.dtype('<f')
     x = np.array([])
     y = np.array([])
@@ -165,6 +167,69 @@ def visCutout(outDir, bins=50, showBeams=False, downsFrac = 0.10, cm='plasma'):
     plt.tight_layout()
     plt.show()
 
+
+def fov_kde(outDir, gp=100, N=10, steps=None, downsFrac = 0.10, cm='plasma'):
+    '''
+    Visualize a lightcone cutout by applying a Gaussian kernel density estiamtor to a particle
+    distribution in theta-phi space.
+
+    Params:
+    :outDir: The top-level cutout output directory to read from
+    :gp: how many grid points on which to evaluate the gaussian kde
+    :step: which shell to include in the plotting. If an integer, use that shell. 
+           If a list of integers, use those shells. If None, use all shells. If 
+           the string 'halo' is passed, assume a properties.csv file is present in
+           outDir, and read the shell number containing the target halo as the value
+           labeled 'lc_shell'
+    :downsFrac: the particle downsampling fraction
+    :cm: the colormap to use
+    '''
+    
+    # get subdirs names/prefix
+    subdirs = np.array(glob.glob("{}/*".format(outDir)))
+    subdirs = subdirs[np.array([s.split('.')[-1]!='csv' for s in subdirs])].tolist()
+    
+    for i in range(len(subdirs[0].split('/')[-1])):
+        try:
+            (int(subdirs[0].split('/')[-1][i]))
+            prefix = subdirs[0].split('/')[-1][0:i]
+            break
+        except ValueError:
+            continue
+
+    # get shells of interest
+    if(steps is not None):
+        if steps == 'halo':
+            steps = [int(np.genfromtxt('{}/properties.csv'.format(outDir), delimiter=',')[1])]
+    else:
+        steps = [s.split('Cutout')[-1] for s in glob.glob("{}/*Cutout*".format(outDir))]
+    print('shells to include = {}'.format(steps))
+
+    # read theta, phi
+    print('reading {}'.format(outDir.split('/')[-1]))
+    t = np.array([])
+    p = np.array([])
+    for step in steps:
+        t = np.hstack([t, np.fromfile('{0}/{2}{1}/theta.{1}.bin'.format(outDir, step, prefix), '<f')])
+        p = np.hstack([p, np.fromfile('{0}/{2}{1}/phi.{1}.bin'.format(outDir, step, prefix), '<f')])
+    mm = downsample(np.arange(len(t)), downsFrac, replace=True)
+    t = t[mm]
+    p = p[mm]
+    val = np.vstack([t, p]).T
+
+    # eval kde on grid
+    print('evaluating kde')
+    grid, f = FFTKDE(kernel='gaussian').fit(val)((gp, gp))
+    tt, pp = np.unique(grid[:, 0]), np.unique(grid[:, 1])
+    f = f - np.mean(f)
+    f = f.reshape(gp, gp).T
+
+    # vis
+    fig = plt.figure(0)
+    ax = fig.add_subplot(111)
+    cfset = ax.contourf(tt, pp, f, cmap=cm, vmin=0)
+    plt.show()
+ 
 
 def plot_timing():
     '''
